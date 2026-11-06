@@ -383,7 +383,7 @@ class Store:
         parent = self.get(db, 'items', parent_id, 'item')
         if parent['proposal_id'] != proposal_id: raise WorptError('An item can only be placed inside the same proposal.', 'invalid')
         if self.depth(db, parent_id) + subtree_height > 2:
-            raise WorptError('WorPT has three levels: goal, task and subtask. This would make a fourth.', 'too_deep')
+            raise WorptError('WorPT has three levels: task category, task and subtask. This would make a fourth.', 'too_deep')
         work = self.all(db, 'SELECT * FROM assignments WHERE item_id = ?', parent_id)
         timed = parent['start_year'] is not None or parent['end_year'] is not None
         if (work or timed) and not self.has_children(db, parent_id):
@@ -423,7 +423,7 @@ class Store:
             self.proposal(db, user, it['proposal_id'])
             f = dict(fields)
             if any(k in f for k in ('start_year', 'start_q', 'end_year', 'end_q')):
-                if self.depth(db, item_id) == 0: raise WorptError('Goals have no timeline of their own; give their tasks timelines.', 'invalid')
+                if self.depth(db, item_id) == 0: raise WorptError('A task category has no timeline of its own; give its tasks timelines.', 'invalid')
                 if self.has_children(db, item_id): raise WorptError("This task's timeline comes from its subtasks.", 'invalid')
                 for k in ('start_year', 'end_year'):
                     if f.get(k) is not None and int(f[k]) < 1: raise WorptError('Years are counted from 1.', 'invalid')
@@ -443,9 +443,9 @@ class Store:
             node = db.execute('SELECT parent_id FROM items WHERE id = ?', (node,)).fetchone()[0]
         h = self.height(db, it['id'])
         if parent_id is None:
-            if h > 3: raise WorptError('WorPT has three levels: goal, task and subtask.', 'too_deep')
+            if h > 3: raise WorptError('WorPT has three levels: task category, task and subtask.', 'too_deep')
             if it['start_year'] is not None or self.one(db, 'SELECT id FROM assignments WHERE item_id = ?', it['id']):
-                raise WorptError('This item has its own effort or timeline, so it cannot become a goal; goals carry no effort.', 'invalid')
+                raise WorptError('This item has its own effort or timeline, so it cannot become a task category; task categories carry no effort.', 'invalid')
         move = self.check_new_parent(db, user, pid, parent_id, h, effort_destination) if parent_id != it['parent_id'] else None
         old_parent = it['parent_id']
         db.execute('UPDATE items SET position = -1 WHERE id = ?', (it['id'],))
@@ -478,7 +478,7 @@ class Store:
 
     # ------------------------------------------------ effort
     def check_assignment(self, db, item, f, assignment_id=None):
-        if self.depth(db, item['id']) == 0: raise WorptError('Goals carry no effort; add a task under the goal and assign people there.', 'invalid')
+        if self.depth(db, item['id']) == 0: raise WorptError('A task category carries no effort; add a task to it and assign people there.', 'invalid')
         if self.has_children(db, item['id']): raise WorptError('This task has subtasks; enter effort on its subtasks.', 'invalid')
         if f.get('is_team'): f['member_id'] = None
         elif 'member_id' in f:

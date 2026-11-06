@@ -152,7 +152,7 @@ def test_incomplete_items_are_reported_not_dropped():
     r = compute(m, goals, 1)
     found = {(c.item, c.message.split(' ')[0]) for c in r['checks']}
     assert ('A1', 'has') in found and ('A2', 'has') in found and ('A3', '"zz"') in found
-    assert ('B', 'goal') in found and ('idle', 'is') in found
+    assert ('B', 'task') in found and ('idle', 'is') in found
     assert r['leaf_labels'] == ['A1', 'A2', 'A3']                     # every item is still there
 
 

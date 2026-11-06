@@ -91,7 +91,7 @@ def compute(members, goals, n_years, weeks_per_fte=52, rounding='nearest'):
         if it.children and it.assignments:
             checks.append(Check('fix', lab, 'has subtasks and its own effort; move its effort into a subtask (not counted until then)'))
         if d == 0 and not it.children:
-            checks.append(Check('fix', lab, 'goal has no tasks'))
+            checks.append(Check('fix', lab, 'task category has no tasks'))
 
     # Year fractions per leaf, from quarter spans.
     n_q = 4 * n_years
