@@ -101,6 +101,11 @@ input.wk.on{border-color:#4a6a90}
 .bar.leaf.sub{background:rgba(126,184,247,.42)}
 .bar.parent{top:28%;bottom:28%;border-radius:4px;background:rgba(247,201,126,.14);border:1px dashed rgba(247,201,126,.55)}
 .bar.cat{top:40%;bottom:40%;border-radius:3px;background:rgba(247,201,126,.55);box-shadow:-2px 0 0 rgba(247,201,126,.9),2px 0 0 rgba(247,201,126,.9)}
+.tsum{display:flex;gap:10px;align-items:flex-start}
+.tsum textarea{flex:1 1 240px}
+.tsum .roles{flex:1 1 200px;min-width:180px;display:flex;flex-direction:column;gap:3px;font-size:12px;line-height:1.4}
+.tsum .roles ul{margin:0 0 4px;padding-left:16px}
+.tsum .roles .btn{align-self:flex-start;margin-top:4px}
 .sg-details{margin:4px 0 12px 52px;max-width:840px;background:#1b2332;border:1px solid #3d5a80;box-shadow:0 6px 18px rgba(0,0,0,.45)}
 .badge{font-family:var(--mono);font-size:12px;color:var(--accent);padding:3px 8px;border:1px solid #2a3a50;border-radius:4px}
 .level{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
@@ -191,8 +196,8 @@ const num = (v, money) => {
 const when = iso => { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? iso : d.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }); };
 const personName = p => p ? [p.first, p.last].filter(Boolean).join(' ') || '(no name)' : '';
 const isColl = m => /^coll/i.test(m.role || '') || m.us === false;
-// a member's short ID and role, written once when they are the same (e.g. PI, not "PI · PI")
-const idRole = (m, sep) => (m.short_id || '').toLowerCase() === (m.role || '').toLowerCase() ? m.role : m.short_id + (sep || ' · ') + m.role;
+// a member's label comes from their role (PI, co-I 1, collab 1…), never their name, so proposals can stay anonymous
+const idRole = m => m.short_id;
 
 function gas(fn, ...args) {
   return new Promise((resolve, reject) => google.script.run
@@ -415,22 +420,17 @@ async function newProposal() {
     '<label class="f">Years<input id="np-years" type="text" inputmode="decimal" data-num="dec" value="3"></label></div>' +
     '<fieldset><legend>First full editor (more can be added on the Team tab)</legend><div class="row">' +
     '<label class="f" style="flex:1">Person<select id="np-lead">' + (opts || '<option value="">No profiles yet</option>') + '</select></label>' +
-    '<label class="f">Short ID<input id="np-sid" placeholder="e.g. PM" style="width:80px"></label><label class="f">Role<input id="np-role" value="PI" style="width:100px"></label></div>' +
+    '<label class="f">Role<input id="np-role" value="PI" style="width:100px"></label></div>' +
     '<p class="hint">Not in the list? <button type="button" class="btn" id="np-newperson">New person…</button></p></fieldset>' +
     '<div class="actions"><button type="button" class="btn" data-x>Cancel</button><button type="button" class="btn primary" id="np-go">Create</button></div>', m => {
     m.querySelector('[data-x]').onclick = closeModal;
-    // the short ID starts as the chosen person's initials (it stays as typed once you change it)
-    const initials = () => { const p = S.people.find(x => x.id === num($('#np-lead').value)); return p ? ((p.first || '')[0] || '') + ((p.last || '')[0] || '') : ''; };
-    const sid = m.querySelector('#np-sid'); sid.value = initials().toUpperCase();
-    sid.oninput = () => { sid.dataset.typed = '1'; };
-    m.querySelector('#np-lead').onchange = () => { if (!sid.dataset.typed) sid.value = initials().toUpperCase(); };
     m.querySelector('#np-newperson').onclick = async () => { closeModal(); const p = await editPerson(null); if (p) newProposal(); };
     m.querySelector('#np-go').onclick = async () => {
       const lead = num($('#np-lead').value);
       if (!lead) return toast('Choose the first full editor (make a profile with New person… if needed).');
       try {
         const r = await api('createProposal', { title: $('#np-title').value, program: $('#np-program').value, n_years: num($('#np-years').value),
-          leads: [{ person_id: lead, short_id: $('#np-sid').value, role: $('#np-role').value }] });
+          leads: [{ person_id: lead, role: $('#np-role').value }] });
         closeModal(); await loadMe(); openProposal(r.proposal.id);
       } catch (e) { showError(e); }
     };
@@ -467,13 +467,17 @@ function editPerson(person) {
     '<label class="f">Google email (the one used to access WorPT)<input id="pp-email" type="email" placeholder="e.g. jane.doe@gmail.com" value="' + esc(p.email || '') + '"' + (own ? ' disabled' : '') + '></label>' +
     '<div class="row"><label class="f" style="flex:1">Institution<input id="pp-inst" placeholder="e.g. NASA Goddard Space Flight Center" value="' + esc(p.institution) + '"></label>' +
     '<label class="f" style="flex:1">Position<input id="pp-pos" placeholder="e.g. postdoc, professor, research scientist" value="' + esc(p.position) + '"></label></div>' +
-    '<label class="row" style="gap:8px"><input type="checkbox" id="pp-us"' + (p.us ? ' checked' : '') + '> US institution?</label>' +
+    '<label class="f">Expertise (for the team summary draft; separate areas with semicolons)<input id="pp-exp" placeholder="e.g. galaxy photometry; survey pipelines" value="' + esc(p.expertise || '') + '"></label>' +
+    '<div class="row"><label class="f">Pronoun in the draft<select id="pp-pron">' + [['', 'none: use the name'], ['she', 'she'], ['he', 'he'], ['they', 'they']]
+      .map(o => '<option value="' + o[0] + '"' + ((p.pronoun || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label>' +
+    '<label class="row" style="gap:8px;align-self:flex-end;padding-bottom:8px"><input type="checkbox" id="pp-us"' + (p.us ? ' checked' : '') + '> US institution?</label></div>' +
     (own ? '<p class="hint">Your own email can only be changed by a core member or admin, because WorPT recognizes you by it.</p>' : '') +
     '<div class="actions"><button type="button" class="btn" data-x>Cancel</button><button type="button" class="btn primary" id="pp-go">Save</button></div>', m => {
     m.querySelector('[data-x]').onclick = () => { closeModal(); resolve(null); };
     m.querySelector('#pp-go').onclick = async () => {
       const f = { prefix: $('#pp-prefix').value, first: $('#pp-first').value, middle: $('#pp-middle').value, last: $('#pp-last').value, suffix: $('#pp-suffix').value,
-                  institution: $('#pp-inst').value, position: $('#pp-pos').value, us: $('#pp-us').checked };
+                  institution: $('#pp-inst').value, position: $('#pp-pos').value, us: $('#pp-us').checked,
+                  expertise: $('#pp-exp').value, pronoun: $('#pp-pron').value };
       if (!own) f.email = $('#pp-email').value;
       try {
         const r = person ? (S.pid ? await change('updatePerson', person.id, Object.assign({ version: person.version }, f))
@@ -630,7 +634,7 @@ function viewItem(n, nodes) {
         '<input type="text" inputmode="decimal" data-num="dec" aria-label="Unfunded weeks for ' + esc(name) + '" value="' + esc(a.unfunded) + '" data-save="assignment:' + a.id + ':unfunded" data-version="' + a.version + '">') +
       '<button type="button" class="btn icon" data-unassign="' + a.id + '" aria-label="Remove ' + esc(name) + ' from this item">✕</button></div>';
   }).join('');
-  const addable = P.members.filter(m => !named.has(m.id)).map(m => '<option value="m' + m.id + '">' + esc(personName(m) + ' (' + idRole(m, ', ') + ')') + '</option>').join('') +
+  const addable = P.members.filter(m => !named.has(m.id)).map(m => '<option value="m' + m.id + '">' + esc(personName(m) + ' (' + idRole(m) + ')') + '</option>').join('') +
     (work.some(a => a.is_team) ? '' : '<option value="team">Everyone not named (team)</option>');
   return html + '<div><div class="pgrid head"><span>Person</span><span>Task lead</span><span>Weeks</span><span>Unfunded weeks</span><span></span></div>' + rows +
     '<label class="row prow" style="gap:8px"><span class="muted">Add a person</span><select data-act="assign" style="flex:1;max-width:340px"><option value="">Choose…</option>' + addable + '</select></label>' +
@@ -668,32 +672,67 @@ function viewChecks() {
 
 // ── team ─────────────────────────────────────────────────────────────────────────────────────────────────────
 function viewTeam() {
-  const P = S.P, can = P.you.can_manage_team, dis = can ? '' : ' disabled';
+  const P = S.P, can = P.you.can_manage_team, dis = can ? '' : ' disabled', hst = /HST/i.test(P.proposal.program || '');
   const rows = P.members.map(m => {
     const v = ' data-version="' + m.version + '"' + dis;
     return '<tr><td><b>' + esc(personName(m)) + '</b><div class="sub">' + esc(m.institution || 'no institution') + ' · ' + (m.us ? 'US' : 'non-US') + '</div>' +
       '<button type="button" class="btn" style="margin-top:6px" data-editperson="' + m.person_id + '">Profile…</button></td>' +
-      '<td><input data-save="member:' + m.id + ':short_id" value="' + esc(m.short_id) + '" style="width:70px" aria-label="Short ID"' + v + '></td>' +
-      '<td><input data-save="member:' + m.id + ':role" value="' + esc(m.role) + '" style="width:90px" aria-label="Role"' + v + (m.us ? '' : ' title="non-US: always a collaborator"') + '></td>' +
+      '<td><input data-save="member:' + m.id + ':role" value="' + esc(m.role) + '" style="width:90px" aria-label="Role"' + v + '>' +
+      '<div class="sub" style="margin-top:4px">shown as <b style="color:var(--text)">' + esc(m.short_id) + '</b></div></td>' +
       '<td><input type="checkbox" data-save="member:' + m.id + ':is_lead" aria-label="Full editor"' + (m.is_lead ? ' checked' : '') + v + '></td>' +
       '<td><input type="text" inputmode="decimal" data-num="dec" data-save="member:' + m.id + ':fte_accuracy" value="' + esc(m.fte_accuracy == null ? '' : m.fte_accuracy) + '" placeholder="0.05" aria-label="FTE accuracy"' + v + '></td>' +
-      '<td style="min-width:200px"><textarea data-save="member:' + m.id + ':bio_summary" aria-label="Team summary"' + v + '>' + esc(m.bio_summary) + '</textarea></td>' +
-      '<td style="min-width:160px"><textarea data-save="member:' + m.id + ':task_summary" aria-label="HST role text"' + v + '>' + esc(m.task_summary) + '</textarea></td>' +
+      '<td style="min-width:420px"><div class="tsum"><textarea data-save="member:' + m.id + ':bio_summary" aria-label="Team summary for ' + esc(personName(m)) + '"' + v + ' style="min-height:96px">' + esc(m.bio_summary) + '</textarea>' +
+      '<div class="roles">' + planSummary(m) + (can ? '<button type="button" class="btn" data-draft="' + m.id + '">Draft summary</button>' : '') + '</div></div></td>' +
+      (hst ? '<td style="min-width:160px"><textarea data-save="member:' + m.id + ':task_summary" aria-label="HST role text"' + v + '>' + esc(m.task_summary) + '</textarea></td>' : '') +
       '<td>' + (can ? '<button type="button" class="btn danger" data-removemember="' + m.id + '">Remove…</button>' : '') + '</td></tr>';
   }).join('');
   const onTeam = new Set(P.members.map(m => m.person_id));
   const options = S.people.filter(p => !onTeam.has(p.id)).map(p => '<option value="' + p.id + '">' + esc(personName(p)) + (p.email ? ' (' + esc(p.email) + ')' : '') + '</option>').join('');
   const add = can ? '<fieldset style="margin-top:14px"><legend>Add someone to the team</legend><div class="row">' +
     '<label class="f" style="flex:1;min-width:220px">Person<select id="am-person"><option value="">Choose…</option>' + options + '</select></label>' +
-    '<label class="f">Short ID<input id="am-sid" style="width:80px" placeholder="e.g. JD"></label>' +
     '<label class="f">Role<input id="am-role" style="width:110px" placeholder="e.g. co-I(1)"></label>' +
     '<label class="row" style="gap:6px;align-self:flex-end;padding-bottom:8px"><input type="checkbox" id="am-lead"> full editor</label>' +
     '<button type="button" class="btn primary" style="align-self:flex-end" data-act="addMember">Add</button>' +
     '<button type="button" class="btn" style="align-self:flex-end" data-act="newPerson">New person…</button></div>' +
-    '<p class="hint">Roles: PI, Sci-PI, Admin-PI, co-I(1), co-I(2)…, coll(1)…, gst(1) (graduate student), pd(1) (postdoc)… Someone at a non-US institution is always given a coll role.</p></fieldset>' : '';
+    '<p class="hint">Roles: PI, Sci-PI, Admin-PI, co-I(1), co-I(2)…, coll(1)…, gst(1) (graduate student), pd(1) (postdoc)… Each person is shown by their role, never their name (co-I(1) as "co-I 1", coll(1) as "collab 1"), so the plan and tables can stay anonymous. Each person needs a role of their own.</p></fieldset>' : '';
   return '<div class="card"><h2 class="h2">Team</h2>' + (can ? '' : '<p class="hint" style="margin:0 0 8px">Only this proposal\'s full editors (and admins) change the team; you can see it here.</p>') +
-    '<div class="scroll"><table class="t"><thead><tr><th>Person</th><th>Short ID</th><th>Role</th><th>Full editor</th><th>FTE accuracy</th><th>Team summary</th><th>HST role text</th><th></th></tr></thead><tbody>' +
-    (rows || '<tr><td colspan="8" class="muted">No one yet.</td></tr>') + '</tbody></table></div>' + add + '</div>';
+    '<div class="scroll"><table class="t"><thead><tr><th>Person</th><th>Role</th><th>Full editor</th><th>FTE accuracy</th><th>Team summary, and their part in the plan</th>' + (hst ? '<th>HST role text</th>' : '') + '<th></th></tr></thead><tbody>' +
+    (rows || '<tr><td colspan="7" class="muted">No one yet.</td></tr>') + '</tbody></table></div>' + add + '</div>';
+}
+
+/** What the plan says about one member: the tasks they lead, the tasks they support (by name or through "team"), and their FTE. */
+function planRoles(m) {
+  const P = S.P, order = tree().filter(n => n.depth > 0 && !n.kids).map(n => n.item), lead = [], support = [];
+  order.forEach(it => {
+    const work = P.assignments.filter(a => a.item_id === it.id);
+    const mine = work.find(a => !a.is_team && a.member_id === m.id), team = work.find(a => a.is_team);
+    const entry = a => ({ label: labelOf(it.id), title: it.title, weeks: +a.weeks || 0, span: it.start_year ? span([it.start_year, it.start_q], [it.end_year, it.end_q]) : 'no timeline yet', team: a.is_team });
+    if (mine) (mine.is_lead ? lead : support).push(entry(mine));
+    else if (team) support.push(entry(team));
+  });
+  return { lead, support };
+}
+function planSummary(m) {
+  const r = planRoles(m), c = (S.P.computed.people[m.id] || { per_year: [], total: [0] });
+  const li = e => '<li><b>' + esc(e.label) + '</b> ' + esc(e.title) + ' <span class="sub">' + esc(e.span) + ', ' + e.weeks + ' wk' + (e.team ? ', as part of the team' : '') + '</span></li>';
+  const fte = c.per_year.map((v, y) => 'Year ' + (y + 1) + ' ' + f2(v[0])).join(' · ') + ' · all ' + f2(c.total[0]);
+  return (r.lead.length ? '<div class="sub">Task lead on</div><ul>' + r.lead.map(li).join('') + '</ul>' : '') +
+    (r.support.length ? '<div class="sub">Supports</div><ul>' + r.support.map(li).join('') + '</ul>' : '') +
+    (r.lead.length || r.support.length ? '<div class="sub">FTE: ' + esc(fte) + '</div>' : '<div class="sub">Not on any task yet.</div>');
+}
+/** A first paragraph for the team summary, built from the plan and the person's profile (no AI): edit it freely. */
+function draftSummary(m) {
+  const r = planRoles(m);
+  const join = xs => xs.length < 2 ? xs.join('') : xs.slice(0, -1).join(', ') + (xs.length > 2 ? ',' : '') + ' and ' + xs[xs.length - 1];
+  const task = e => 'Task ' + e.label + ' (' + e.title + ')';
+  const name = m.prefix ? m.prefix + ' ' + m.last : personName(m);
+  const subject = { she: 'She', he: 'He', they: 'They' }[m.pronoun] || name;
+  const expertise = join((m.expertise || '').split(/\s*;\s*/).filter(Boolean));
+  const out = [];
+  if (r.lead.length) out.push(name + ' will lead ' + join(r.lead.map(task)) + (expertise ? ', drawing on expertise in ' + expertise : '') + '.');
+  if (r.support.length) out.push((r.lead.length ? subject + ' will also support ' : name + ' will support ') + join(r.support.map(task)) +
+    (!r.lead.length && expertise ? ', contributing expertise in ' + expertise : '') + '.');
+  return out.join(' ');
 }
 
 // ── travel and budget ────────────────────────────────────────────────────────────────────────────────────────
@@ -802,7 +841,7 @@ const ACTIONS = {
   addMember: () => attempt(async () => {
     const person = num($('#am-person').value);
     if (!person) return toast('Choose a person (or make one with New person…).');
-    await change('addMember', S.pid, { person_id: person, short_id: $('#am-sid').value, role: $('#am-role').value, is_lead: $('#am-lead').checked });
+    await change('addMember', S.pid, { person_id: person, role: $('#am-role').value, is_lead: $('#am-lead').checked });
     toast('Added to the team.', true);
   }),
   addNonlabor: () => attempt(() => change('addNonlabor', S.pid, { item: 'New item', amounts: Array(S.P.proposal.n_years).fill(0) })),
@@ -901,6 +940,12 @@ function wire() {
   }));
   app.querySelectorAll('[data-unassign]').forEach(b => b.onclick = () => attempt(() => change('deleteAssignment', +b.dataset.unassign)));
   app.querySelectorAll('[data-delnl]').forEach(b => b.onclick = () => attempt(() => change('deleteNonlabor', +b.dataset.delnl)));
+  app.querySelectorAll('[data-draft]').forEach(b => b.onclick = () => attempt(async () => {
+    const m = memberById(+b.dataset.draft), text = draftSummary(m);
+    if (!text) return toast(personName(m) + ' is not on any task yet, so there is nothing to draft from.');
+    if ((m.bio_summary || '').trim() && !(await ask('Replace the team summary?', 'This replaces what is written for ' + personName(m) + ' now with a new draft. (The history keeps the old text.)', [['Replace it', true, 'primary']]))) return;
+    await change('updateMember', m.id, { version: m.version, bio_summary: text });
+  }));
   app.querySelectorAll('[data-removemember]').forEach(b => b.onclick = () => attempt(async () => {
     const id = +b.dataset.removemember, pre = await api('removeMember', id, false);
     const ok = await ask('Remove from the team?', pre.message, [['Remove', true, 'danger']]);

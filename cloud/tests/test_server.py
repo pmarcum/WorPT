@@ -10,6 +10,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 import pytest
 from worpt_server import create_app
 from worpt.tables import build, TABLES
+from worpt.store import role_label
 from test_parity_tables import load, CASES
 
 KEY, READ = 'k' * 24, 'r' * 24
@@ -156,7 +157,7 @@ def test_non_us_person_becomes_a_collaborator_everywhere(team):
     ann, pid, p = team['ann'], team['pid'], team['people']
     ann.ok('patch', f"/api/people/{p['bob']['id']}", dict(version=1, us=False))
     roles = {m['short_id']: m['role'] for m in ann.ok('get', f'/api/proposals/{pid}')['members']}
-    assert roles == {'AA': 'PI', 'BB': 'coll(1)'}
+    assert roles == {'PI': 'PI', 'collab 1': 'coll(1)'}                  # the label follows the new role
     ann.ok('patch', f"/api/people/{p['cat']['id']}", dict(version=1, us=False))
     cat_m = ann.ok('post', f'/api/proposals/{pid}/members', dict(person_id=p['cat']['id'], short_id='CC', role='co-I(2)'))['member']
     assert cat_m['role'] == 'coll(2)'
@@ -171,11 +172,50 @@ def test_non_us_person_becomes_a_collaborator_everywhere(team):
 def test_member_fields(team):
     ann, pid, p = team['ann'], team['pid'], team['people']
     url = f'/api/proposals/{pid}/members'
-    ann.no('post', url, dict(person_id=p['bob']['id'], short_id='B2', role='co-I(3)'), code='duplicate')
-    ann.no('post', url, dict(person_id=p['cat']['id'], short_id='BB', role='co-I(2)'), code='duplicate')
-    ann.no('post', url, dict(person_id=p['cat']['id'], short_id='Team', role='co-I(2)'), code='invalid')
-    ann.no('post', url, dict(person_id=p['cat']['id'], short_id='CC', role=''), code='missing')
-    ann.no('post', url, dict(person_id=9999, short_id='ZZ', role='co-I(2)'), code='not_found')
+    ann.no('post', url, dict(person_id=p['bob']['id'], role='co-I(3)'), code='duplicate')            # already on the proposal
+    ann.no('post', url, dict(person_id=p['cat']['id'], role='co-I(1)'), code='duplicate')            # Bob's role
+    ann.no('post', url, dict(person_id=p['cat']['id'], role='Team'), code='invalid')
+    ann.no('post', url, dict(person_id=p['cat']['id'], role=''), code='missing')
+    ann.no('post', url, dict(person_id=9999, role='co-I(2)'), code='not_found')
+
+
+def test_labels_come_from_roles_never_from_names(team):
+    ann, pid, p = team['ann'], team['pid'], team['people']
+    labels = {m['role']: m['short_id'] for m in ann.ok('get', f'/api/proposals/{pid}')['members']}
+    assert labels == {'PI': 'PI', 'co-I(1)': 'co-I 1'}                    # what the client sent as short_id is ignored
+    for role, label in [('coll(2)', 'collab 2'), ('gst(1)', 'grad 1'), ('pd(3)', 'postdoc 3'), ('Sci-PI', 'Sci-PI')]:
+        m = ann.ok('patch', f"/api/members/{team['bob_m']['id']}", dict(version=ann.ok('get', f'/api/proposals/{pid}')['members'][1]['version'], role=role))['member']
+        assert m['short_id'] == label, (role, m)
+    assert 'Sci-PI' in ann.ok('get', f'/api/proposals/{pid}/tables/NOTANONschedule')['latex']
+
+
+def test_profiles_have_expertise_and_pronoun(team):
+    ann, p = team['ann'], team['people']
+    x = ann.ok('patch', f"/api/people/{p['ann']['id']}", dict(version=1, expertise=' galaxy photometry ', pronoun='She'))['person']
+    assert (x['expertise'], x['pronoun']) == ('galaxy photometry', 'she')
+    ann.no('patch', f"/api/people/{p['ann']['id']}", dict(version=2, pronoun='it'), code='invalid')
+
+
+def test_an_older_database_is_brought_up_to_date(tmp_path):
+    import sqlite3
+    db = tmp_path / 'old.db'
+    c = sqlite3.connect(db)
+    c.executescript('''CREATE TABLE people (id INTEGER PRIMARY KEY, email TEXT UNIQUE, first TEXT NOT NULL DEFAULT '', middle TEXT NOT NULL DEFAULT '',
+      last TEXT NOT NULL DEFAULT '', prefix TEXT NOT NULL DEFAULT '', suffix TEXT NOT NULL DEFAULT '', institution TEXT NOT NULL DEFAULT '',
+      position TEXT NOT NULL DEFAULT '', us INTEGER NOT NULL DEFAULT 1, version INTEGER NOT NULL DEFAULT 1);
+      CREATE TABLE proposals (id TEXT PRIMARY KEY, title TEXT NOT NULL, program TEXT NOT NULL DEFAULT '', n_years INTEGER NOT NULL DEFAULT 3,
+      rounding TEXT NOT NULL DEFAULT 'nearest', latex_subdir TEXT NOT NULL DEFAULT 'do_NOT_manually_edit', travel TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL, created_by TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1);
+      CREATE TABLE members (id INTEGER PRIMARY KEY, proposal_id TEXT NOT NULL, person_id INTEGER NOT NULL, short_id TEXT NOT NULL, role TEXT NOT NULL,
+      is_lead INTEGER NOT NULL DEFAULT 0, fte_accuracy REAL, bio_summary TEXT NOT NULL DEFAULT '', task_summary TEXT NOT NULL DEFAULT '',
+      trips TEXT NOT NULL DEFAULT '[]', version INTEGER NOT NULL DEFAULT 1, UNIQUE (proposal_id, short_id), UNIQUE (proposal_id, person_id));
+      INSERT INTO people (id, last) VALUES (1, 'Marcum'), (2, 'Bobson');
+      INSERT INTO proposals (id, title, created_at, created_by) VALUES ('p1', 'Old', '2026-11-06', 'x');
+      INSERT INTO members (proposal_id, person_id, short_id, role, is_lead) VALUES ('p1', 1, 'PM', 'PI', 1), ('p1', 2, 'BB', 'co-I(1)', 0);''')
+    c.commit(); c.close()
+    app = create_app(str(db), KEY, READ)
+    out = Api(app.test_client(), 'eve@x.org', 'admin').ok('get', '/api/proposals/p1')
+    assert {m['short_id'] for m in out['members']} == {'PI', 'co-I 1'} and out['members'][0]['expertise'] == ''
 
 
 def test_a_proposal_always_keeps_a_lead(team):
@@ -364,11 +404,23 @@ def store_fixture(api, folder):
     return pid
 
 
+def relabeled(p):
+    """The fixture with each person's ID replaced by their role's label, as the server stores them."""
+    new = {m.id: role_label(m.role) for m in p.members}
+    for m in p.members: m.id = new[m.id]
+    def walk(items):
+        for it in items:
+            for a in it.assignments: a.person = new.get(a.person, a.person)
+            walk(it.children)
+    walk(p.goals)
+    return p
+
+
 @pytest.mark.parametrize('folder', CASES, ids=[c.name for c in CASES])
 def test_tables_through_the_api_match_the_fixture(client, folder):
     admin = Api(client, 'admin@x.org', 'admin')
     pid = store_fixture(admin, folder)
-    direct = build(load(folder))
+    direct = build(relabeled(load(folder)))
     for name in TABLES:
         got = admin.ok('get', f'/api/proposals/{pid}/tables/{name}')
         assert got['latex'] == direct[name], f'{folder.name}/{name} differs after storing'

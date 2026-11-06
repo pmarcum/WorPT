@@ -12,7 +12,7 @@ Who may do what (agreed 5 November 2026):
   * a proposal always keeps at least one lead; leads and admins may delete it, after typing its title.
   * a profile may be edited by its owner, leads of any proposal the person is on, core members and admins.
 """
-import contextlib, datetime, json, secrets, sqlite3
+import contextlib, datetime, json, re, secrets, sqlite3
 from .model import Person, Assignment, Item, Proposal, TravelCosts, NonlaborItem
 
 SCHEMA = """
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS people (
   id INTEGER PRIMARY KEY, email TEXT UNIQUE, first TEXT NOT NULL DEFAULT '', middle TEXT NOT NULL DEFAULT '',
   last TEXT NOT NULL DEFAULT '', prefix TEXT NOT NULL DEFAULT '', suffix TEXT NOT NULL DEFAULT '',
   institution TEXT NOT NULL DEFAULT '', position TEXT NOT NULL DEFAULT '', us INTEGER NOT NULL DEFAULT 1,
-  version INTEGER NOT NULL DEFAULT 1);
+  expertise TEXT NOT NULL DEFAULT '', pronoun TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS proposals (
   id TEXT PRIMARY KEY, title TEXT NOT NULL, program TEXT NOT NULL DEFAULT '', n_years INTEGER NOT NULL DEFAULT 3,
   rounding TEXT NOT NULL DEFAULT 'nearest', latex_subdir TEXT NOT NULL DEFAULT 'do_NOT_manually_edit',
@@ -52,13 +52,25 @@ CREATE INDEX IF NOT EXISTS history_proposal ON history (proposal_id, id);
 LEVELS = ('goal', 'task', 'subtask')
 TRAVEL_DEFAULT = dict(airfare=[0, 0, 0], perdiem=[0, 0, 0], conference=[0, 0, 0], ground=[0, 0, 0], days=[0, 0])
 EDITABLE = dict(
-    people=('email', 'first', 'middle', 'last', 'prefix', 'suffix', 'institution', 'position', 'us'),
+    people=('email', 'first', 'middle', 'last', 'prefix', 'suffix', 'institution', 'position', 'us', 'expertise', 'pronoun'),
     proposals=('title', 'program', 'n_years', 'rounding', 'travel'),
-    members=('short_id', 'role', 'is_lead', 'fte_accuracy', 'bio_summary', 'task_summary', 'trips'),
+    members=('role', 'is_lead', 'fte_accuracy', 'bio_summary', 'task_summary', 'trips'),     # short_id follows the role
     items=('title', 'start_year', 'start_q', 'end_year', 'end_q'),
     assignments=('member_id', 'is_team', 'is_lead', 'weeks', 'unfunded'),
     nonlabor=('item', 'amounts'))
 JSON_COLS = {'travel', 'trips', 'amounts'}
+DERIVED = dict(members=('short_id',))           # set by the server itself, never taken from a request
+PRONOUNS = ('', 'he', 'she', 'they')
+# Columns added after the first release, so an existing database gains them when the server starts.
+ADDED_COLUMNS = [('people', 'expertise', "TEXT NOT NULL DEFAULT ''"), ('people', 'pronoun', "TEXT NOT NULL DEFAULT ''")]
+ROLE_WORDS = {'co-i': 'co-I', 'coi': 'co-I', 'coll': 'collab', 'gst': 'grad', 'pd': 'postdoc'}
+
+
+def role_label(role):
+    """A member's label, which also stands for them in the tables, comes from their role and never their name, so
+    proposals can stay anonymous: PI -> PI, co-I(1) -> co-I 1, coll(2) -> collab 2, gst(1) -> grad 1, pd(1) -> postdoc 1."""
+    m = re.fullmatch(r'\s*([A-Za-z][A-Za-z-]*)\s*\(\s*(\d+)\s*\)\s*', role or '')
+    return f'{ROLE_WORDS.get(m.group(1).lower(), m.group(1))} {m.group(2)}' if m else (role or '').strip()
 
 
 class WorptError(Exception):
@@ -81,7 +93,17 @@ def now():
 class Store:
     def __init__(self, path):
         self.path = path
-        with self.connect() as db: db.executescript(SCHEMA)
+        with self.connect() as db:
+            db.executescript(SCHEMA)
+            for table, column, kind in ADDED_COLUMNS:
+                if column not in {r['name'] for r in db.execute(f'PRAGMA table_info({table})')}:
+                    db.execute(f'ALTER TABLE {table} ADD COLUMN {column} {kind}')
+            # labels come from roles (from 6 November 2026): relabel members made before that, where the label is free
+            for m in db.execute('SELECT id, proposal_id, short_id, role FROM members').fetchall():
+                want = role_label(m['role'])
+                if want and want != m['short_id'] and not db.execute('SELECT 1 FROM members WHERE proposal_id = ? AND short_id = ?',
+                                                                      (m['proposal_id'], want)).fetchone():
+                    db.execute('UPDATE members SET short_id = ? WHERE id = ?', (want, m['id']))
 
     @contextlib.contextmanager
     def connect(self):
@@ -125,7 +147,7 @@ class Store:
         if version is None or int(version) != before['version']:
             raise WorptError(f'Someone else changed this {what} after you opened it. Both versions are shown so you can choose.',
                              'conflict', current=before)
-        fields = {k: v for k, v in fields.items() if k in EDITABLE[tbl]}
+        fields = {k: v for k, v in fields.items() if k in EDITABLE[tbl] + DERIVED.get(tbl, ())}
         if not fields: return before
         sets = ', '.join(f'{k} = ?' for k in fields)
         vals = [json.dumps(v) if k in JSON_COLS else v for k, v in fields.items()]
@@ -184,8 +206,11 @@ class Store:
         f = dict(fields)
         if 'email' in f: f['email'] = (f['email'] or '').strip().lower() or None
         if 'us' in f: f['us'] = 1 if f['us'] else 0
-        for k in ('first', 'middle', 'last', 'prefix', 'suffix', 'institution', 'position'):
+        for k in ('first', 'middle', 'last', 'prefix', 'suffix', 'institution', 'position', 'expertise', 'pronoun'):
             if k in f: f[k] = (f[k] or '').strip()
+        if 'pronoun' in f:
+            f['pronoun'] = f['pronoun'].lower()
+            if f['pronoun'] not in PRONOUNS: raise WorptError('The pronoun is he, she, they, or left blank.', 'invalid')
         return f
 
     def check_email_free(self, db, email, person_id=None):
@@ -207,13 +232,14 @@ class Store:
         with self.connect() as db:
             if not self.can_edit_person(db, user, person_id):
                 raise WorptError("You can edit your own profile, or the profiles of people on proposals where you are a full editor.")
-            f = self.clean_person(fields)
+            f = self.clean_person({k: v for k, v in fields.items() if k in EDITABLE['people']})
             if 'email' in f: self.check_email_free(db, f['email'], person_id)
             p = self.update_row(db, user, 'people', person_id, version, f, None, 'profile')
             if not p['us']:                                        # non-US means collaborator, on every proposal
                 for m in self.all(db, 'SELECT * FROM members WHERE person_id = ?', person_id):
                     if not m['role'].lower().startswith('coll'):
-                        self.update_row(db, user, 'members', m['id'], m['version'], {'role': self.free_coll_role(db, m['proposal_id'])},
+                        role = self.free_coll_role(db, m['proposal_id'])
+                        self.update_row(db, user, 'members', m['id'], m['version'], {'role': role, 'short_id': role_label(role)},
                                         m['proposal_id'], 'team member')
             return p
 
@@ -299,17 +325,17 @@ class Store:
         return f'coll({k})'
 
     def check_member_fields(self, db, proposal_id, f, member_id=None, person=None):
-        if 'short_id' in f:
-            f['short_id'] = (f['short_id'] or '').strip()
-            if not f['short_id']: raise WorptError('Each team member needs a short ID (e.g. initials).', 'missing')
-            if f['short_id'].lower() == 'team': raise WorptError('"team" is reserved for "everyone not named"; choose another ID.', 'invalid')
-            if self.one(db, 'SELECT id FROM members WHERE proposal_id = ? AND short_id = ? AND id != ?', proposal_id, f['short_id'], member_id or -1):
-                raise WorptError(f'The ID "{f["short_id"]}" is already used on this proposal.', 'duplicate')
+        f.pop('short_id', None)                                         # the label always comes from the role
         if 'role' in f:
             f['role'] = (f['role'] or '').strip()
-            if not f['role']: raise WorptError('Each team member needs a role.', 'missing')
+            if not f['role']: raise WorptError('Each team member needs a role (e.g. PI, co-I(1), coll(1)).', 'missing')
             if person is not None and not person['us'] and not f['role'].lower().startswith('coll'):
                 f['role'] = self.free_coll_role(db, proposal_id)          # non-US institution: always a collaborator
+            f['short_id'] = role_label(f['role'])
+            if f['short_id'].lower() == 'team': raise WorptError('"team" stands for "everyone not named"; choose another role.', 'invalid')
+            other = self.one(db, 'SELECT id, role FROM members WHERE proposal_id = ? AND short_id = ? AND id != ?', proposal_id, f['short_id'], member_id or -1)
+            if other: raise WorptError(f'Someone on this proposal already has the role {other["role"]} ({f["short_id"]}); '
+                                       'each person needs a role of their own, e.g. co-I(1), co-I(2).', 'duplicate')
         if 'is_lead' in f: f['is_lead'] = 1 if f['is_lead'] else 0
         return f
 
@@ -318,7 +344,7 @@ class Store:
         if self.one(db, 'SELECT id FROM members WHERE proposal_id = ? AND person_id = ?', proposal_id, person['id']):
             raise WorptError(f'{person["first"]} {person["last"]} is already on this proposal.', 'duplicate')
         f = {k: v for k, v in fields.items() if k in EDITABLE['members']}
-        f.setdefault('short_id', ''); f.setdefault('role', '')
+        f.setdefault('role', '')
         f = self.check_member_fields(db, proposal_id, f, person=person)
         return self.insert_row(db, user, 'members', dict(f, proposal_id=proposal_id, person_id=person['id']), proposal_id)
 
@@ -552,7 +578,7 @@ class Store:
     # ------------------------------------------------ reading a whole proposal
     def export(self, db, proposal_id):
         p = self.one(db, 'SELECT * FROM proposals WHERE id = ?', proposal_id)
-        members = self.all(db, 'SELECT m.*, p.first, p.middle, p.last, p.prefix, p.suffix, p.institution, p.position, p.us, '
+        members = self.all(db, 'SELECT m.*, p.first, p.middle, p.last, p.prefix, p.suffix, p.institution, p.position, p.us, p.expertise, p.pronoun, '
                            'p.email, p.version AS person_version FROM members m JOIN people p ON p.id = m.person_id '
                            'WHERE m.proposal_id = ? ORDER BY m.id', proposal_id)
         items = self.all(db, 'SELECT * FROM items WHERE proposal_id = ? ORDER BY position, id', proposal_id)
