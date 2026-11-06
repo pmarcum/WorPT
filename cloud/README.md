@@ -53,8 +53,8 @@ email and the person's access level (`admin` from ADMIN_EMAILS, `core` from CORE
 | `WORPT_DB` | database file, default `/home/bibman/worpt_data/worpt.db` |
 | `WORPT_TEMPLATES` | LaTeX templates folder, default `latexTableTemplates/` in this repository |
 
-Secrets go in a systemd drop-in (`sudo systemctl edit worpt`), never in a committed file;
-see `systemd/worpt.service.example` and `nginx/worpt-location.conf`. `worpt_backup.py` makes a
+Secrets go in a systemd drop-in readable only by root, never in a committed file. Installing,
+updating, restoring and removing the server are covered in [DEPLOY.md](../DEPLOY.md). `worpt_backup.py` makes a
 nightly copy of the database and keeps the newest 14.
 
 Rules the server applies to every change:

@@ -1,8 +1,9 @@
-# /etc/systemd/system/worpt.service  (copy of this file; the secrets go in a drop-in, never here)
-#   sudo systemctl edit worpt      ->  add, between the comment lines it shows:
+# /etc/systemd/system/worpt.service  (a copy of this file; it holds no secrets)
+# The key goes in its own file, readable only by root (DEPLOY.md, Part 1, step 4):
+#   /etc/systemd/system/worpt.service.d/credential.conf   (sudo chmod 600)
 #       [Service]
 #       Environment=WORPT_CREDENTIAL=REPLACE_ME
-#       Environment=WORPT_READ_CREDENTIAL=REPLACE_ME
+#       Environment=WORPT_READ_CREDENTIAL=REPLACE_ME      (optional: gooTeX's read-only key)
 [Unit]
 Description=WorPT server (proposal work plans and LaTeX tables)
 After=network.target
