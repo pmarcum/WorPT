@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WorPT</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<!--
+  WorPT dashboard page. Served by the WorPT Dashboard web app, which fetches this file live from GitHub, so every
+  group gets page changes automatically. It talks only to its own Apps Script (google.script.run.gas), never to the
+  VM: the server's key stays in Apps Script.
+-->
+<style>
+:root{
+  --bg:#0f0f11; --surface:#17171a; --surface2:#131316; --border:#2a2a30; --border2:#353540; --line:#222228;
+  --text:#e8e8f0; --muted:#a0a0ae; --accent:#7eb8f7; --accent2:#f7c97e; --accent3:#7ef7c2; --red:#f77e7e;
+  --mono:'IBM Plex Mono',monospace; --sans:'IBM Plex Sans',sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;line-height:1.4}
+a{color:var(--accent)} a:hover{color:#a0ccff}
+button,input,select,textarea{font:inherit;color:inherit}
+input,select,textarea{background:var(--bg);border:1px solid var(--border2);border-radius:5px;padding:6px 8px;color:var(--text)}
+input[type=number]{font-family:var(--mono);width:68px}
+input[type=checkbox],input[type=radio]{width:17px;height:17px;accent-color:var(--accent)}
+textarea{width:100%;min-height:54px;resize:vertical}
+input:disabled,select:disabled,textarea:disabled{opacity:.6}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.btn{padding:7px 12px;min-height:34px;border-radius:5px;border:1px solid var(--border2);background:transparent;cursor:pointer;font-family:var(--mono);font-size:11px}
+.btn:hover{background:rgba(255,255,255,.05)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--bg);font-weight:600}
+.btn.primary:hover{background:#a0ccff}
+.btn.danger{border-color:#5a3030;color:#f7a0a0}
+.btn.icon{width:32px;min-height:32px;padding:0;display:inline-flex;align-items:center;justify-content:center;color:var(--muted)}
+.btn:disabled{opacity:.45;cursor:default}
+.topbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:8px 18px;background:var(--surface);border-bottom:1px solid var(--border)}
+.logo{display:flex;flex-direction:column;gap:1px;margin-right:6px}
+.logo b{font-family:var(--mono);font-size:15px;letter-spacing:.05em}
+.logo span{font-size:10px;color:var(--muted)}
+.nav{display:flex;gap:4px;flex-wrap:wrap}
+.nav button,.tabs button{padding:7px 14px;min-height:34px;border-radius:5px;border:0;background:transparent;color:var(--muted);cursor:pointer;font-family:var(--mono);font-size:12px}
+.nav button[aria-current=page],.tabs button[aria-current=page]{background:rgba(126,184,247,.14);color:var(--accent)}
+.nav button:hover,.tabs button:hover{color:var(--text)}
+.top-right{margin-left:auto;display:flex;gap:14px;align-items:center;font-family:var(--mono);font-size:11px;color:var(--muted)}
+#save.saving{color:var(--accent2)} #save.saved{color:var(--accent3)}
+.banner{padding:8px 18px;background:#2a2410;border-bottom:1px solid #4a3f1a;color:#f7e0a8;font-size:12px}
+.wrap{padding:14px 18px;max-width:1500px;margin:0 auto}
+.ptitle{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;margin:2px 0 10px}
+.ptitle h1{margin:0;font-size:17px;font-weight:600}
+.ptitle .meta{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--border);padding-bottom:8px;margin-bottom:14px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px}
+.h2{margin:0 0 8px;font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:500}
+.hint{font-size:11px;color:var(--muted);line-height:1.5;margin:6px 0 0}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.stack{display:flex;flex-direction:column;gap:12px}
+.cols{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--muted)}
+label.f input,label.f select,label.f textarea{font-size:13px}
+.mono{font-family:var(--mono)}
+.muted{color:var(--muted)}
+.empty{padding:30px 0;color:var(--muted);font-size:14px;line-height:1.6}
+/* proposals */
+.plist{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.pcard{display:flex;flex-direction:column;gap:6px;text-align:left;padding:14px;border-radius:8px;border:1px solid var(--border);background:var(--surface);cursor:pointer;min-height:110px}
+.pcard:hover{border-color:var(--border2);background:#1b1b1f}
+.pcard b{font-size:14px}
+/* plan */
+.outline{flex:1 1 300px;min-width:0}
+.editor{flex:2 1 460px;min-width:0}
+.ripple{flex:1 1 360px;min-width:0;display:flex;flex-direction:column;gap:14px}
+.orow{display:flex;align-items:center;gap:8px;width:100%;text-align:left;min-height:34px;padding:6px 8px;border-radius:5px;border:1px solid transparent;background:transparent;cursor:pointer}
+.orow:hover{background:rgba(255,255,255,.03)}
+.orow[aria-current=true]{background:rgba(126,184,247,.10);border-color:#2a3a50}
+.orow .lab{font-family:var(--mono);font-size:11px;color:var(--accent);min-width:40px}
+.orow .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.orow .w{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.orow.goal .t{font-weight:600}
+.badge{font-family:var(--mono);font-size:12px;color:var(--accent);padding:3px 8px;border:1px solid #2a3a50;border-radius:4px}
+.level{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+fieldset{border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin:0}
+legend{font-size:11px;color:var(--muted);padding:0 4px}
+.pgrid{display:grid;grid-template-columns:minmax(0,1.8fr) 44px minmax(150px,1.6fr) minmax(0,1.2fr) 36px;gap:8px;align-items:center}
+.pgrid.head{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.prow{padding:6px 0;border-top:1px solid var(--line)}
+.fte{font-family:var(--mono);font-size:11px;color:var(--accent3);white-space:nowrap}
+.sub{font-family:var(--mono);font-size:10px;color:var(--muted)}
+.rgrid{display:grid;gap:2px;min-width:330px}
+.rgrid .c{display:flex;flex-direction:column;align-items:flex-end;gap:1px;padding:6px 4px;border-top:1px solid var(--line);font-family:var(--mono);font-size:12px;border-radius:4px;transition:background .5s}
+.rgrid .c.all{background:rgba(255,255,255,.03);font-weight:600}
+.rgrid .c.lit{background:rgba(126,247,194,.22)}
+.rgrid .n{padding:6px 4px;border-top:1px solid var(--line);min-width:0}
+.rgrid .hd{font-family:var(--mono);font-size:10px;color:var(--muted);padding:4px;text-align:right}
+.checks{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.checks li{display:flex;gap:8px;align-items:baseline;line-height:1.45}
+.checks .where{font-family:var(--mono);font-size:10px;color:var(--bg);background:var(--accent2);border-radius:3px;padding:1px 5px;white-space:nowrap}
+.checks .where.fix{background:#f7a07e}
+/* tables */
+table.t{border-collapse:collapse;width:100%}
+table.t th{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:500;text-align:left;padding:6px;border-bottom:1px solid var(--border)}
+table.t td{padding:6px;border-top:1px solid var(--line);vertical-align:top}
+table.t td.num{text-align:right;font-family:var(--mono)}
+.scroll{overflow-x:auto}
+pre.latex{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px;overflow:auto;max-height:65vh;font-size:11.5px;line-height:1.45;white-space:pre}
+.tlist button{display:block;width:100%;text-align:left;padding:8px 10px;min-height:34px;border-radius:5px;border:1px solid transparent;background:transparent;cursor:pointer}
+.tlist button[aria-current=true]{background:rgba(126,184,247,.10);border-color:#2a3a50}
+.tlist .sub{display:block}
+/* modal and toast */
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:flex-start;justify-content:center;padding:8vh 16px;z-index:50;overflow:auto}
+#modal[hidden]{display:none}
+.dialog{background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:18px;width:min(560px,100%);display:flex;flex-direction:column;gap:12px}
+.dialog h2{margin:0;font-size:15px}
+.dialog .actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.compare div{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;white-space:pre-wrap;word-break:break-word}
+#toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);max-width:min(640px,92vw);background:#2a1618;border:1px solid #5a3030;color:#f7c0c0;padding:10px 14px;border-radius:8px;z-index:60;line-height:1.5}
+#toast[hidden]{display:none}
+#toast.ok{background:#14261e;border-color:#245a40;color:#bff0d8}
+@media (max-width:700px){.top-right{margin-left:0}.pgrid{grid-template-columns:minmax(0,1fr) 40px minmax(0,1.3fr) minmax(0,1.2fr) 34px}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="logo"><b>WorPT</b><span>Work Plan Tool for proposals</span></div>
+  <nav class="nav" aria-label="Main">
+    <button type="button" data-go="proposals">Proposals</button>
+    <button type="button" data-go="people">People &amp; profiles</button>
+  </nav>
+  <div class="top-right"><span id="save" aria-live="polite"></span><span id="who"></span></div>
+</header>
+<div id="banner"></div>
+<main class="wrap" id="app"><p class="empty">Opening WorPT…</p></main>
+<div id="modal" hidden></div>
+<div id="toast" role="alert" hidden></div>
+
+<script>
+'use strict';
+// ── state ────────────────────────────────────────────────────────────────────────────────────────────────────
+const S = {
+  cfg: null, me: null, view: 'proposals', proposals: [], people: [], pid: null, P: null, prev: null,
+  tab: 'plan', sel: null, lastChange: 0, lit: {}, saving: 0, table: null, tableOut: null, history: null,
+};
+const TABS = [['plan', 'Plan'], ['team', 'Team'], ['budget', 'Travel & budget'], ['tables', 'Tables'], ['history', 'History'], ['settings', 'Settings']];
+const TABLE_NAMES = {
+  NOTANONschedule: ['Schedule', 'named'], NOTANONtasks: ['Task list', 'named'], NOTANONfte: ['FTE by person', 'named'],
+  NOTANONteamSummaries: ['Team summaries', 'named'], NOTANONhst: ['HST roles', 'named'], isANONtasks: ['Task list', 'anonymous'],
+  isANONfte: ['FTE by role', 'anonymous'], isANONtravel: ['Travel', 'anonymous'], isANONnonlabor: ['Non-labor budget', 'anonymous'],
+};
+const POLL_MS = 10000;
+
+// ── small helpers ────────────────────────────────────────────────────────────────────────────────────────────
+const $ = (sel, root) => (root || document).querySelector(sel);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const f2 = x => (Math.round((+x || 0) * 100) / 100).toFixed(2);
+const money = x => '$' + Math.round(+x || 0).toLocaleString('en-US');
+const fteStep = x => { const s = x < 0.1 ? 0.01 : 0.05; return Math.round(x / s) * s; };
+const num = v => (v === '' || v == null || isNaN(+v)) ? null : +v;
+const when = iso => { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? iso : d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }); };
+const personName = p => p ? [p.first, p.last].filter(Boolean).join(' ') || '(no name)' : '';
+const isColl = m => /^coll/i.test(m.role || '') || m.us === false;
+
+function gas(fn, ...args) {
+  return new Promise((resolve, reject) => google.script.run
+    .withSuccessHandler(resolve)
+    .withFailureHandler(e => reject({ code: 'apps_script', message: String((e && e.message) || e) }))
+    .gas(fn, ...args));
+}
+async function api(fn, ...args) { const r = await gas(fn, ...args); if (!r || r.status !== 'ok') throw r || { message: 'No answer.' }; return r; }
+
+function setSaving(d) {
+  S.saving += d;
+  const el = $('#save');
+  if (S.saving > 0) { el.textContent = 'Saving…'; el.className = 'saving'; }
+  else { el.textContent = 'Saved'; el.className = 'saved'; clearTimeout(setSaving.t); setSaving.t = setTimeout(() => { el.textContent = ''; }, 2500); }
+}
+function toast(msg, ok) {
+  const t = $('#toast'); t.textContent = msg; t.className = ok ? 'ok' : ''; t.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, ok ? 3000 : 9000);
+}
+function showError(e) { toast((e && e.message) || String(e)); }
+
+/** A change to the open proposal: the change and the proposal as it now stands come back together. */
+async function change(fn, ...args) {
+  setSaving(+1);
+  try {
+    const out = await gas('change', S.pid, fn, ...args);
+    if (!out.result || out.result.status !== 'ok') throw out.result || { message: 'No answer.' };
+    if (out.proposal && out.proposal.status === 'ok') applyProposal(out.proposal);
+    return out.result;
+  } finally { setSaving(-1); }
+}
+
+// ── modal ────────────────────────────────────────────────────────────────────────────────────────────────────
+function modal(html, onReady) {
+  const m = $('#modal'); m.innerHTML = '<div class="dialog" role="dialog" aria-modal="true">' + html + '</div>'; m.hidden = false;
+  const first = m.querySelector('input,select,textarea,button'); if (first) first.focus();
+  if (onReady) onReady(m);
+  return m;
+}
+function closeModal() { const m = $('#modal'); m.hidden = true; m.innerHTML = ''; }
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#modal').hidden) closeModal(); });
+function ask(title, text, buttons) {          // buttons: [[label, value, cls]] → Promise of the value (null if closed)
+  return new Promise(resolve => {
+    modal('<h2>' + esc(title) + '</h2><p style="margin:0;line-height:1.55">' + esc(text) + '</p><div class="actions">' +
+      buttons.map((b, i) => '<button type="button" class="btn ' + (b[2] || '') + '" data-i="' + i + '">' + esc(b[0]) + '</button>').join('') +
+      '<button type="button" class="btn" data-i="x">Cancel</button></div>', m => {
+      m.querySelectorAll('[data-i]').forEach(btn => btn.onclick = () => { closeModal(); resolve(btn.dataset.i === 'x' ? null : buttons[+btn.dataset.i][1]); });
+    });
+  });
+}
+
+// ── saving a field ───────────────────────────────────────────────────────────────────────────────────────────
+// Inputs carry data-save="kind:id:field" (and data-version). They save when you leave them or press Enter.
+const UPDATE = { proposal: 'updateProposal', item: 'updateItem', member: 'updateMember', assignment: 'updateAssignment', nonlabor: 'updateNonlabor', person: 'updatePerson' };
+const WHAT = { proposal: 'proposal', item: 'item', member: 'team member', assignment: 'assignment', nonlabor: 'budget line', person: 'profile' };
+
+function readInput(el) {
+  if (el.type === 'checkbox' || el.type === 'radio') return el.checked;
+  if (el.dataset.type === 'num' || el.type === 'number') return num(el.value);
+  if (el.dataset.type === 'int') return el.value === '' ? null : parseInt(el.value, 10);
+  return el.value;
+}
+async function saveFields(kind, id, version, fields) {
+  const fn = UPDATE[kind];
+  try {
+    if (kind === 'proposal') return await change(fn, id, Object.assign({ version }, fields));
+    if (kind === 'person' && !S.pid) { setSaving(+1); try { return await api(fn, id, Object.assign({ version }, fields)); } finally { setSaving(-1); } }
+    return await change(fn, id, Object.assign({ version }, fields));
+  } catch (e) {
+    if (e && e.code === 'conflict') return conflict(kind, id, fields, e.current);
+    showError(e);
+    if (S.pid) reloadProposal(); else render();
+  }
+}
+async function conflict(kind, id, fields, current) {
+  const show = v => typeof v === 'object' ? JSON.stringify(v) : String(v == null ? '—' : v);
+  const keys = Object.keys(fields);
+  const theirs = keys.map(k => k + ': ' + show(current && current[k])).join('\n'), mine = keys.map(k => k + ': ' + show(fields[k])).join('\n');
+  const choice = await new Promise(resolve => modal(
+    '<h2>Someone else changed this ' + esc(WHAT[kind]) + ' first</h2><p style="margin:0">Your change was not saved. Which should stand?</p>' +
+    '<div class="compare"><div><b>Theirs (saved)</b>\n' + esc(theirs) + '</div><div><b>Yours</b>\n' + esc(mine) + '</div></div>' +
+    '<div class="actions"><button type="button" class="btn" data-c="theirs">Keep theirs</button><button type="button" class="btn primary" data-c="mine">Use mine</button></div>',
+    m => m.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { closeModal(); resolve(b.dataset.c); })));
+  if (choice === 'mine' && current) return saveFields(kind, id, current.version, fields);
+  if (S.pid) reloadProposal(); else render();
+}
+document.addEventListener('change', e => {
+  const el = e.target.closest('[data-save]');
+  if (!el) return;
+  const [kind, id, field] = el.dataset.save.split(':');
+  saveFields(kind, kind === 'proposal' ? id : +id, +el.dataset.version, { [field]: readInput(el) });
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.matches('input[data-save]')) e.target.blur();
+});
+// The FTE beside a weeks box follows what you type, before anything is saved.
+document.addEventListener('input', e => {
+  const el = e.target;
+  if (el.dataset.fte) { const out = document.getElementById(el.dataset.fte); if (out) out.textContent = '= ' + f2(fteStep((num(el.value) || 0) / (S.P ? S.P.weeks_per_fte || 52 : 52))) + ' FTE'; }
+});
+
+// ── loading ──────────────────────────────────────────────────────────────────────────────────────────────────
+async function start() {
+  try {
+    S.cfg = await gas('getClientConfig');
+    $('#who').textContent = S.cfg.email + (S.cfg.access !== 'code' ? ' · ' + S.cfg.access : '');
+    const notes = [];
+    if (S.cfg.latestCoreLibrary > S.cfg.coreLibraryVersion) notes.push('WorPT Core ' + S.cfg.latestCoreLibrary + ' is available (this dashboard uses ' + S.cfg.coreLibraryVersion + '). ' + S.cfg.coreLibraryNotes);
+    if (S.cfg.latestWebApp > S.cfg.webAppVersion) notes.push('A new WorPT Dashboard Code.gs (version ' + S.cfg.latestWebApp + ') is available. ' + S.cfg.webAppNotes);
+    $('#banner').innerHTML = notes.map(n => '<div class="banner">' + esc(n) + ' For whoever looks after this WorPT: see MAINTENANCE.md, "Updating".</div>').join('');
+    const hash = location.hash || '';
+    await loadMe();
+    const m = hash.match(/^#p=([A-Za-z0-9_-]+)/);
+    if (m && S.proposals.some(p => p.id === m[1])) await openProposal(m[1]); else go('proposals');
+  } catch (e) { $('#app').innerHTML = '<p class="empty">' + esc((e && e.message) || e) + '</p>'; }
+}
+async function loadMe() { const r = await api('me'); S.me = r; S.proposals = r.proposals || []; }
+async function loadPeople() { try { S.people = (await api('people', '')).people || []; } catch (e) { S.people = []; } }
+
+function go(view) {
+  S.view = view; S.pid = null; S.P = null;
+  document.querySelectorAll('[data-go]').forEach(b => b.setAttribute('aria-current', b.dataset.go === view ? 'page' : 'false'));
+  if (view === 'proposals') loadMe().then(render, showError);
+  if (view === 'people') loadPeople().then(render, showError);
+  render();
+}
+document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
+
+async function openProposal(pid) {
+  S.view = 'proposal'; S.pid = pid; S.tab = 'plan'; S.sel = null; S.prev = null; S.table = null; S.tableOut = null; S.history = null;
+  document.querySelectorAll('[data-go]').forEach(b => b.setAttribute('aria-current', 'false'));
+  $('#app').innerHTML = '<p class="empty">Opening the proposal…</p>';
+  try {
+    const [r] = await Promise.all([api('getProposal', pid), loadPeople()]);
+    try { history.replaceState(null, '', '#p=' + pid); } catch (e) { /* not allowed inside some frames */ }
+    applyProposal(r);
+  } catch (e) { showError(e); go('proposals'); }
+}
+async function reloadProposal() {
+  if (!S.pid) return;
+  try { applyProposal(await api('getProposal', S.pid)); } catch (e) { showError(e); }
+}
+
+/** A fresh copy of the proposal arrived: work out what changed in the ripple panel, then redraw. */
+function applyProposal(r) {
+  const old = S.P && S.P.computed;
+  S.P = r; S.lastChange = r.last_change || 0;
+  S.lit = {};
+  if (old) {
+    Object.keys(r.computed.people).forEach(mid => {
+      const a = r.computed.people[mid], b = old.people[mid];
+      const cells = a.per_year.concat([a.total]), was = b ? b.per_year.concat([b.total]) : [];
+      cells.forEach((c, y) => { if (!was[y] || Math.abs(c[0] - was[y][0]) > 1e-9 || Math.abs(c[1] - was[y][1]) > 1e-9) S.lit[mid + ':' + y] = true; });
+    });
+    if (Object.keys(S.lit).length) { clearTimeout(applyProposal.t); applyProposal.t = setTimeout(() => { document.querySelectorAll('.rgrid .c.lit').forEach(c => c.classList.remove('lit')); S.lit = {}; }, 1600); }
+  }
+  if (S.sel && !r.items.some(i => i.id === S.sel)) S.sel = null;
+  if (!S.sel) { const first = leafOrder()[0] || r.items[0]; S.sel = first ? first.id : null; }
+  if (S.tab === 'history') S.history = null;
+  if (S.tab === 'tables' && S.table) loadTable(S.table, true);
+  render();
+}
+
+// Others' changes: ask every 10 seconds whether anything changed, while the page is visible and nobody is typing.
+setInterval(async () => {
+  if (S.view !== 'proposal' || !S.pid || document.visibilityState !== 'visible' || S.saving || !$('#modal').hidden) return;
+  if (document.activeElement && document.activeElement.matches('input,textarea,select')) return;
+  try {
+    const r = await api('changed', S.pid);
+    if (r.last_change > S.lastChange && !S.saving) await reloadProposal();
+  } catch (e) { /* quiet: the next check tries again */ }
+}, POLL_MS);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.pid) reloadProposal(); });
+
+// ── drawing (keeps the focus and anything half-typed when the page redraws) ──────────────────────────────────
+function render() {
+  const a = document.activeElement, key = a && a.dataset && (a.dataset.save || a.dataset.key);
+  const typed = a && key && a.matches('input:not([type=checkbox]):not([type=radio]),textarea') ? { value: a.value, s: a.selectionStart, e: a.selectionEnd, dirty: a.value !== a.defaultValue } : null;
+  const html = S.view === 'proposal' && S.P ? viewProposal() : S.view === 'people' ? viewPeople() : viewProposals();
+  $('#app').innerHTML = html;
+  if (key) {
+    const b = document.querySelector('[data-save="' + CSS.escape(key) + '"],[data-key="' + CSS.escape(key) + '"]');
+    if (b) {
+      if (typed && typed.dirty) b.value = typed.value;
+      b.focus();
+      if (typed && b.setSelectionRange) try { b.setSelectionRange(typed.s, typed.e); } catch (e) { /* number inputs */ }
+    }
+  }
+  wire();
+}
+
+// ── proposals list ───────────────────────────────────────────────────────────────────────────────────────────
+function viewProposals() {
+  const canCreate = S.cfg && S.cfg.access !== 'code';
+  const list = S.proposals.map(p =>
+    '<button type="button" class="pcard" data-open="' + esc(p.id) + '"><b>' + esc(p.title) + '</b>' +
+    '<span class="mono muted" style="font-size:11px">' + esc(p.program || 'no program set') + ' · ' + p.n_years + ' year' + (p.n_years === 1 ? '' : 's') + '</span>' +
+    '<span class="muted">Leads: ' + esc(p.leads || '—') + '</span>' +
+    '<span class="muted" style="font-size:11px;margin-top:auto">Last changed ' + esc(when(p.last_changed_at)) + '</span></button>').join('');
+  const empty = S.cfg && S.cfg.access === 'admin' ? 'There are no proposals yet.' :
+    'You are not on any proposal yet. Ask a proposal lead to add you; they need the Google email you sign in with, ' + (S.cfg ? S.cfg.email : '') + '.';
+  return '<div class="row" style="margin-bottom:12px"><h1 style="margin:0;font-size:17px">Proposals</h1>' +
+    (S.cfg && S.cfg.access === 'admin' ? '<span class="muted">(as an admin you see every proposal)</span>' : '') +
+    (canCreate ? '<button type="button" class="btn primary" style="margin-left:auto" data-act="newProposal">New proposal</button>' : '') + '</div>' +
+    (list ? '<div class="plist">' + list + '</div>' : '<p class="empty">' + esc(empty) + '</p>');
+}
+
+async function newProposal() {
+  await loadPeople();
+  const me = S.me && S.me.profile;
+  const opts = S.people.map(p => '<option value="' + p.id + '"' + (me && me.id === p.id ? ' selected' : '') + '>' + esc(personName(p)) + (p.email ? ' (' + esc(p.email) + ')' : '') + '</option>').join('');
+  modal('<h2>New proposal</h2>' +
+    '<label class="f">Title<input id="np-title" maxlength="300"></label>' +
+    '<div class="row"><label class="f" style="flex:1">Program<input id="np-program" placeholder="e.g. NASA/ADAP"></label>' +
+    '<label class="f">Years<input id="np-years" type="number" min="1" step="1" value="3"></label></div>' +
+    '<fieldset><legend>First lead (more can be added on the Team tab)</legend><div class="row">' +
+    '<label class="f" style="flex:1">Person<select id="np-lead">' + (opts || '<option value="">No profiles yet</option>') + '</select></label>' +
+    '<label class="f">Short ID<input id="np-sid" value="PI" style="width:80px"></label><label class="f">Role<input id="np-role" value="PI" style="width:100px"></label></div>' +
+    '<p class="hint">Not in the list? <button type="button" class="btn" id="np-newperson">New person…</button></p></fieldset>' +
+    '<div class="actions"><button type="button" class="btn" data-x>Cancel</button><button type="button" class="btn primary" id="np-go">Create</button></div>', m => {
+    m.querySelector('[data-x]').onclick = closeModal;
+    m.querySelector('#np-newperson').onclick = async () => { closeModal(); const p = await editPerson(null); if (p) newProposal(); };
+    m.querySelector('#np-go').onclick = async () => {
+      const lead = num($('#np-lead').value);
+      if (!lead) return toast('Choose the first lead (make a profile with New person… if needed).');
+      try {
+        const r = await api('createProposal', { title: $('#np-title').value, program: $('#np-program').value, n_years: num($('#np-years').value),
+          leads: [{ person_id: lead, short_id: $('#np-sid').value, role: $('#np-role').value }] });
+        closeModal(); await loadMe(); openProposal(r.proposal.id);
+      } catch (e) { showError(e); }
+    };
+  });
+}
+
+// ── people and profiles ──────────────────────────────────────────────────────────────────────────────────────
+function viewPeople() {
+  const me = S.me && S.me.profile;
+  const mine = me ? '<p>Your profile: <b>' + esc(personName(me)) + '</b> · ' + esc(me.institution || 'no institution') + ' · ' + (me.us ? 'US institution' : 'non-US institution (always a collaborator)') +
+    ' <button type="button" class="btn" data-editperson="' + me.id + '">Edit my profile</button></p>' :
+    '<p class="muted">You have no profile yet. A proposal lead or core member makes it, with your Google email (' + esc(S.cfg ? S.cfg.email : '') + ').</p>';
+  const others = S.people.filter(p => !me || p.id !== me.id);
+  const rows = others.map(p => '<tr><td>' + esc(personName(p)) + '</td><td class="mono">' + esc(p.email || '—') + '</td><td>' + esc(p.institution) + '</td><td>' + (p.us ? 'US' : 'non-US') + '</td>' +
+    '<td><button type="button" class="btn" data-editperson="' + p.id + '">Edit</button></td></tr>').join('');
+  const canAdd = S.cfg && (S.cfg.access !== 'code' || S.people.length > 1);
+  return '<div class="row" style="margin-bottom:12px"><h1 style="margin:0;font-size:17px">People &amp; profiles</h1>' +
+    (canAdd ? '<button type="button" class="btn primary" style="margin-left:auto" data-act="newPerson">New person</button>' : '') + '</div>' +
+    '<div class="card stack">' + mine +
+    (others.length ? '<div class="scroll"><table class="t"><thead><tr><th>Name</th><th>Google email</th><th>Institution</th><th>US?</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '') +
+    '<p class="hint">A profile is shared by every proposal the person is on. Its email must be the Google email they sign in with, or they will not see their proposals. ' +
+    'Someone at a non-US institution is always a collaborator (100% unfunded) on every proposal.</p></div>';
+}
+
+/** Edit (or, with person = null, make) a profile. Resolves to the saved profile, or null. */
+function editPerson(person) {
+  const p = person || { first: '', middle: '', last: '', prefix: '', suffix: '', email: '', institution: '', position: '', us: true };
+  const own = S.me && S.me.profile && person && S.me.profile.id === person.id;
+  return new Promise(resolve => modal('<h2>' + (person ? 'Edit profile' : 'New person') + '</h2>' +
+    '<div class="row"><label class="f" style="width:70px">Prefix<input id="pp-prefix" value="' + esc(p.prefix) + '"></label>' +
+    '<label class="f" style="flex:1">First<input id="pp-first" value="' + esc(p.first) + '"></label>' +
+    '<label class="f" style="width:90px">Middle<input id="pp-middle" value="' + esc(p.middle) + '"></label></div>' +
+    '<div class="row"><label class="f" style="flex:1">Last<input id="pp-last" value="' + esc(p.last) + '"></label>' +
+    '<label class="f" style="width:80px">Suffix<input id="pp-suffix" value="' + esc(p.suffix) + '"></label></div>' +
+    '<label class="f">Google email (the one they sign in with)<input id="pp-email" type="email" value="' + esc(p.email || '') + '"' + (own ? ' disabled' : '') + '></label>' +
+    '<div class="row"><label class="f" style="flex:1">Institution<input id="pp-inst" value="' + esc(p.institution) + '"></label>' +
+    '<label class="f" style="flex:1">Position<input id="pp-pos" value="' + esc(p.position) + '"></label></div>' +
+    '<label class="row" style="gap:8px"><input type="checkbox" id="pp-us"' + (p.us ? ' checked' : '') + '> US institution (unticked: always a collaborator, 100% unfunded, on every proposal)</label>' +
+    (own ? '<p class="hint">Your own email can only be changed by a core member or admin, because WorPT recognises you by it.</p>' : '') +
+    '<div class="actions"><button type="button" class="btn" data-x>Cancel</button><button type="button" class="btn primary" id="pp-go">Save</button></div>', m => {
+    m.querySelector('[data-x]').onclick = () => { closeModal(); resolve(null); };
+    m.querySelector('#pp-go').onclick = async () => {
+      const f = { prefix: $('#pp-prefix').value, first: $('#pp-first').value, middle: $('#pp-middle').value, last: $('#pp-last').value, suffix: $('#pp-suffix').value,
+                  institution: $('#pp-inst').value, position: $('#pp-pos').value, us: $('#pp-us').checked };
+      if (!own) f.email = $('#pp-email').value;
+      try {
+        const r = person ? (S.pid ? await change('updatePerson', person.id, Object.assign({ version: person.version }, f))
+                                  : await api('updatePerson', person.id, Object.assign({ version: person.version }, f)))
+                         : await api('createPerson', f);
+        closeModal(); toast('Profile saved.', true);
+        await Promise.all([loadPeople(), loadMe()]); if (!S.pid) render();
+        resolve(r.person);
+      } catch (e) {
+        if (e && e.code === 'conflict') { closeModal(); toast('Someone else changed this profile while you were editing; it has been reloaded.'); await loadPeople(); render(); resolve(null); }
+        else showError(e);
+      }
+    };
+  }));
+}
+
+// ── one proposal ─────────────────────────────────────────────────────────────────────────────────────────────
+function viewProposal() {
+  const P = S.P, p = P.proposal;
+  const leads = P.members.filter(m => m.is_lead).map(personName).join(', ');
+  const body = { plan: viewPlan, team: viewTeam, budget: viewBudget, tables: viewTables, history: viewHistory, settings: viewSettings }[S.tab]();
+  return '<div class="ptitle"><h1>' + esc(p.title) + '</h1><span class="meta">' + esc(p.program || 'no program set') + ' · ' + p.n_years + ' year' + (p.n_years === 1 ? '' : 's') +
+    ' · leads: ' + esc(leads || '—') + (P.you.lead ? ' · you are a lead' : P.you.member_id ? '' : ' · viewing as admin') + '</span></div>' +
+    '<nav class="tabs" aria-label="Proposal sections">' + TABS.map(t => '<button type="button" data-tab="' + t[0] + '" aria-current="' + (S.tab === t[0] ? 'page' : 'false') + '">' + esc(t[1]) + '</button>').join('') + '</nav>' + body;
+}
+
+// The tree, in order, with depth and label.
+function tree() {
+  const P = S.P, kids = {}, out = [];
+  P.items.forEach(i => (kids[i.parent_id == null ? 'root' : i.parent_id] = kids[i.parent_id == null ? 'root' : i.parent_id] || []).push(i));
+  Object.values(kids).forEach(k => k.sort((a, b) => a.position - b.position || a.id - b.id));
+  (function walk(parent, depth) { (kids[parent] || []).forEach(i => { out.push({ item: i, depth, kids: (kids[i.id] || []).length }); walk(i.id, depth + 1); }); })('root', 0);
+  return out;
+}
+function leafOrder() { return tree().filter(n => n.depth > 0 && !n.kids).map(n => n.item); }
+const labelOf = id => (S.P.computed.items[id] || {}).label || '';
+const memberById = id => S.P.members.find(m => m.id === id);
+function itemWeeks(id) {          // weeks on an item and everything under it ("team" counts once per person it covers)
+  const P = S.P, below = new Set([id]);
+  let grew = true;
+  while (grew) { grew = false; P.items.forEach(i => { if (below.has(i.parent_id) && !below.has(i.id)) { below.add(i.id); grew = true; } }); }
+  let w = 0;
+  P.items.filter(i => below.has(i.id)).forEach(i => {
+    const work = P.assignments.filter(a => a.item_id === i.id), named = new Set(work.filter(a => !a.is_team).map(a => a.member_id));
+    work.forEach(a => { w += (+a.weeks || 0) * (a.is_team ? P.members.filter(m => !named.has(m.id)).length : 1); });
+  });
+  return w;
+}
+
+function viewPlan() {
+  const P = S.P, nodes = tree();
+  const outline = nodes.map(n => '<button type="button" class="orow' + (n.depth === 0 ? ' goal' : '') + '" data-sel="' + n.item.id + '" aria-current="' + (n.item.id === S.sel) + '" style="padding-left:' + (8 + n.depth * 18) + 'px">' +
+    '<span class="lab">' + esc(labelOf(n.item.id)) + '</span><span class="t">' + esc(n.item.title || '(untitled)') + '</span><span class="w">' + (+itemWeeks(n.item.id).toFixed(1)) + '</span></button>').join('');
+  const sel = nodes.find(n => n.item.id === S.sel);
+  return '<div class="cols">' +
+    '<section class="card outline" aria-label="Outline"><div class="row" style="margin-bottom:8px"><h2 class="h2" style="margin:0">Outline</h2><span class="sub" style="margin-left:auto">weeks</span></div>' +
+    (outline || '<p class="muted">No goals yet. Start with a goal, then add tasks under it.</p>') +
+    '<div class="row" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">' +
+    '<button type="button" class="btn" data-act="addGoal">+ Goal</button>' +
+    '<button type="button" class="btn" data-act="addTask"' + (sel ? '' : ' disabled') + '>+ Task</button>' +
+    '<button type="button" class="btn" data-act="addSub"' + (sel && sel.depth > 0 ? '' : ' disabled') + '>+ Subtask</button></div>' +
+    '<p class="hint">+ Task adds a task to the chosen goal; + Subtask adds a subtask to the chosen task.</p></section>' +
+    '<section class="card editor stack" aria-label="Chosen item">' + (sel ? viewItem(sel, nodes) : '<p class="muted">Choose or add an item.</p>') + '</section>' +
+    '<section class="ripple" aria-label="Ripple panel">' + viewRipple() + viewChecks() + '</section></div>';
+}
+
+function viewItem(n, nodes) {
+  const P = S.P, it = n.item, d = n.depth, leaf = d > 0 && !n.kids, ny = P.proposal.n_years;
+  const siblings = nodes.filter(x => x.item.parent_id === it.parent_id);
+  const idx = siblings.findIndex(x => x.item.id === it.id);
+  const parents = d === 0 ? [] : nodes.filter(x => x.depth === d - 1 && x.item.id !== it.parent_id);
+  let html = '<div class="row"><span class="badge">' + esc(labelOf(it.id)) + '</span><span class="level">' + ['Goal', 'Task', 'Subtask'][d] + '</span>' +
+    '<span style="margin-left:auto" class="row">' +
+    '<button type="button" class="btn icon" data-move="-1" aria-label="Move up"' + (idx > 0 ? '' : ' disabled') + '>↑</button>' +
+    '<button type="button" class="btn icon" data-move="1" aria-label="Move down"' + (idx < siblings.length - 1 ? '' : ' disabled') + '>↓</button>' +
+    (parents.length ? '<select data-act="moveUnder" aria-label="Move under another ' + (d === 1 ? 'goal' : 'task') + '"><option value="">Move under…</option>' +
+      parents.map(x => '<option value="' + x.item.id + '">' + esc(labelOf(x.item.id) + ' ' + x.item.title) + '</option>').join('') + '</select>' : '') +
+    '<button type="button" class="btn danger" data-act="deleteItem">Delete…</button></span></div>' +
+    '<label class="f">Title<input data-save="item:' + it.id + ':title" data-version="' + it.version + '" value="' + esc(it.title) + '" maxlength="500"></label>';
+  if (d === 0) return html + '<p class="muted" style="margin:0;line-height:1.5">Goals carry no timeline or people of their own; their numbers come from their tasks (' + (+itemWeeks(it.id).toFixed(1)) + ' weeks in all).</p>' +
+    '<div><button type="button" class="btn" data-act="addTask">+ Add a task to this goal</button></div>';
+  if (!leaf) {
+    const c = P.computed.items[it.id] || {};
+    return html + '<p class="muted" style="margin:0;line-height:1.5">This task has subtasks, so its timeline (' + esc(span(c.start, c.end)) + ') and its effort (' + (+itemWeeks(it.id).toFixed(1)) + ' weeks) come from them. Choose a subtask to change them.</p>' +
+      '<div><button type="button" class="btn" data-act="addSub">+ Add a subtask</button></div>';
+  }
+  const ysel = (field, v) => '<select data-save="item:' + it.id + ':' + field + '" data-version="' + it.version + '" data-type="int" aria-label="' + field.replace('_', ' ') + '"><option value="">—</option>' +
+    Array.from({ length: Math.max(ny, v || 0) }, (_, k) => '<option value="' + (k + 1) + '"' + (v === k + 1 ? ' selected' : '') + '>Year ' + (k + 1) + '</option>').join('') + '</select>';
+  const qsel = (field, v) => '<select data-save="item:' + it.id + ':' + field + '" data-version="' + it.version + '" data-type="int" aria-label="' + field.replace('_', ' ') + '"><option value="">—</option>' +
+    [1, 2, 3, 4].map(q => '<option value="' + q + '"' + (v === q ? ' selected' : '') + '>Q' + q + '</option>').join('') + '</select>';
+  html += '<fieldset><legend>Timeline</legend><div class="row"><span class="muted">From</span>' + ysel('start_year', it.start_year) + qsel('start_q', it.start_q) +
+    '<span class="muted">to</span>' + ysel('end_year', it.end_year) + qsel('end_q', it.end_q) + '</div></fieldset>';
+  const work = P.assignments.filter(a => a.item_id === it.id).sort((a, b) => a.position - b.position || a.id - b.id);
+  const named = new Set(work.filter(a => !a.is_team).map(a => a.member_id));
+  const unnamed = P.members.filter(m => !named.has(m.id));
+  const rows = work.map(a => {
+    const m = a.is_team ? null : memberById(a.member_id), coll = m && isColl(m);
+    const name = a.is_team ? 'Everyone not named (team)' : personName(m);
+    const role = a.is_team ? unnamed.length + ' people, each gets these weeks' : (m.short_id + ' · ' + m.role + (coll ? ' · collaborator' : ''));
+    return '<div class="pgrid prow"><span style="display:flex;flex-direction:column;min-width:0"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(name) + '</span><span class="sub">' + esc(role) + '</span></span>' +
+      '<input type="radio" name="lead-' + it.id + '" aria-label="Make ' + esc(name) + ' the lead"' + (a.is_lead ? ' checked' : '') + ' data-save="assignment:' + a.id + ':is_lead" data-version="' + a.version + '">' +
+      '<span class="row" style="gap:6px;flex-wrap:nowrap"><input type="number" min="0" step="0.5" aria-label="Weeks for ' + esc(name) + '" value="' + esc(a.weeks) + '" data-save="assignment:' + a.id + ':weeks" data-version="' + a.version + '" data-fte="fte-' + a.id + '">' +
+      '<span class="fte" id="fte-' + a.id + '">= ' + f2(fteStep((+a.weeks || 0) / (P.proposal.weeks_per_fte || 52))) + ' FTE</span></span>' +
+      (coll ? '<span class="muted" style="font-size:11px">all unfunded (collaborator)</span>' :
+        '<input type="number" min="0" step="0.5" aria-label="Unfunded weeks for ' + esc(name) + '" value="' + esc(a.unfunded) + '" data-save="assignment:' + a.id + ':unfunded" data-version="' + a.version + '">') +
+      '<button type="button" class="btn icon" data-unassign="' + a.id + '" aria-label="Remove ' + esc(name) + ' from this item">✕</button></div>';
+  }).join('');
+  const addable = P.members.filter(m => !named.has(m.id)).map(m => '<option value="m' + m.id + '">' + esc(personName(m) + ' (' + m.short_id + ', ' + m.role + ')') + '</option>').join('') +
+    (work.some(a => a.is_team) ? '' : '<option value="team">Everyone not named (team)</option>');
+  return html + '<div><div class="pgrid head"><span>Person</span><span>Lead</span><span>Weeks</span><span>Unfunded weeks</span><span></span></div>' + rows +
+    '<label class="row prow" style="gap:8px"><span class="muted">Add a person</span><select data-act="assign" style="flex:1;max-width:340px"><option value="">Choose…</option>' + addable + '</select></label>' +
+    (P.members.length ? '' : '<p class="hint">The team is empty: add people on the Team tab first.</p>') +
+    '<p class="hint">The green figure is that person\'s effort on this item in FTE, counted over the whole item (weeks ÷ ' + (P.proposal.weeks_per_fte || 52) + '), updated as you type. The panel on the right shows how it lands in each year once saved.</p></div>';
+}
+const span = (s, e) => s && e ? 'Year ' + s[0] + ' Q' + s[1] + ' – Year ' + e[0] + ' Q' + e[1] : 'none yet';
+
+function viewRipple() {
+  const P = S.P, ny = P.proposal.n_years, c = P.computed;
+  const cols = 'grid-template-columns:minmax(100px,1.6fr) repeat(' + (ny + 1) + ',minmax(52px,1fr))';
+  const head = '<span class="hd" style="text-align:left">Person</span>' + Array.from({ length: ny }, (_, y) => '<span class="hd">Year ' + (y + 1) + '</span>').join('') + '<span class="hd">All</span>';
+  const cell = (v, mid, y, all) => '<span class="c' + (all ? ' all' : '') + (S.lit[mid + ':' + y] ? ' lit' : '') + '"><span>' + f2(v[0]) + '</span><span class="sub">' + (v[1] > 0 ? f2(v[1]) + ' unf.' : '—') + '</span></span>';
+  const rows = P.members.map(m => {
+    const r = c.people[m.id] || { per_year: [], total: [0, 0, 0] };
+    return '<span class="n"><span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(personName(m)) + '</span><span class="sub">' + esc(m.short_id + ' · ' + m.role) + '</span></span>' +
+      Array.from({ length: ny }, (_, y) => cell(r.per_year[y] || [0, 0, 0], m.id, y)).join('') + cell(r.total, m.id, ny, true);
+  }).join('');
+  // project total per year = the sum of the people's rounded yearly figures (as in the tables); all years: the engine's total
+  const yearSum = y => P.members.reduce((a, m) => a + (((c.people[m.id] || {}).per_year || [])[y] || [0])[0], 0);
+  const totals = '<span class="n"><b>Project</b></span>' + Array.from({ length: ny }, (_, y) => '<span class="c"><b>' + f2(yearSum(y)) + '</b></span>').join('') +
+    '<span class="c all">' + f2((c.project_total || [0])[0]) + '</span>';
+  return '<div class="card"><h2 class="h2">Effort per person (FTE)</h2><p class="hint" style="margin:0 0 8px">Each cell: total, with the unfunded part below. Cells that just changed light up.</p>' +
+    '<div class="scroll"><div class="rgrid" style="' + cols + '">' + head + rows + (P.members.length ? totals : '') + '</div></div>' +
+    (P.members.length ? '' : '<p class="hint">No team members yet.</p>') + '</div>';
+}
+
+function viewChecks() {
+  const checks = S.P.computed.checks || [];
+  const memberLabel = id => { const m = S.P.members.find(x => x.short_id === id); return m ? personName(m) : id; };
+  return '<div class="card"><h2 class="h2">Checks (' + checks.length + ')</h2>' +
+    (checks.length ? '<ul class="checks">' + checks.map(k => '<li><span class="where ' + esc(k.level) + '">' + esc(/^[A-Z]+[0-9.]*$/.test(k.item) ? k.item : memberLabel(k.item)) + '</span><span>' + esc(k.message) + '</span></li>').join('') + '</ul>'
+      : '<p style="margin:0;color:var(--accent3)">Nothing needs attention.</p>') + '</div>';
+}
+
+// ── team ─────────────────────────────────────────────────────────────────────────────────────────────────────
+function viewTeam() {
+  const P = S.P, can = P.you.can_manage_team, dis = can ? '' : ' disabled';
+  const rows = P.members.map(m => {
+    const v = ' data-version="' + m.version + '"' + dis;
+    return '<tr><td><b>' + esc(personName(m)) + '</b><div class="sub">' + esc(m.institution || 'no institution') + ' · ' + (m.us ? 'US' : 'non-US') + '</div>' +
+      '<button type="button" class="btn" style="margin-top:6px" data-editperson="' + m.person_id + '">Profile…</button></td>' +
+      '<td><input data-save="member:' + m.id + ':short_id" value="' + esc(m.short_id) + '" style="width:70px" aria-label="Short ID"' + v + '></td>' +
+      '<td><input data-save="member:' + m.id + ':role" value="' + esc(m.role) + '" style="width:90px" aria-label="Role"' + v + (m.us ? '' : ' title="non-US: always a collaborator"') + '></td>' +
+      '<td><input type="checkbox" data-save="member:' + m.id + ':is_lead" aria-label="Lead"' + (m.is_lead ? ' checked' : '') + v + '></td>' +
+      '<td><input type="number" min="0.01" step="0.01" data-save="member:' + m.id + ':fte_accuracy" value="' + esc(m.fte_accuracy == null ? '' : m.fte_accuracy) + '" placeholder="0.05" aria-label="FTE accuracy"' + v + '></td>' +
+      '<td style="min-width:200px"><textarea data-save="member:' + m.id + ':bio_summary" aria-label="Team summary"' + v + '>' + esc(m.bio_summary) + '</textarea></td>' +
+      '<td style="min-width:160px"><textarea data-save="member:' + m.id + ':task_summary" aria-label="HST role text"' + v + '>' + esc(m.task_summary) + '</textarea></td>' +
+      '<td>' + (can ? '<button type="button" class="btn danger" data-removemember="' + m.id + '">Remove…</button>' : '') + '</td></tr>';
+  }).join('');
+  const onTeam = new Set(P.members.map(m => m.person_id));
+  const options = S.people.filter(p => !onTeam.has(p.id)).map(p => '<option value="' + p.id + '">' + esc(personName(p)) + (p.email ? ' (' + esc(p.email) + ')' : '') + '</option>').join('');
+  const add = can ? '<fieldset style="margin-top:14px"><legend>Add someone to the team</legend><div class="row">' +
+    '<label class="f" style="flex:1;min-width:220px">Person<select id="am-person"><option value="">Choose…</option>' + options + '</select></label>' +
+    '<label class="f">Short ID<input id="am-sid" style="width:80px" placeholder="e.g. JD"></label>' +
+    '<label class="f">Role<input id="am-role" style="width:110px" placeholder="e.g. co-I(1)"></label>' +
+    '<label class="row" style="gap:6px;align-self:flex-end;padding-bottom:8px"><input type="checkbox" id="am-lead"> lead</label>' +
+    '<button type="button" class="btn primary" style="align-self:flex-end" data-act="addMember">Add</button>' +
+    '<button type="button" class="btn" style="align-self:flex-end" data-act="newPerson">New person…</button></div>' +
+    '<p class="hint">Roles: PI, Sci-PI, Admin-PI, co-I(1), co-I(2)…, coll(1)…, gst(1) (graduate student), pd(1) (postdoc)… Someone at a non-US institution is always given a coll role.</p></fieldset>' : '';
+  return '<div class="card"><h2 class="h2">Team</h2>' + (can ? '' : '<p class="hint" style="margin:0 0 8px">Only this proposal\'s leads (and admins) change the team; you can see it here.</p>') +
+    '<div class="scroll"><table class="t"><thead><tr><th>Person</th><th>Short ID</th><th>Role</th><th>Lead</th><th>FTE accuracy</th><th>Team summary</th><th>HST role text</th><th></th></tr></thead><tbody>' +
+    (rows || '<tr><td colspan="8" class="muted">No one yet.</td></tr>') + '</tbody></table></div>' + add + '</div>';
+}
+
+// ── travel and budget ────────────────────────────────────────────────────────────────────────────────────────
+function viewBudget() {
+  const P = S.P, ny = P.proposal.n_years, tr = P.proposal.travel || {}, years = Array.from({ length: ny }, (_, y) => y);
+  const trips = P.members.map(m => '<tr><td>' + esc(personName(m)) + '<div class="sub">' + esc(m.short_id + ' · ' + m.role) + '</div></td>' + years.map(y =>
+    ['dom', 'int'].map((k, j) => '<td><input type="number" min="0" step="1" data-trip="' + m.id + ':' + y + ':' + j + '" data-key="trip:' + m.id + ':' + y + ':' + j + '" value="' + esc(((m.trips || [])[y] || [0, 0])[j] || 0) + '" aria-label="' + esc(personName(m)) + ' year ' + (y + 1) + ' ' + (j ? 'international' : 'domestic') + ' trips" style="width:56px"></td>').join('')).join('') + '</tr>').join('');
+  const rowsT = [['airfare', 'Airfare (per trip)'], ['perdiem', 'Per diem (per day)'], ['conference', 'Conference fees (per trip)'], ['ground', 'Ground travel (per day)']];
+  const tv = (k, i) => ((tr[k] || [])[i] == null ? 0 : tr[k][i]);
+  const assumptions = rowsT.map(r => '<tr><td>' + r[1] + '</td>' + [0, 1].map(i => '<td><input type="number" min="0" step="1" data-travel="' + r[0] + ':' + i + '" data-key="travel:' + r[0] + ':' + i + '" value="' + esc(tv(r[0], i)) + '" style="width:90px" aria-label="' + r[1] + (i ? ' international' : ' domestic') + '"></td>').join('') +
+    '<td><input type="number" min="0" step="0.1" data-travel="' + r[0] + ':2" data-key="travel:' + r[0] + ':2" data-pct="1" value="' + esc(+(tv(r[0], 2) * 100).toFixed(3)) + '" style="width:70px" aria-label="' + r[1] + ' yearly increase, percent"> %</td></tr>').join('') +
+    '<tr><td>Days per trip</td>' + [0, 1].map(i => '<td><input type="number" min="0" step="1" data-travel="days:' + i + '" data-key="travel:days:' + i + '" value="' + esc(tv('days', i)) + '" style="width:90px" aria-label="Days per ' + (i ? 'international' : 'domestic') + ' trip"></td>').join('') + '<td></td></tr>';
+  const sum = (P.computed.travel || []).map(t => '<tr><td>Year ' + t.year + '</td><td class="num">' + t.dom_trips + ' × ' + money(t.dom_per_trip) + '</td><td class="num">' + money(t.dom_total) + '</td>' +
+    '<td class="num">' + t.int_trips + ' × ' + money(t.int_per_trip) + '</td><td class="num">' + money(t.int_total) + '</td><td class="num"><b>' + money(t.dom_total + t.int_total) + '</b></td></tr>').join('');
+  const lines = P.nonlabor.map(r => '<tr><td><input data-save="nonlabor:' + r.id + ':item" data-version="' + r.version + '" value="' + esc(r.item) + '" style="width:100%;min-width:180px" aria-label="Budget item"></td>' +
+    years.map(y => '<td><input type="number" min="0" step="1" data-nl="' + r.id + ':' + y + '" data-key="nl:' + r.id + ':' + y + '" value="' + esc((r.amounts || [])[y] || 0) + '" style="width:90px" aria-label="' + esc(r.item) + ' year ' + (y + 1) + '"></td>').join('') +
+    '<td class="num">' + money((r.amounts || []).slice(0, ny).reduce((a, b) => a + (+b || 0), 0)) + '</td><td><button type="button" class="btn icon" data-delnl="' + r.id + '" aria-label="Delete this line">✕</button></td></tr>').join('');
+  return '<div class="stack">' +
+    '<div class="card"><h2 class="h2">Trips per person</h2><div class="scroll"><table class="t"><thead><tr><th>Person</th>' + years.map(y => '<th colspan="2">Year ' + (y + 1) + '</th>').join('') + '</tr>' +
+    '<tr><th></th>' + years.map(() => '<th>Dom.</th><th>Intl.</th>').join('') + '</tr></thead><tbody>' + (trips || '<tr><td class="muted">No team members yet.</td></tr>') + '</tbody></table></div></div>' +
+    '<div class="cols"><div class="card" style="flex:1 1 420px"><h2 class="h2">Cost assumptions</h2><div class="scroll"><table class="t"><thead><tr><th></th><th>Domestic $</th><th>International $</th><th>Yearly increase</th></tr></thead><tbody>' + assumptions + '</tbody></table></div></div>' +
+    '<div class="card" style="flex:1 1 420px"><h2 class="h2">Travel costs</h2><div class="scroll"><table class="t"><thead><tr><th></th><th>Domestic trips</th><th>Domestic</th><th>International trips</th><th>International</th><th>Year</th></tr></thead><tbody>' + sum + '</tbody></table></div>' +
+    '<p class="hint">Rounded to the dollar here; the tables round to the nearest $5.</p></div></div>' +
+    '<div class="card"><h2 class="h2">Non-labor budget</h2><div class="scroll"><table class="t"><thead><tr><th>Item (LaTeX allowed, e.g. Materials \\&amp; Supplies)</th>' + years.map(y => '<th>Year ' + (y + 1) + ' $</th>').join('') + '<th>Total</th><th></th></tr></thead><tbody>' +
+    (lines || '<tr><td class="muted" colspan="' + (ny + 3) + '">No lines yet.</td></tr>') + '</tbody></table></div>' +
+    '<div class="row" style="margin-top:10px"><button type="button" class="btn" data-act="addNonlabor">+ Line</button><span class="hint" style="margin:0">Travel is added to the table by itself; lines with no amounts are left out.</span></div></div></div>';
+}
+
+// ── tables ───────────────────────────────────────────────────────────────────────────────────────────────────
+function viewTables() {
+  const list = Object.keys(TABLE_NAMES).map(k => '<button type="button" data-table="' + k + '" aria-current="' + (S.table === k) + '"><span>' + esc(TABLE_NAMES[k][0]) + '</span><span class="sub">' + esc(TABLE_NAMES[k][1]) + ' · ' + k + '</span></button>').join('');
+  const out = S.tableOut;
+  const right = !S.table ? '<p class="muted">Choose a table to see its LaTeX.</p>' : !out ? '<p class="muted">Making the table…</p>' :
+    '<div class="row" style="margin-bottom:8px"><b>' + esc(TABLE_NAMES[S.table][0]) + '</b><span class="sub">' + esc(S.table) + '.tex</span><button type="button" class="btn primary" style="margin-left:auto" data-act="copyTable">Copy LaTeX</button></div>' +
+    (out.checks && out.checks.length ? '<ul class="checks" style="margin-bottom:8px">' + out.checks.map(k => '<li><span class="where ' + esc(k.level) + '">' + esc(k.item) + '</span><span>' + esc(k.message) + '</span></li>').join('') + '</ul>' : '') +
+    '<pre class="latex" id="latex">' + esc(out.latex) + '</pre>';
+  return '<div class="cols"><div class="card tlist" style="flex:1 1 240px;max-width:320px">' + list + '<p class="hint">These are the tables gooTeX will pull in. A rendered preview comes later.</p></div>' +
+    '<div class="card" style="flex:3 1 520px;min-width:0">' + right + '</div></div>';
+}
+async function loadTable(name, quiet) {
+  S.table = name; if (!quiet) { S.tableOut = null; render(); }
+  try { S.tableOut = await api('table', S.pid, name); } catch (e) { showError(e); S.tableOut = { latex: '', checks: [] }; }
+  if (S.tab === 'tables' && S.table === name) render();
+}
+
+// ── history ──────────────────────────────────────────────────────────────────────────────────────────────────
+function viewHistory() {
+  if (!S.history) {
+    if (!S.historyLoading) {
+      S.historyLoading = true;
+      api('history', S.pid).then(r => { S.history = r.history; }, showError).then(() => { S.historyLoading = false; if (S.tab === 'history' && S.history) render(); });
+    }
+    return '<p class="muted">Loading the history…</p>';
+  }
+  const NAMES = { proposals: 'proposal settings', members: 'team member', items: 'item', assignments: 'assignment', nonlabor: 'budget line', people: 'profile', proposal_snapshot: 'whole proposal' };
+  const rows = S.history.map(h => {
+    const b = h.before ? JSON.parse(h.before) : null, a = h.after ? JSON.parse(h.after) : null, x = a || b || {};
+    const name = x.title || x.item || x.short_id || (x.last ? personName(x) : '') || (x.member_id ? 'member ' + x.member_id : x.is_team ? 'team' : '');
+    let what = '';
+    if (h.action === 'update' && a && b) what = Object.keys(a).filter(k => k !== 'version' && JSON.stringify(a[k]) !== JSON.stringify(b[k]))
+      .map(k => k + ': ' + JSON.stringify(b[k]) + ' → ' + JSON.stringify(a[k])).join('; ');
+    return '<tr><td class="mono" style="white-space:nowrap">' + esc(when(h.at)) + '</td><td>' + esc(h.user) + '</td><td>' + esc(h.action) + ' ' + esc(NAMES[h.tbl] || h.tbl) + '</td><td>' + esc(name) + '</td><td class="muted" style="word-break:break-word">' + esc(what) + '</td></tr>';
+  }).join('');
+  return '<div class="card"><h2 class="h2">History (newest first)</h2><div class="scroll"><table class="t"><thead><tr><th>When</th><th>Who</th><th>What</th><th>Which</th><th>Change</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '<p class="hint">Every change is kept, so anything can be put back; restore buttons come in a later version.</p></div>';
+}
+
+// ── settings ─────────────────────────────────────────────────────────────────────────────────────────────────
+function viewSettings() {
+  const p = S.P.proposal, v = ' data-version="' + p.version + '"', can = S.P.you.can_manage_team;
+  return '<div class="cols"><div class="card stack" style="flex:2 1 460px">' +
+    '<label class="f">Title<input data-save="proposal:' + esc(p.id) + ':title"' + v + ' value="' + esc(p.title) + '"></label>' +
+    '<label class="f">Program (contains "HST": team summaries use full role names)<input data-save="proposal:' + esc(p.id) + ':program"' + v + ' value="' + esc(p.program) + '"></label>' +
+    '<div class="row"><label class="f">Years<input type="number" min="1" step="1" data-type="int" data-save="proposal:' + esc(p.id) + ':n_years"' + v + ' value="' + p.n_years + '"></label>' +
+    '<label class="f">FTE rounding<select data-save="proposal:' + esc(p.id) + ':rounding"' + v + '><option value="nearest"' + (p.rounding === 'nearest' ? ' selected' : '') + '>to the nearest step</option>' +
+    '<option value="up"' + (p.rounding === 'up' ? ' selected' : '') + '>up (as the old Sheet did)</option></select></label></div>' +
+    '<p class="hint">Created ' + esc(when(p.created_at)) + ' by ' + esc(p.created_by) + '.</p></div>' +
+    (can ? '<div class="card stack" style="flex:1 1 300px;border-color:#5a3030"><h2 class="h2">Delete this proposal</h2><p style="margin:0;line-height:1.5">Deletes the whole proposal for everyone. A copy is kept in the history. Type the title exactly to confirm.</p>' +
+      '<input id="del-title" aria-label="Type the title to confirm" placeholder="' + esc(p.title) + '"><div><button type="button" class="btn danger" data-act="deleteProposal">Delete proposal</button></div></div>' : '') + '</div>';
+}
+
+// ── actions ──────────────────────────────────────────────────────────────────────────────────────────────────
+async function attempt(fn) { try { return await fn(); } catch (e) { if (e && e.code === 'conflict') { toast('Someone else changed this first; showing the current version.'); reloadProposal(); } else showError(e); } }
+
+async function addItem(parentId, title) {
+  try { const r = await change('addItem', S.pid, { parent_id: parentId, title }); S.sel = r.item.id; render(); }
+  catch (e) {
+    if (e && e.code !== 'parent_has_effort') return showError(e);
+    const dest = await ask('Where should its effort go?', e.message, [['Move it into the new subtask', 'new_child', 'primary'], ['Remove it', 'remove', 'danger']]);
+    if (!dest) return;
+    await attempt(async () => { const r = await change('addItem', S.pid, { parent_id: parentId, title, effort_destination: dest }); S.sel = r.item.id; render(); });
+  }
+}
+
+const ACTIONS = {
+  newProposal, newPerson: async () => { const p = await editPerson(null); if (p && S.pid) { await loadPeople(); render(); } },
+  addGoal: () => addItem(null, 'New goal'),
+  addTask: () => { const n = tree().find(x => x.item.id === S.sel); let g = n && n.item; while (g && g.parent_id != null) g = S.P.items.find(i => i.id === g.parent_id); if (g) addItem(g.id, 'New task'); },
+  addSub: () => { const n = tree().find(x => x.item.id === S.sel); if (!n || n.depth === 0) return; addItem(n.depth === 2 ? n.item.parent_id : n.item.id, 'New subtask'); },
+  deleteItem: () => attempt(async () => {
+    const pre = await api('deleteItem', S.sel, false);
+    const ok = await ask('Delete this item?', pre.message + ' The history keeps a copy.', [['Delete', true, 'danger']]);
+    if (ok) await change('deleteItem', S.sel, true);
+  }),
+  addMember: () => attempt(async () => {
+    const person = num($('#am-person').value);
+    if (!person) return toast('Choose a person (or make one with New person…).');
+    await change('addMember', S.pid, { person_id: person, short_id: $('#am-sid').value, role: $('#am-role').value, is_lead: $('#am-lead').checked });
+    toast('Added to the team.', true);
+  }),
+  addNonlabor: () => attempt(() => change('addNonlabor', S.pid, { item: 'New item', amounts: Array(S.P.proposal.n_years).fill(0) })),
+  copyTable: async () => {
+    const text = S.tableOut ? S.tableOut.latex : '';
+    try { await navigator.clipboard.writeText(text); toast('LaTeX copied.', true); }
+    catch (e) { const r = document.createRange(); r.selectNodeContents($('#latex')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast('Press Ctrl+C (or ⌘C) to copy the selected LaTeX.', true); }
+  },
+  deleteProposal: () => attempt(async () => {
+    await api('deleteProposal', S.pid, $('#del-title').value);
+    toast('Proposal deleted.', true); go('proposals');
+  }),
+};
+
+function wire() {
+  const app = $('#app');
+  app.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openProposal(b.dataset.open));
+  app.querySelectorAll('[data-act]').forEach(b => {
+    if (b.tagName === 'SELECT') return;
+    b.onclick = () => ACTIONS[b.dataset.act] && ACTIONS[b.dataset.act]();
+  });
+  app.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { S.tab = b.dataset.tab; if (S.tab === 'history') S.history = null; render(); });
+  app.querySelectorAll('[data-sel]').forEach(b => b.onclick = () => { S.sel = +b.dataset.sel; render(); });
+  app.querySelectorAll('[data-table]').forEach(b => b.onclick = () => loadTable(b.dataset.table));
+  app.querySelectorAll('[data-editperson]').forEach(b => b.onclick = async () => {
+    const id = +b.dataset.editperson;
+    let p = S.people.find(x => x.id === id) || (S.me && S.me.profile && S.me.profile.id === id ? S.me.profile : null);
+    if (!p) { await loadPeople(); p = S.people.find(x => x.id === id); }
+    if (p) editPerson(p); else toast('You can edit your own profile, or the profiles of people on proposals you lead.');
+  });
+  app.querySelectorAll('[data-move]').forEach(b => b.onclick = () => attempt(async () => {
+    const it = S.P.items.find(i => i.id === S.sel);
+    await change('updateItem', it.id, { version: it.version, parent_id: it.parent_id, position: it.position + (+b.dataset.move) });
+  }));
+  app.querySelectorAll('[data-unassign]').forEach(b => b.onclick = () => attempt(() => change('deleteAssignment', +b.dataset.unassign)));
+  app.querySelectorAll('[data-delnl]').forEach(b => b.onclick = () => attempt(() => change('deleteNonlabor', +b.dataset.delnl)));
+  app.querySelectorAll('[data-removemember]').forEach(b => b.onclick = () => attempt(async () => {
+    const id = +b.dataset.removemember, pre = await api('removeMember', id, false);
+    const ok = await ask('Remove from the team?', pre.message, [['Remove', true, 'danger']]);
+    if (ok) await change('removeMember', id, true);
+  }));
+  const assign = app.querySelector('select[data-act=assign]');
+  if (assign) assign.onchange = () => attempt(async () => {
+    const v = assign.value; if (!v) return;
+    const first = !S.P.assignments.some(a => a.item_id === S.sel);
+    await change('addAssignment', S.sel, v === 'team' ? { is_team: true, weeks: 0, is_lead: false } : { member_id: +v.slice(1), weeks: 0, is_lead: first });
+  });
+  const under = app.querySelector('select[data-act=moveUnder]');
+  if (under) under.onchange = () => attempt(async () => {
+    const it = S.P.items.find(i => i.id === S.sel), target = +under.value; if (!target) return;
+    try { await change('updateItem', it.id, { version: it.version, parent_id: target }); }
+    catch (e) {
+      if (e.code !== 'parent_has_effort') throw e;
+      const dest = await ask('Where should its effort go?', e.message.replace('the new subtask', 'the item you are moving'), [['Move it into the item you are moving', 'new_child', 'primary'], ['Remove it', 'remove', 'danger']]);
+      if (dest) await change('updateItem', it.id, { version: it.version, parent_id: target, effort_destination: dest }); else render();
+    }
+  });
+  // Grouped fields: a member's trips, the travel assumptions and a budget line's amounts save as one list.
+  app.querySelectorAll('[data-trip]').forEach(el => el.onchange = () => attempt(() => {
+    const [mid, y, j] = el.dataset.trip.split(':').map(Number), m = memberById(mid), ny = S.P.proposal.n_years;
+    const trips = Array.from({ length: ny }, (_, k) => ((m.trips || [])[k] || [0, 0]).slice(0, 2).map(v => +v || 0));
+    trips[y][j] = num(el.value) || 0;
+    return change('updateMember', mid, { version: m.version, trips });
+  }));
+  app.querySelectorAll('[data-travel]').forEach(el => el.onchange = () => attempt(() => {
+    const [k, i] = el.dataset.travel.split(':'), p = S.P.proposal, tr = JSON.parse(JSON.stringify(p.travel || {}));
+    tr[k] = (tr[k] || (k === 'days' ? [0, 0] : [0, 0, 0])).slice();
+    tr[k][+i] = (num(el.value) || 0) / (el.dataset.pct ? 100 : 1);
+    return change('updateProposal', p.id, { version: p.version, travel: tr });
+  }));
+  app.querySelectorAll('[data-nl]').forEach(el => el.onchange = () => attempt(() => {
+    const [rid, y] = el.dataset.nl.split(':').map(Number), r = S.P.nonlabor.find(x => x.id === rid);
+    const amounts = Array.from({ length: S.P.proposal.n_years }, (_, k) => +((r.amounts || [])[k] || 0));
+    amounts[y] = num(el.value) || 0;
+    return change('updateNonlabor', rid, { version: r.version, amounts });
+  }));
+}
+
+start();
+</script>
+</body>
+</html>

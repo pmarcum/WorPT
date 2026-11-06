@@ -2,8 +2,8 @@
 
 The server half of the rebuilt WorPT. It runs on the shared VM beside BibMan and gooTeX
 (port 8083, behind nginx at `/worpt/`). It holds the **effort engine**, the **LaTeX table
-generators**, and the **storage and API** the WorPT dashboard uses. (The dashboard and the
-deployment guide come next.)
+generators**, and the **storage and API** the WorPT dashboard uses. The dashboard itself is
+`Index.html` and `apps_script/` at the top of the repository; [DEPLOY.md](../DEPLOY.md) sets up both.
 
 ## Effort engine — `worpt/effort.py`
 
@@ -60,7 +60,8 @@ nightly copy of the database and keeps the newest 14.
 Rules the server applies to every change:
 
 - Admins and core members create proposals; admins see every proposal, everyone else only the ones they are on.
-- Anyone on a proposal edits its plan; its leads (and admins) manage the team and leads, and may
+- Anyone on a proposal edits its plan and budget (including each member's trips); its leads (and
+  admins) manage the team and leads, and may
   delete the proposal after typing its title. A proposal always keeps at least one lead.
 - A profile may be edited by its owner, leads of a proposal the person is on, core members and admins.
   Someone at a non-US institution is a collaborator (`coll(n)`) on every proposal.
@@ -71,6 +72,8 @@ Rules the server applies to every change:
   returned, so nothing is overwritten silently. Every change is recorded in `history` (who, when,
   before and after). A refused request saves nothing.
 - Refusals are HTTP 200 with `{"status": "error", "code": ..., "message": ...}`.
+- `GET /api/proposals/<id>/changed` returns the number of the proposal's newest change; the dashboard asks
+  every 10 seconds while it is visible and reloads only when the number grows.
 
 ## Tests
 

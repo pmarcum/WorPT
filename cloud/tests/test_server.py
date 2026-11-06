@@ -374,3 +374,47 @@ def test_tables_through_the_api_match_the_fixture(client, folder):
         assert got['latex'] == direct[name], f'{folder.name}/{name} differs after storing'
     gootex = Api(client, '', key=READ)                          # gooTeX's read-only key gets the same tables
     assert gootex.ok('get', f'/api/proposals/{pid}/tables/isANONfte')['latex'] == direct['isANONfte']
+
+
+# ------------------------------------------------ what the dashboard polls and lists
+def test_changed_grows_with_each_change(team):
+    ann, bob, pid = team['ann'], team['bob'], team['pid']
+    first = ann.ok('get', f'/api/proposals/{pid}/changed')['last_change']
+    assert first == ann.ok('get', f'/api/proposals/{pid}')['last_change'] > 0
+    assert bob.ok('get', f'/api/proposals/{pid}/changed')['last_change'] == first          # nothing changed yet
+    bob.ok('patch', f"/api/items/{team['task']['id']}", dict(version=team['task']['version'], title='Renamed'))
+    assert ann.ok('get', f'/api/proposals/{pid}/changed')['last_change'] > first
+    team['dan'].no('get', f'/api/proposals/{pid}/changed', code='not_found')
+
+
+def test_proposal_list_shows_leads_and_last_change(team):
+    p = team['ann'].ok('get', '/api/proposals')['proposals'][0]
+    assert p['leads'] == 'Ann Annson' and p['last_changed_at']
+
+
+def test_travel_summary(team):
+    ann, pid = team['ann'], team['pid']
+    ann.ok('patch', f"/api/proposals/{pid}", dict(version=team['prop']['version'],
+           travel=dict(airfare=[700, 1750, 0], perdiem=[264, 320, 0], conference=[500, 800, 0], ground=[60, 100, 0], days=[5, 5])))
+    ann.ok('patch', f"/api/members/{team['bob_m']['id']}", dict(version=1, trips=[[1, 0], [2, 1], [0, 0]]))
+    t = ann.ok('get', f'/api/proposals/{pid}')['computed']['travel']
+    assert [(y['dom_trips'], y['int_trips']) for y in t] == [(1, 0), (2, 1), (0, 0)]
+    assert t[0]['dom_per_trip'] == 700 + 264 * 5 + 500 + 60 * 5 and t[1]['dom_total'] == 2 * t[1]['dom_per_trip']
+
+
+def test_deletes_accept_confirmation_in_the_query_string(team):
+    ann, pid, m = team['ann'], team['pid'], team['bob_m']
+    assert ann.ok('delete', f"/api/members/{m['id']}?confirm=0")['needs_confirmation']
+    ann.ok('delete', f"/api/members/{m['id']}?confirm=1")
+    assert ann.ok('delete', f"/api/items/{team['goal']['id']}")['needs_confirmation']
+    ann.ok('delete', f"/api/items/{team['goal']['id']}?confirm=true")
+    ann.no('delete', f'/api/proposals/{pid}?confirm_title=Wrong', code='confirm_title')
+    ann.ok('delete', f'/api/proposals/{pid}?confirm_title=Test%20Proposal')
+
+
+def test_any_member_edits_trips_but_not_other_member_fields(team):
+    bob, m = team['bob'], team['bob_m']
+    aa = team['ann'].ok('get', f"/api/proposals/{team['pid']}")['members'][0]
+    assert bob.ok('patch', f"/api/members/{aa['id']}", dict(version=aa['version'], trips=[[1, 0], [0, 0], [0, 1]]))['member']['trips'][2] == [0, 1]
+    bob.no('patch', f"/api/members/{aa['id']}", dict(version=aa['version'] + 1, trips=[[0, 0]], role='co-I'))
+    bob.no('patch', f"/api/members/{m['id']}", dict(version=1, task_summary='x'))

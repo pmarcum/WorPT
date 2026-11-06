@@ -357,6 +357,19 @@ def _travel_costs(p, n):
     return out
 
 
+def travel_summary(p):
+    """Per year: trips (domestic, international) summed over the team, the cost of one trip, and the year's travel cost."""
+    n, cost = p.n_years, _travel_costs(p, p.n_years)
+    trips = np.zeros((n, 2))
+    for m in p.members:
+        given = np.array(m.trips, float).reshape(-1, 2)[:n] if m.trips else np.zeros((0, 2))
+        trips[:len(given)] += given
+    return [dict(year=y + 1, dom_trips=float(trips[y, 0]), int_trips=float(trips[y, 1]),
+                 dom_per_trip=float(cost['dom']['trip'][y]), int_per_trip=float(cost['int']['trip'][y]),
+                 dom_total=float(cost['dom']['trip'][y] * trips[y, 0]), int_total=float(cost['int']['trip'][y] * trips[y, 1]))
+            for y in range(n)]
+
+
 def _trips_per_year(c):
     return np.sum([c['people'][pid]['trips'] for pid in c['order']], axis=0) if c['order'] else np.zeros((c['n'], 2))
 

@@ -16,7 +16,7 @@ import hmac, logging, os, pathlib, sys
 from flask import Flask, jsonify, request
 from worpt.store import Store, User, WorptError
 from worpt.effort import compute, label_tree
-from worpt.tables import build, TABLES
+from worpt.tables import build, travel_summary, TABLES
 
 log = logging.getLogger('worpt')
 
@@ -51,6 +51,9 @@ def create_app(db_path=None, credential=None, read_credential=None):
         return u
 
     body = lambda: request.get_json(silent=True) or {}
+    # Deletes take their confirmation in the query string too (?confirm=1, ?confirm_title=...): Apps Script's
+    # UrlFetchApp is not guaranteed to send a body with DELETE.
+    confirmed = lambda: str(body().get('confirm', request.args.get('confirm', ''))).lower() in ('1', 'true', 'yes')
 
     @app.before_request
     def gate():
@@ -78,7 +81,7 @@ def create_app(db_path=None, credential=None, read_credential=None):
             people={member_of[s]: dict(per_year=r['person_year'][i].tolist(), total=r['person_total'][i].tolist()) for i, s in enumerate(r['ids'])},
             items={iid: dict(label=lab, fte=r['items'][lab]['fte'].tolist(), start=r['items'][lab]['start'], end=r['items'][lab]['end'])
                    for iid, lab in label_of.items()},
-            project_total=r['project_total'].tolist(),
+            project_total=r['project_total'].tolist(), travel=travel_summary(prop),
             checks=[dict(level=c.level, item=c.item, message=c.message) for c in r['checks']])
 
     # ------------------------------------------------ routes
@@ -118,7 +121,10 @@ def create_app(db_path=None, credential=None, read_credential=None):
         b = body(); return ok(proposal=store.update_proposal(user(), pid, b.pop('version', None), b))
 
     @app.delete('/api/proposals/<pid>')
-    def delete_proposal(pid): return ok(**store.delete_proposal(user(), pid, body().get('confirm_title')))
+    def delete_proposal(pid): return ok(**store.delete_proposal(user(), pid, body().get('confirm_title', request.args.get('confirm_title'))))
+
+    @app.get('/api/proposals/<pid>/changed')
+    def changed(pid): return ok(last_change=store.changed(user(), pid))
 
     @app.get('/api/proposals/<pid>/history')
     def history(pid): return ok(history=store.history(user(), pid, request.args.get('limit', 200)))
@@ -132,7 +138,7 @@ def create_app(db_path=None, credential=None, read_credential=None):
 
     @app.delete('/api/members/<int:member_id>')
     def remove_member(member_id):
-        out = store.remove_member(user(), member_id, bool(body().get('confirm')))
+        out = store.remove_member(user(), member_id, confirmed())
         return ok(**out) if out.get('needs_confirmation') else ok(removed=out)
 
     @app.post('/api/proposals/<pid>/items')
@@ -146,7 +152,7 @@ def create_app(db_path=None, credential=None, read_credential=None):
 
     @app.delete('/api/items/<int:item_id>')
     def delete_item(item_id):
-        out = store.delete_item(user(), item_id, bool(body().get('confirm')))
+        out = store.delete_item(user(), item_id, confirmed())
         return ok(**out) if out.get('needs_confirmation') else ok(deleted=out)
 
     @app.post('/api/items/<int:item_id>/assignments')

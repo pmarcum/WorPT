@@ -7,7 +7,8 @@ written to the `history` table (who, when, the row before and after), so anythin
 Who may do what (agreed 5 November 2026):
   * admin (ADMIN_EMAILS) and core (CORE_MEMBERS) may create proposals; access-code users may not.
   * admins see every proposal; everyone else sees the proposals they are on.
-  * anyone on a proposal may edit its plan (goals, tasks, effort, budget); leads and admins manage its team and leads.
+  * anyone on a proposal may edit its plan (goals, tasks, effort, budget and travel, including each member's trips);
+    leads and admins manage its team and leads.
   * a proposal always keeps at least one lead; leads and admins may delete it, after typing its title.
   * a profile may be edited by its owner, leads of any proposal the person is on, core members and admins.
 """
@@ -250,12 +251,26 @@ class Store:
         if n < 1: raise WorptError('A proposal needs at least one year.', 'invalid')
         return n
 
+    LIST = ("SELECT p.*, (SELECT max(at) FROM history h WHERE h.proposal_id = p.id) AS last_changed_at, "
+            "(SELECT group_concat(trim(pe.first || ' ' || pe.last), ', ') FROM members l JOIN people pe ON pe.id = l.person_id "
+            "WHERE l.proposal_id = p.id AND l.is_lead = 1) AS leads FROM proposals p ")
+
     def list_proposals(self, user):
         with self.connect() as db:
-            if user.admin: return self.all(db, 'SELECT * FROM proposals ORDER BY created_at DESC')
+            if user.admin: return self.all(db, self.LIST + 'ORDER BY last_changed_at DESC')
             me = self.person_for(db, user)
-            return self.all(db, 'SELECT p.* FROM proposals p JOIN members m ON m.proposal_id = p.id WHERE m.person_id = ? '
-                            'ORDER BY p.created_at DESC', me['id']) if me else []
+            return self.all(db, self.LIST + 'JOIN members m ON m.proposal_id = p.id WHERE m.person_id = ? '
+                            'ORDER BY last_changed_at DESC', me['id']) if me else []
+
+    @staticmethod
+    def last_change(db, proposal_id):
+        return db.execute('SELECT coalesce(max(id), 0) FROM history WHERE proposal_id = ?', (proposal_id,)).fetchone()[0]
+
+    def changed(self, user, proposal_id):
+        """The number of the proposal's newest recorded change: the dashboard reloads only when it grows."""
+        with self.connect() as db:
+            self.proposal(db, user, proposal_id)
+            return self.last_change(db, proposal_id)
 
     def update_proposal(self, user, proposal_id, version, fields):
         with self.connect() as db:
@@ -315,7 +330,8 @@ class Store:
     def update_member(self, user, member_id, version, fields):
         with self.connect() as db:
             m = self.get(db, 'members', member_id, 'team member')
-            self.proposal(db, user, m['proposal_id'], need='team')
+            # trips are part of the budget, which anyone on the proposal may edit; everything else about a member is the team's
+            self.proposal(db, user, m['proposal_id'], need='view' if set(fields) <= {'trips'} else 'team')
             f = self.check_member_fields(db, m['proposal_id'], dict(fields), member_id, self.get(db, 'people', m['person_id'], 'profile'))
             if m['is_lead'] and 'is_lead' in f and not f['is_lead']: self.keep_a_lead(db, m)
             return self.update_row(db, user, 'members', member_id, version, f, m['proposal_id'], 'team member')
@@ -549,7 +565,7 @@ class Store:
         with self.connect() as db:
             p = self.proposal(db, user, proposal_id)
             m = self.membership(db, user, proposal_id)
-            return dict(self.export(db, proposal_id), you=dict(email=user.email, access=user.access,
+            return dict(self.export(db, proposal_id), last_change=self.last_change(db, proposal_id), you=dict(email=user.email, access=user.access,
                         member_id=m and m['id'], lead=bool(m and m['is_lead']), can_manage_team=user.admin or bool(m and m['is_lead'])))
 
     def history(self, user, proposal_id, limit=200):
