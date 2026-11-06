@@ -196,7 +196,7 @@ allows it once, the first time they open it.
 
 **5. Try it.** Open the link. Admins and core members go straight in; everyone else types the access code
 once. Then, in **People & profiles**, make a profile for each person (with the Google email they sign in
-with: that is how WorPT recognises them), and in **Proposals**, **New proposal**.
+with: that is how WorPT recognises them), and in **Proposals**, **New proposal work plan**.
 
 ### Updating the dashboard
 
