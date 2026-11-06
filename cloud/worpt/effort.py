@@ -3,8 +3,8 @@
 Rules (see the WorPT design decisions):
   * Effort, people and timelines live only on lowest-level items (goal > task > subtask).
   * An item's weeks are split across years in proportion to its quarters that fall in each year.
-  * Person FTE per year = weeks that year / weeks_per_fte, rounded to the nearest step:
-    0.01 below 0.1 FTE, otherwise the person's FTE accuracy (default 0.05).
+  * Person FTE per year = weeks that year / weeks_per_fte, rounded to a step: 0.01 below 0.1 FTE,
+    otherwise the person's FTE accuracy (default 0.05); rounding='nearest' (default) or 'up'.
   * Funded = rounded total - rounded unfunded. All-years figures are sums of rounded yearly values.
   * "team" gives its weeks to every team member not named on that item.
   * Collaborators (role "coll..." or a non-US institution) are always 100% unfunded.
@@ -54,9 +54,10 @@ class Check:
     message: str
 
 
-def mround(x, step):
-    """Round to the nearest multiple of `step` (halves go up), like Google Sheets' MROUND."""
-    return np.round(np.floor(np.asarray(x) / step + 0.5 + 1e-9) * step, 10)
+def mround(x, step, mode='nearest'):
+    """Round to a multiple of `step`: 'nearest' (halves go up, like Google Sheets' MROUND) or 'up' (ceiling)."""
+    q = np.asarray(x) / step
+    return np.round((np.ceil(q - 1e-9) if mode == 'up' else np.floor(q + 0.5 + 1e-9)) * step, 10)
 
 
 def letters(n):
@@ -78,7 +79,7 @@ def label_tree(goals):
     return out
 
 
-def compute(members, goals, n_years, weeks_per_fte=52):
+def compute(members, goals, n_years, weeks_per_fte=52, rounding='nearest'):
     """Compute person FTE per year, item FTE and roll-ups. Returns a dict of numpy arrays and checks."""
     checks, ids = [], [m.id for m in members]
     pidx = {pid: i for i, pid in enumerate(ids)}
@@ -128,7 +129,7 @@ def compute(members, goals, n_years, weeks_per_fte=52):
 
     # Person FTE per year: raw, then rounded; funded = total - unfunded.
     raw_t, raw_u = W @ frac / weeks_per_fte, U @ frac / weeks_per_fte
-    rnd = lambda x: mround(x, np.where(x < SMALL_FTE, SMALL_STEP, step[:, None]))
+    rnd = lambda x: mround(x, np.where(x < SMALL_FTE, SMALL_STEP, step[:, None]), rounding)
     fte_t, fte_u = rnd(raw_t), rnd(raw_u)
     person_year = np.stack([fte_t, fte_u, np.round(fte_t - fte_u, 10)], axis=2)        # (P, Y, [total, unfunded, funded])
     person_total = np.round(person_year.sum(1), 10)                                       # (P, 3)

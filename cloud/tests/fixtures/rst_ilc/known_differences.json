@@ -1,0 +1,73 @@
+{
+ "NOTANONhst": [
+  {
+   "reason": "FIX-3: with no separate Science/Admin PI the old script used only the first letter of the PI name; now the full name.",
+   "old": [
+    "\\def\\AdminPIname{M}",
+    "\\def\\SciencePIname{M}"
+   ],
+   "new": [
+    "\\def\\AdminPIname{Avery  Lindqvist}",
+    "\\def\\SciencePIname{Avery  Lindqvist}"
+   ]
+  }
+ ],
+ "NOTANONschedule": [
+  {
+   "reason": "FIX-2: \"team\" weeks now count each unnamed member (here 3 people x 2 weeks = 6); the old script multiplied by the number of NAMED people.",
+   "old": [
+    "{\\FundedUsTeam{al1}\\,\\FundedUsTeam{6}\\TaskAssignmentDelimiter\\UnfundedUsTeam{T}\\,\\UnfundedUsTeam{2}} &  % assignments for this task"
+   ],
+   "new": [
+    "{\\FundedUsTeam{al1}\\,\\FundedUsTeam{6}\\TaskAssignmentDelimiter\\UnfundedUsTeam{T}\\,\\UnfundedUsTeam{6}} &  % assignments for this task"
+   ]
+  },
+  {
+   "reason": "FIX-2: \"team\" weeks now count each unnamed member (here 3 people x 2 weeks = 6); the old script multiplied by the number of NAMED people.",
+   "old": [
+    "{\\FundedUsTeam{al1}\\,\\FundedUsTeam{6}\\TaskAssignmentDelimiter\\UnfundedUsTeam{T}\\,\\UnfundedUsTeam{2}} &  % assignments for this task"
+   ],
+   "new": [
+    "{\\FundedUsTeam{al1}\\,\\FundedUsTeam{6}\\TaskAssignmentDelimiter\\UnfundedUsTeam{T}\\,\\UnfundedUsTeam{6}} &  % assignments for this task"
+   ]
+  },
+  {
+   "reason": "FIX-2: \"team\" weeks now count each unnamed member (here 3 people x 2 weeks = 6); the old script multiplied by the number of NAMED people.",
+   "old": [
+    "{\\FundedUsTeam{al1}\\,\\FundedUsTeam{6}\\TaskAssignmentDelimiter\\UnfundedUsTeam{T}\\,\\UnfundedUsTeam{2}} &  % assignments for this task"
+   ],
+   "new": [
+    "{\\FundedUsTeam{al1}\\,\\FundedUsTeam{6}\\TaskAssignmentDelimiter\\UnfundedUsTeam{T}\\,\\UnfundedUsTeam{6}} &  % assignments for this task"
+   ]
+  },
+  {
+   "reason": "FIX-2: \"team\" weeks now count each unnamed member (here 3 people x 2 weeks = 6); the old script multiplied by the number of NAMED people.",
+   "old": [
+    "{\\FundedUsTeam{al1}\\,\\FundedUsTeam{6}\\TaskAssignmentDelimiter\\UnfundedUsTeam{T}\\,\\UnfundedUsTeam{2}} &  % assignments for this task"
+   ],
+   "new": [
+    "{\\FundedUsTeam{al1}\\,\\FundedUsTeam{6}\\TaskAssignmentDelimiter\\UnfundedUsTeam{T}\\,\\UnfundedUsTeam{6}} &  % assignments for this task"
+   ]
+  }
+ ],
+ "isANONnonlabor": [
+  {
+   "reason": "FIX-1: the Domestic travel line (and the Travel total above it) now uses the year's total domestic cost (trips x cost per trip); the old script used the cost of one trip.",
+   "old": [
+    "\\MajorCatFontstyle{Travel}  & \\MajorAmountFontstyle{\\$7,470} & \\MajorAmountFontstyle{\\$21,570} & \\MajorAmountFontstyle{\\$2,870} & \\MajorCatTotalFontstyle{\\$31,910}\\\\"
+   ],
+   "new": [
+    "\\MajorCatFontstyle{Travel}  & \\MajorAmountFontstyle{\\$13,110} & \\MajorAmountFontstyle{\\$24,415} & \\MajorAmountFontstyle{\\$0} & \\MajorCatTotalFontstyle{\\$37,525}\\\\"
+   ]
+  },
+  {
+   "reason": "FIX-1: the Domestic travel line (and the Travel total above it) now uses the year's total domestic cost (trips x cost per trip); the old script used the cost of one trip.",
+   "old": [
+    "\\TravelSubcatFontstyle{~~~Domestic}  & \\TravelSubcatAmountFontstyle{\\$2,820} & \\TravelSubcatAmountFontstyle{\\$2,845} & \\TravelSubcatAmountFontstyle{\\$2,870} & \\TravelSubcatTotalFontstyle{\\$8,535}\\\\"
+   ],
+   "new": [
+    "\\TravelSubcatFontstyle{~~~Domestic}  & \\TravelSubcatAmountFontstyle{\\$8,460} & \\TravelSubcatAmountFontstyle{\\$5,690} & \\TravelSubcatAmountFontstyle{\\$0} & \\TravelSubcatTotalFontstyle{\\$14,150}\\\\"
+   ]
+  }
+ ]
+}

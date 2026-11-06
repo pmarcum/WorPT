@@ -1,0 +1,1143 @@
+{
+ "program": "RST_GO",
+ "title": "Proposal title replaced",
+ "latex_subdir": "do_NOT_manually_edit",
+ "n_years": 3,
+ "weeks_per_fte": 52,
+ "team": [
+  {
+   "id": "al1",
+   "role": "PI",
+   "last": "Lindqvist",
+   "first": "Avery",
+   "middle": "",
+   "prefix": "Prof.",
+   "suffix": "",
+   "institution": "Northwestern Univ",
+   "position": "university professor",
+   "us": true,
+   "fte_accuracy": null,
+   "bio_summary": "",
+   "task_summary": "",
+   "trips": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0
+    ]
+   ]
+  },
+  {
+   "id": "jo2",
+   "role": "co-I(1)",
+   "last": "Okonkwo-Hale",
+   "first": "Jordan",
+   "middle": "R",
+   "prefix": "Dr.",
+   "suffix": "",
+   "institution": "NASA ARC",
+   "position": "research scientist",
+   "us": true,
+   "fte_accuracy": null,
+   "bio_summary": "",
+   "task_summary": "",
+   "trips": [
+    [
+     2.0,
+     1.0
+    ],
+    [
+     1.0,
+     1.0
+    ],
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0
+    ]
+   ]
+  },
+  {
+   "id": "mc3",
+   "role": "co-I(2)",
+   "last": "Castellanos",
+   "first": "Morgan",
+   "middle": "T",
+   "prefix": "Dr.",
+   "suffix": "",
+   "institution": "NASA ARC/BAERI",
+   "position": "research scientist",
+   "us": true,
+   "fte_accuracy": null,
+   "bio_summary": "",
+   "task_summary": "",
+   "trips": [
+    [
+     1.0,
+     0.0
+    ],
+    [
+     1.0,
+     3.0
+    ],
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0
+    ]
+   ]
+  },
+  {
+   "id": "rv4",
+   "role": "coll(1)",
+   "last": "Vantongeren",
+   "first": "Riley",
+   "middle": "",
+   "prefix": "Dr.",
+   "suffix": "",
+   "institution": "NASA ARC",
+   "position": "research scientist",
+   "us": true,
+   "fte_accuracy": null,
+   "bio_summary": "",
+   "task_summary": "",
+   "trips": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0
+    ]
+   ]
+  }
+ ],
+ "goals": [
+  {
+   "title": "Goal A title",
+   "tasks": [
+    {
+     "title": "Task A1 title",
+     "start": [
+      1,
+      1
+     ],
+     "end": [
+      1,
+      2
+     ],
+     "assignments": [
+      {
+       "person": "mc3",
+       "weeks": 5.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "rv4",
+       "weeks": 0.5,
+       "unfunded": 0.5,
+       "lead": false
+      },
+      {
+       "person": "jo2",
+       "weeks": 0.2,
+       "unfunded": 0.0,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.10961538461538461,
+      0.009615384615384616,
+      0.1
+     ]
+    },
+    {
+     "title": "Task A2 title",
+     "start": [
+      1,
+      1
+     ],
+     "end": [
+      1,
+      2
+     ],
+     "assignments": [
+      {
+       "person": "jo2",
+       "weeks": 4.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "mc3",
+       "weeks": 0.5,
+       "unfunded": 0.0,
+       "lead": false
+      },
+      {
+       "person": "rv4",
+       "weeks": 0.2,
+       "unfunded": 0.2,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.09038461538461538,
+      0.0038461538461538464,
+      0.08653846153846154
+     ]
+    },
+    {
+     "title": "Task A3 title",
+     "start": [
+      1,
+      1
+     ],
+     "end": [
+      1,
+      2
+     ],
+     "assignments": [
+      {
+       "person": "al1",
+       "weeks": 4.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "jo2",
+       "weeks": 0.5,
+       "unfunded": 0.0,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.08653846153846154,
+      0.0,
+      0.08653846153846154
+     ]
+    },
+    {
+     "title": "Task A4 title",
+     "start": [
+      1,
+      2
+     ],
+     "end": [
+      1,
+      3
+     ],
+     "assignments": [
+      {
+       "person": "jo2",
+       "weeks": 3.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "rv4",
+       "weeks": 0.5,
+       "unfunded": 0.5,
+       "lead": false
+      },
+      {
+       "person": "mc3",
+       "weeks": 0.5,
+       "unfunded": 0.0,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.07692307692307693,
+      0.009615384615384616,
+      0.0673076923076923
+     ]
+    },
+    {
+     "title": "Task A5 title",
+     "start": [
+      1,
+      3
+     ],
+     "end": [
+      1,
+      3
+     ],
+     "assignments": [
+      {
+       "person": "jo2",
+       "weeks": 4.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "mc3",
+       "weeks": 1.0,
+       "unfunded": 0.0,
+       "lead": false
+      },
+      {
+       "person": "rv4",
+       "weeks": 0.5,
+       "unfunded": 0.5,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.10576923076923077,
+      0.009615384615384616,
+      0.09615384615384616
+     ]
+    },
+    {
+     "title": "Task A6 title",
+     "start": [
+      1,
+      1
+     ],
+     "end": [
+      1,
+      1
+     ],
+     "assignments": [
+      {
+       "person": "al1",
+       "weeks": 2.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "jo2",
+       "weeks": 0.5,
+       "unfunded": 0.0,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.04807692307692308,
+      0.0,
+      0.04807692307692308
+     ]
+    },
+    {
+     "title": "Task A7 title",
+     "start": [
+      1,
+      2
+     ],
+     "end": [
+      1,
+      3
+     ],
+     "assignments": [
+      {
+       "person": "al1",
+       "weeks": 4.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "jo2",
+       "weeks": 0.5,
+       "unfunded": 0.0,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.08653846153846154,
+      0.0,
+      0.08653846153846154
+     ]
+    }
+   ]
+  },
+  {
+   "title": "Goal B title",
+   "tasks": [
+    {
+     "title": "Task B1 title",
+     "start": [
+      1,
+      3
+     ],
+     "end": [
+      1,
+      3
+     ],
+     "assignments": [
+      {
+       "person": "jo2",
+       "weeks": 3.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "al1",
+       "weeks": 0.5,
+       "unfunded": 0.0,
+       "lead": false
+      },
+      {
+       "person": "mc3",
+       "weeks": 0.2,
+       "unfunded": 0.0,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.07115384615384615,
+      0.0,
+      0.07115384615384615
+     ]
+    },
+    {
+     "title": "Task B2 title",
+     "start": [
+      1,
+      3
+     ],
+     "end": [
+      1,
+      3
+     ],
+     "assignments": [
+      {
+       "person": "jo2",
+       "weeks": 2.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "al1",
+       "weeks": 0.5,
+       "unfunded": 0.0,
+       "lead": false
+      },
+      {
+       "person": "mc3",
+       "weeks": 0.2,
+       "unfunded": 0.0,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.051923076923076926,
+      0.0,
+      0.051923076923076926
+     ]
+    },
+    {
+     "title": "Task B3 title",
+     "start": [
+      1,
+      3
+     ],
+     "end": [
+      1,
+      4
+     ],
+     "assignments": [
+      {
+       "person": "jo2",
+       "weeks": 6.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "al1",
+       "weeks": 1.0,
+       "unfunded": 0.0,
+       "lead": false
+      },
+      {
+       "person": "rv4",
+       "weeks": 1.0,
+       "unfunded": 1.0,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.15384615384615385,
+      0.019230769230769232,
+      0.1346153846153846
+     ]
+    },
+    {
+     "title": "Task B4 title",
+     "start": [
+      1,
+      1
+     ],
+     "end": [
+      1,
+      2
+     ],
+     "assignments": [
+      {
+       "person": "al1",
+       "weeks": 3.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "jo2",
+       "weeks": 0.5,
+       "unfunded": 0.0,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.0673076923076923,
+      0.0,
+      0.0673076923076923
+     ]
+    },
+    {
+     "title": "Task B5 title",
+     "start": [
+      1,
+      1
+     ],
+     "end": [
+      1,
+      2
+     ],
+     "assignments": [
+      {
+       "person": "al1",
+       "weeks": 3.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "jo2",
+       "weeks": 0.5,
+       "unfunded": 0.0,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.0673076923076923,
+      0.0,
+      0.0673076923076923
+     ]
+    },
+    {
+     "title": "Task B6 title",
+     "start": [
+      1,
+      1
+     ],
+     "end": [
+      1,
+      2
+     ],
+     "assignments": [
+      {
+       "person": "al1",
+       "weeks": 3.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "jo2",
+       "weeks": 0.5,
+       "unfunded": 0.0,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.0673076923076923,
+      0.0,
+      0.0673076923076923
+     ]
+    },
+    {
+     "title": "Task B7 title",
+     "start": [
+      1,
+      3
+     ],
+     "end": [
+      1,
+      4
+     ],
+     "assignments": [
+      {
+       "person": "al1",
+       "weeks": 6.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "jo2",
+       "weeks": 0.5,
+       "unfunded": 0.0,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.125,
+      0.0,
+      0.125
+     ]
+    },
+    {
+     "title": "Task B8 title",
+     "start": [
+      1,
+      4
+     ],
+     "end": [
+      2,
+      1
+     ],
+     "assignments": [
+      {
+       "person": "jo2",
+       "weeks": 4.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "mc3",
+       "weeks": 0.5,
+       "unfunded": 0.0,
+       "lead": false
+      },
+      {
+       "person": "al1",
+       "weeks": 0.5,
+       "unfunded": 0.0,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.09615384615384616,
+      0.0,
+      0.09615384615384616
+     ]
+    },
+    {
+     "title": "Task B9 title",
+     "start": [
+      1,
+      4
+     ],
+     "end": [
+      2,
+      1
+     ],
+     "assignments": [
+      {
+       "person": "jo2",
+       "weeks": 3.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "mc3",
+       "weeks": 0.5,
+       "unfunded": 0.0,
+       "lead": false
+      },
+      {
+       "person": "al1",
+       "weeks": 0.5,
+       "unfunded": 0.0,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.07692307692307693,
+      0.0,
+      0.07692307692307693
+     ]
+    }
+   ]
+  },
+  {
+   "title": "Goal C title",
+   "tasks": [
+    {
+     "title": "Task C1 title",
+     "start": [
+      2,
+      1
+     ],
+     "end": [
+      2,
+      2
+     ],
+     "assignments": [
+      {
+       "person": "al1",
+       "weeks": 3.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "jo2",
+       "weeks": 1.0,
+       "unfunded": 0.0,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.07692307692307693,
+      0.0,
+      0.07692307692307693
+     ]
+    },
+    {
+     "title": "Task C2 title",
+     "start": [
+      2,
+      1
+     ],
+     "end": [
+      2,
+      2
+     ],
+     "assignments": [
+      {
+       "person": "al1",
+       "weeks": 3.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "jo2",
+       "weeks": 1.0,
+       "unfunded": 0.0,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.07692307692307693,
+      0.0,
+      0.07692307692307693
+     ]
+    },
+    {
+     "title": "Task C3 title",
+     "start": [
+      2,
+      2
+     ],
+     "end": [
+      2,
+      3
+     ],
+     "assignments": [
+      {
+       "person": "al1",
+       "weeks": 2.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "jo2",
+       "weeks": 0.5,
+       "unfunded": 0.0,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.04807692307692308,
+      0.0,
+      0.04807692307692308
+     ]
+    },
+    {
+     "title": "Task C4 title",
+     "start": [
+      2,
+      2
+     ],
+     "end": [
+      2,
+      3
+     ],
+     "assignments": [
+      {
+       "person": "al1",
+       "weeks": 2.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "jo2",
+       "weeks": 0.5,
+       "unfunded": 0.0,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.04807692307692308,
+      0.0,
+      0.04807692307692308
+     ]
+    },
+    {
+     "title": "Task C5 title",
+     "start": [
+      2,
+      3
+     ],
+     "end": [
+      2,
+      4
+     ],
+     "assignments": [
+      {
+       "person": "al1",
+       "weeks": 2.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "jo2",
+       "weeks": 0.5,
+       "unfunded": 0.0,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.04807692307692308,
+      0.0,
+      0.04807692307692308
+     ]
+    },
+    {
+     "title": "Task C6 title",
+     "start": [
+      2,
+      1
+     ],
+     "end": [
+      2,
+      2
+     ],
+     "assignments": [
+      {
+       "person": "jo2",
+       "weeks": 4.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "mc3",
+       "weeks": 1.0,
+       "unfunded": 0.0,
+       "lead": false
+      },
+      {
+       "person": "al1",
+       "weeks": 0.5,
+       "unfunded": 0.0,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.10576923076923077,
+      0.0,
+      0.10576923076923077
+     ]
+    },
+    {
+     "title": "Task C7 title",
+     "start": [
+      1,
+      4
+     ],
+     "end": [
+      2,
+      1
+     ],
+     "assignments": [
+      {
+       "person": "al1",
+       "weeks": 3.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "jo2",
+       "weeks": 1.0,
+       "unfunded": 0.0,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.07692307692307693,
+      0.0,
+      0.07692307692307693
+     ]
+    },
+    {
+     "title": "Task C8 title",
+     "start": [
+      2,
+      4
+     ],
+     "end": [
+      3,
+      1
+     ],
+     "assignments": [
+      {
+       "person": "al1",
+       "weeks": 3.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "jo2",
+       "weeks": 0.5,
+       "unfunded": 0.0,
+       "lead": false
+      },
+      {
+       "person": "rv4",
+       "weeks": 0.5,
+       "unfunded": 0.5,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.07692307692307693,
+      0.009615384615384616,
+      0.0673076923076923
+     ]
+    }
+   ]
+  },
+  {
+   "title": "Goal D title",
+   "tasks": [
+    {
+     "title": "Task D1 title",
+     "start": [
+      1,
+      4
+     ],
+     "end": [
+      2,
+      2
+     ],
+     "assignments": [
+      {
+       "person": "al1",
+       "weeks": 6.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "team",
+       "weeks": 2.0,
+       "unfunded": 0.0,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.23076923076923078,
+      0.038461538461538464,
+      0.19230769230769232
+     ]
+    },
+    {
+     "title": "Task D2 title",
+     "start": [
+      2,
+      3
+     ],
+     "end": [
+      3,
+      1
+     ],
+     "assignments": [
+      {
+       "person": "al1",
+       "weeks": 6.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "team",
+       "weeks": 2.0,
+       "unfunded": 0.0,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.23076923076923078,
+      0.038461538461538464,
+      0.19230769230769232
+     ]
+    },
+    {
+     "title": "Task D3 title",
+     "start": [
+      2,
+      4
+     ],
+     "end": [
+      3,
+      3
+     ],
+     "assignments": [
+      {
+       "person": "al1",
+       "weeks": 6.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "team",
+       "weeks": 2.0,
+       "unfunded": 0.0,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.23076923076923078,
+      0.038461538461538464,
+      0.19230769230769232
+     ]
+    },
+    {
+     "title": "Task D4 title",
+     "start": [
+      3,
+      2
+     ],
+     "end": [
+      3,
+      4
+     ],
+     "assignments": [
+      {
+       "person": "al1",
+       "weeks": 6.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "team",
+       "weeks": 2.0,
+       "unfunded": 0.0,
+       "lead": false
+      }
+     ],
+     "sheet_fte": [
+      0.23076923076923078,
+      0.038461538461538464,
+      0.19230769230769232
+     ]
+    }
+   ]
+  }
+ ],
+ "nonlabor": [
+  {
+   "item": "Equipment",
+   "amounts": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "item": "Materials \\& Supplies",
+   "amounts": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "item": "Publication Costs",
+   "amounts": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  }
+ ],
+ "travel": {
+  "airfare": [
+   700.0,
+   1750.0,
+   0.0
+  ],
+  "perdiem": [
+   264.0,
+   320.0,
+   0.015
+  ],
+  "conference": [
+   500.0,
+   800.0,
+   0.0
+  ],
+  "ground": [
+   60.0,
+   100.0,
+   0.015
+  ],
+  "days": [
+   5.0,
+   5.0
+  ]
+ }
+}

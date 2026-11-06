@@ -1,0 +1,48 @@
+{
+ "NOTANONhst": [
+  {
+   "reason": "FIX-3: with no separate Science/Admin PI the old script used only the first letter of the PI name; now the full name.",
+   "old": [
+    "\\def\\AdminPIname{P}",
+    "\\def\\SciencePIname{P}"
+   ],
+   "new": [
+    "\\def\\AdminPIname{Riley X Vantongeren}",
+    "\\def\\SciencePIname{Riley X Vantongeren}"
+   ]
+  }
+ ],
+ "isANONnonlabor": [
+  {
+   "reason": "FIX-1: the Domestic travel line (and the Travel total above it) now uses the year's total domestic cost (trips x cost per trip); the old script used the cost of one trip.",
+   "old": [
+    "\\MajorCatFontstyle{Travel}  & \\MajorAmountFontstyle{\\$7,470} & \\MajorCatTotalFontstyle{\\$7,470}\\\\"
+   ],
+   "new": [
+    "\\MajorCatFontstyle{Travel}  & \\MajorAmountFontstyle{\\$13,110} & \\MajorCatTotalFontstyle{\\$13,110}\\\\"
+   ]
+  },
+  {
+   "reason": "FIX-1: the Domestic travel line (and the Travel total above it) now uses the year's total domestic cost (trips x cost per trip); the old script used the cost of one trip.",
+   "old": [
+    "\\TravelSubcatFontstyle{~~~Domestic}  & \\TravelSubcatAmountFontstyle{\\$2,820} & \\TravelSubcatTotalFontstyle{\\$2,820}\\\\"
+   ],
+   "new": [
+    "\\TravelSubcatFontstyle{~~~Domestic}  & \\TravelSubcatAmountFontstyle{\\$8,460} & \\TravelSubcatTotalFontstyle{\\$8,460}\\\\"
+   ]
+  }
+ ],
+ "isANONtravel": [
+  {
+   "reason": "FIX-4: the per-person trip counts in the caption now include only trips within the grant years (this is a 1-year grant), and 1 trip is singular.",
+   "old": [
+    "\\def\\perPersonNumberTripsList{\\smallIndent \\textbf{PI}: 3 domestic trips; 2 intern'l trips;\\newline",
+    "\\smallIndent \\textbf{co-I(1)}: 2 domestic trips; 3 intern'l trips;\\newline}"
+   ],
+   "new": [
+    "\\def\\perPersonNumberTripsList{\\smallIndent \\textbf{PI}: 2 domestic trips; 1 intern'l trip;\\newline",
+    "\\smallIndent \\textbf{co-I(1)}: 1 domestic trip; 0 intern'l trips;\\newline}"
+   ]
+  }
+ ]
+}

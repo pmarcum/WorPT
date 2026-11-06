@@ -1,0 +1,19 @@
+%______________________________________
+% Instructions and LaTeX code to copy/paste into your document, to incorporate this file into your proposal, now located at:
+%
+% https://github.com/pmarcum/WorPT-Work-Plan-Tool-4-proposals/blob/main/latexTableTemplates/NOTANONteamSummaries/readme.md
+%______________________________________
+\def\WorPTfolder{NOTANONteamSummaries} % set the folder name where WorPT files are contained
+% ___________________________________________
+%       Default formatting preferences
+% ___________________________________________
+%--- boldfaces the name at the beginning of each paragraph associated with that name
+\def\NameFontstyle#1{\textbf{#1}}            % boldface the name at top of paragraph for that person
+\newenvironment{NOTANONteamSummaries}{%
+Prof. \NameFontstyle{Avery  Lindqvist}, \NameFontstyle{PI},  \par
+Dr. \NameFontstyle{Morgan T Castellanos}, \NameFontstyle{co-I(1)},  \par
+Dr. \NameFontstyle{Jordan R Okonkwo-Hale}, \NameFontstyle{co-I(2)},  \par
+Dr. \NameFontstyle{Riley  Vantongeren}, \NameFontstyle{coll(1)},  
+}
+{%
+}

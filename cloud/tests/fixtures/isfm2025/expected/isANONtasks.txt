@@ -1,0 +1,80 @@
+%______________________________________
+% Instructions and LaTeX code to copy/paste into your document, to incorporate this file into your proposal, now located at:
+%
+% https://github.com/pmarcum/WorPT-Work-Plan-Tool-4-proposals/blob/main/latexTableTemplates/isANONtasks/readme.md
+%______________________________________
+\newif\ifLandScape                 % establish a boolean variable
+\def\WorPTfolder{isANONtasks} % set the folder name where WorPT files are contained
+% ___________________________________________
+%       Default formatting preferences
+% ___________________________________________
+\LandScapefalse                % default is that the landscape mode is OFF
+%---- column width controls
+\def\TaskWidth{3.4in}          % width of "Task" column (leftmost column)
+\def\StartFinishWidth{0.2in}  % width of start/finish columns
+\def\LeadWidth{0.5in}          % width of "Task Lead" column
+\def\ExpertiseWidth{1.5in}     % width of "Team Expertise" column (rightmost column)
+%---- table compactness controls
+\def\SpaceBetweenRows{0.87}     % vertical compactness of rows
+\def\SpaceBetweenColumns{2pt}  % spacing between columns
+%--- control to nudge table to the left or right
+\def\NudgeTable{1.2\textwidth} % adjust to help center table
+%---- fix the Table Number in the caption
+\def\TaskAddCounter{-1}        % corrects table number messed up by table,longtable combination)
+%--- aesthetic preferences
+\def\SectionColor{Blue}        % task grouping banner color
+\def\SectionFontColor{White}   % task grouping title font color
+\def\YearFontColor{Red}        % font color under "Y" (year) columns in Start/Finish
+\def\YearQuarterLineColor{lightgray} % vertical line color in year/quarter Start/Finish columns
+\def\SectionFontstyle#1{\textbf{#1}} % boldface task grouping title
+\def\ColumnLabelFontstyle#1{\textbf{#1}} % boldface all the column headers
+%--- table preamble definition bundled into the "T" variable
+\newcolumntype{T}{
+  |p{\TaskWidth}||       % title column
+  p{\StartFinishWidth}!{\color{\YearQuarterLineColor}\vrule} % Start/year
+  p{\StartFinishWidth}!{\color{\YearQuarterLineColor}\vrule}!{\color{\YearQuarterLineColor}\vrule} % Start/quarter
+  p{\StartFinishWidth}!{\color{\YearQuarterLineColor}\vrule} % Finish/year
+  p{\StartFinishWidth}|| % Finish/quarter
+  p{\LeadWidth}!{\color{\YearQuarterLineColor}\vrule} % Task Lead column
+  p{\ExpertiseWidth}|    % Expertise column
+}
+\newenvironment{isANONtasks}{%
+\ifLandScape
+  \begin{sidewaystable*}
+\else
+  \begin{table*}[h!]  % \begin{table} needed to make bottom table caption have same width as table
+\fi
+\addtocounter{table}{\TaskAddCounter}           % corrects double-counting of longtable and table combination
+\renewcommand{\arraystretch}{\SpaceBetweenRows} % controls vertical row separation/spacing
+\setlength{\tabcolsep}{\SpaceBetweenColumns}    % controls horizontal column separation/spacing
+\centerline{
+\begin{minipage}{\NudgeTable}                   % increase to allow a wide table to spill into margin
+\begin{longtable}{T}
+%--- make colorized top banner labels, the column headers
+\hline
+\multirow{2}{*}{\ColumnLabelFontstyle{Task Description}} & \multicolumn{2}{c}{\ColumnLabelFontstyle{Start}} & \multicolumn{2}{!{\color{\YearQuarterLineColor}\vrule}c||}{\ColumnLabelFontstyle{Finish}} & \ColumnLabelFontstyle{Task} & \ColumnLabelFontstyle{Team}\\
+\cline{2-5}
+\rule{0pt}{12pt} & {\color{\YearFontColor}Y} & Q & {\color{\YearFontColor}Y} & Q & \ColumnLabelFontstyle{Lead} & \ColumnLabelFontstyle{Expertise}\\
+\multicolumn{7}{|c|}{\cellcolor{\SectionColor}\color{\SectionFontColor}\SectionFontstyle{Task A: Goal A title}}\\
+A1: {Task A1 title}  & {\color{\YearFontColor}1} & 1 & {\color{\YearFontColor}1} & 2 & co-I(2) & PI\\
+A2: {Task A2 title}  & {\color{\YearFontColor}1} & 1 & {\color{\YearFontColor}1} & 2 & co-I(1) & PI\\
+A3: {Task A3 title}  & {\color{\YearFontColor}1} & 2 & {\color{\YearFontColor}1} & 2 & co-I(2) & PI\\
+\multicolumn{7}{|c|}{\cellcolor{\SectionColor}\color{\SectionFontColor}\SectionFontstyle{Task B: Goal B title}}\\
+B1: {Task B1 title}  & {\color{\YearFontColor}1} & 1 & {\color{\YearFontColor}1} & 1 & PI & co-I(1,2)\\
+B2: {Task B2 title}  & {\color{\YearFontColor}1} & 2 & {\color{\YearFontColor}1} & 2 & PI & co-I(2)\\
+B3: {Task B3 title}  & {\color{\YearFontColor}1} & 2 & {\color{\YearFontColor}1} & 3 & PI & co-I(1)\\
+B4: {Task B4 title}  & {\color{\YearFontColor}1} & 1 & {\color{\YearFontColor}1} & 3 & co-I(1) & PI\\
+B5: {Task B5 title}  & {\color{\YearFontColor}1} & 2 & {\color{\YearFontColor}1} & 3 & PI & co-I(2)\\
+\multicolumn{7}{|c|}{\cellcolor{\SectionColor}\color{\SectionFontColor}\SectionFontstyle{Task C: Goal C title}}\\
+C1: {Task C1 title}  & {\color{\YearFontColor}1} & 1 & {\color{\YearFontColor}1} & 4 & PI & co-I(2)\\
+C2: {Task C2 title}  & {\color{\YearFontColor}1} & 4 & {\color{\YearFontColor}1} & 4 & PI & co-I(1,2)\\
+\hline
+\end{longtable}
+\end{minipage}}} 
+{%
+\ifLandScape
+  \end{sidewaystable*}
+\else
+  \end{table*}
+\fi
+}

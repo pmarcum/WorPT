@@ -1,0 +1,290 @@
+%______________________________________
+% Instructions and LaTeX code to copy/paste into your document, to incorporate this file into your proposal, now located at:
+%
+% https://github.com/pmarcum/WorPT-Work-Plan-Tool-4-proposals/blob/main/latexTableTemplates/NOTANONschedule/readme.md
+%______________________________________
+%
+% Template for WorPT script begins below
+% (not for general user unless you are planning to alter the WorPT script!)
+%
+\newif\ifLandScape                 % establish a boolean variable
+\def\WorPTfolder{NOTANONschedule} % set the folder name where WorPT files are contained
+% ___________________________________________
+%       Default formatting preferences
+% ___________________________________________
+\LandScapefalse             % default is that the landscape mode is OFF
+%--- table column widths
+\def\TitleWidth{4.1in}      % Title column width
+\def\TimelineWidth{1ex}     % skinny timeline columns width
+\def\AssignmentsWidth{24ex} % Task assignments column width
+\def\SumFteWidth{5ex}       % Total FTE/Sum column width
+\def\UnfundedFteWidth{5ex}  % Total FTE/Unfunded column width
+\def\FundedFteWidth{5ex}    % Total FTE/Funded column width
+%---- fix the Table Number in the caption
+\def\TaskAddCounter{-1}   % corrects table number messed up by table,longtable combination)
+%---- table compactness controls
+\def\SpaceBetweenRows{0.8}    % vertical compactness of rows
+\def\SpaceBetweenColumns{1pt} % spacing between columns
+%--- control to nudge table to the left or right
+\def\NudgeTable{1.5\textwidth}   % adjust to help center table
+%---- vertical line colors
+\def\TimelineVerticalLineColor{lightgray}
+\def\TotalFteVerticalLineColor{lightgray}
+%---- preferences of column headers
+\def\TaskTimelineHeaderFontsize{\scriptsize}   % Task Timeline label text size
+\def\TaskAssignmentsHeaderFontsize{\scriptsize}% Task Assignments label text size
+\def\TotalFteHeaderFontsize{\scriptsize}       % Totaled FTEs label text size
+\def\YearHeaderFontsize{\scriptsize}           % "YEAR1", "YEAR2"... label text size
+\def\TaskTitleHeaderFontsize{\normalsize}      % "TASK TITLES" column label text size
+\def\YearSliceHeaderFontsize{\scriptsize}      % "1", "2"... year-quarter label text size
+\def\IdWksHeaderFontsize{\normalsize}          % "id wks" text size
+%---- symbol preferences for FTE types (sum, funded, unfunded)
+\def\TotalFteSumHeaderIcon{\textbf{\large{$\Sigma$}}} % sigma symbol label size
+\def\TotalFteUnfundedHeaderIcon{\noDollarIcon{-0.4}{0.4mm}{0.2}{0.15}} % "no dollar" symbol label size
+\def\TotalFteFundedHeaderIcon{\dollarIcon{-0.4}{0.2}{0.015}}% green "dollar" symbol label size
+%--- preferences of task CATEGORY label
+\def\TaskCategoryLabel#1#2{{\normalsize\textbf\scshape{#1}}~{\normalsize\textbf{#2}}} % Task Category label format for row item
+%--- preferences of TASK label
+\def\TaskTitleLabel#1#2{~{\scriptsize{\textbf{\scshape{#1}}}}~{\color{mediumelectricblue}{\footnotesize\textbf{#2}}}} % Task title format for row item
+%--- preferences of timeline color
+\def\TimelineColor{mediumelectricblue}          % Task Timeline cell color
+%--- preferences for indicating US vs non-US instutional affiliations and funded vs unfunded team members
+\def\FundedUsTeam#1{\small \color{blue}{#1}}    % funded US team members ID, \#weeks format
+\def\UnfundedUsTeam#1{\small \color{black}{#1}} % UNfunded US team members ID, \#weeks fomat
+\def\InternationalTeam#1{\small \color{red}{#1}}% international team members ID, \#weeks format
+%--- preferences for formatting the FTE values in far right columns
+\def\FteTotalFormat#1{\small{#1}}               % Total FTE/sum value format
+\def\FteUnfundedFormat#1{\small{#1}}            % Total FTE/unfunded value format
+\def\FteFundedFormat#1{\small \color{blue}{#1}} % Total FTE/funded value format
+%--- Delimiter of the task assignments
+\def\TaskAssignmentDelimiter{;\hspace{3pt}} % delimiter used in TASK ASSIGNMENTS
+%--- Format the identity reveals in the table caption
+\def\RevealIdentityFormat#1#2{\textbf{#1}: #2}
+%--- internal parameters used by script but not for user
+\def\LastYearPlusTwo{5}
+\def\NumberYears{3}
+\def\SlicesPerYearMinusTwo{2} % Num slices/year - first,last slices
+\def\TimelineSize{\tiny}                        % width control of TASK TIMELINE cells
+\def\RevealIdentities{\RevealIdentityFormat{al1}{Avery~Lindqvist}, \RevealIdentityFormat{mc3}{Morgan~Castellanos}, \RevealIdentityFormat{jo2}{Jordan~Okonkwo-Hale}, \RevealIdentityFormat{rv4}{Riley~Vantongeren}}
+%--- table preamble definition bundled into the "T" variable
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}      % title, assignment columns
+\newcolumntype{V}{!{\color{\TimelineVerticalLineColor}\vrule}} % vertical lines in timeline
+\newcolumntype{W}{!{\color{\TotalFteVerticalLineColor}\vrule}} % vertical lines in FTE
+\newcolumntype{T}{
+|L{\TitleWidth}         % title column
+*{\NumberYears}{        % timeline columns
+|p{\TimelineWidth}V*{\SlicesPerYearMinusTwo}{p{\TimelineWidth}V}p{\TimelineWidth}} 
+|L{\AssignmentsWidth}   % task assignment column
+|p{\SumFteWidth}W       % total fte, sum column
+p{\UnfundedFteWidth}W   % total fte, unfunded column
+p{\FundedFteWidth}|     % total fte, funded column
+}
+\newenvironment{NOTANONschedule}{%
+\ifLandScape
+  \begin{sidewaystable*}
+\else
+  \begin{table*}[h!]     % \begin{table} needed to make bottom table caption have same width as table
+\fi
+\addtocounter{table}{\TaskAddCounter}           % corrects double-counting of longtable and table combination
+\renewcommand{\arraystretch}{\SpaceBetweenRows} % controls vertical row separation/spacing
+\setlength{\tabcolsep}{\SpaceBetweenColumns}    % controls horizontal column separation/spacing
+\centerline{
+\begin{minipage}{\NudgeTable}                   % increase to allow a wide table to spill into margin
+\begin{longtable}{T}
+% ------------------------- First line of headers
+\cline{2-13}                               
+\multicolumn{1}{c|}{} &                                                  % title column
+\multicolumn{12}{c|}{\TaskTimelineHeaderFontsize{TASK}} & % schedule columns
+\multicolumn{1}{c}{} &                                                   % task assignment column
+\multicolumn{3}{c}{}\\                              % 3-column total fte
+\cline{14-17}
+% ------------------------- Second line of headers
+\multicolumn{1}{c|}{} &                                                    % title column
+\multicolumn{12}{c|}{\TaskTimelineHeaderFontsize{TIMELINE}} & % schedule columns
+\multicolumn{1}{c|}{\TaskAssignmentsHeaderFontsize{TASK}} &                % task assignments column
+\multicolumn{3}{c|}{\TotalFteHeaderFontsize{TOTAL}}\\ % 3-column total fte
+\cline{2-13}
+% -------------------------  Third line of headers
+\multicolumn{1}{c|}{}                                                 % title column
+ & \multicolumn{4}{c|}{\YearHeaderFontsize{YR1}} & \multicolumn{4}{c|}{\YearHeaderFontsize{YR2}} & \multicolumn{4}{c|}{\YearHeaderFontsize{YR3}} &                                               % year label list (YR1, YR2, ...)
+\multicolumn{1}{c|}{\TaskAssignmentsHeaderFontsize{ASSIGNMENTS}} &    % task assignments (ID, \#week)
+\multicolumn{3}{c|}{\TotalFteHeaderFontsize{FTE}}\\% 3-column total fte
+\cline{1-1}
+% -------------------------  Forth line of headers
+\multicolumn{1}{|l|}{\TaskTitleHeaderFontsize{TASK TITLES}} % title column
+ & \YearSliceHeaderFontsize{1} & \YearSliceHeaderFontsize{2} & \YearSliceHeaderFontsize{3} & \YearSliceHeaderFontsize{4} & \YearSliceHeaderFontsize{1} & \YearSliceHeaderFontsize{2} & \YearSliceHeaderFontsize{3} & \YearSliceHeaderFontsize{4} & \YearSliceHeaderFontsize{1} & \YearSliceHeaderFontsize{2} & \YearSliceHeaderFontsize{3} & \YearSliceHeaderFontsize{4} &                                % year slice list (1,2,3,4 1,2,3,4...)
+\multicolumn{1}{c|}{\IdWksHeaderFontsize{id~\#wks}} &       % task assignments (ID,\#weeks)
+{\TotalFteSumHeaderIcon} &                                  % Col1 Total funded+unfunded FTE
+{\TotalFteUnfundedHeaderIcon} &                             % Col2 Total unfunded FTE
+{\TotalFteFundedHeaderIcon}                                 % Col3 Total funded FTE
+\hline
+% begin main contents of table
+\TaskCategoryLabel{A}{Goal A title} % category identification
+ & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % empty year slices
+{} &                           % empty assignments
+{} & {} & {}\\                 % empty total fte
+% begin task
+\TaskTitleLabel{A1}{Task A1 title} % title of this task
+ & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % timeline for this task
+{\FundedUsTeam{mc3}\,\FundedUsTeam{5}\TaskAssignmentDelimiter\UnfundedUsTeam{rv4}\,\UnfundedUsTeam{0.5}\TaskAssignmentDelimiter\FundedUsTeam{jo2}\,\FundedUsTeam{0.2}} &  % assignments for this task
+\FteTotalFormat{0.11} & \FteUnfundedFormat{0.01} & \FteFundedFormat{0.10}\\
+% begin task
+\TaskTitleLabel{A2}{Task A2 title} % title of this task
+ & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % timeline for this task
+{\FundedUsTeam{jo2}\,\FundedUsTeam{4}\TaskAssignmentDelimiter\FundedUsTeam{mc3}\,\FundedUsTeam{0.5}\TaskAssignmentDelimiter\UnfundedUsTeam{rv4}\,\UnfundedUsTeam{0.2}} &  % assignments for this task
+\FteTotalFormat{0.09} & \FteUnfundedFormat{0.00} & \FteFundedFormat{0.09}\\
+% begin task
+\TaskTitleLabel{A3}{Task A3 title} % title of this task
+ & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % timeline for this task
+{\FundedUsTeam{al1}\,\FundedUsTeam{4}\TaskAssignmentDelimiter\FundedUsTeam{jo2}\,\FundedUsTeam{0.5}} &  % assignments for this task
+\FteTotalFormat{0.09} & \FteUnfundedFormat{0.00} & \FteFundedFormat{0.09}\\
+% begin task
+\TaskTitleLabel{A4}{Task A4 title} % title of this task
+ & \TimelineSize{} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % timeline for this task
+{\FundedUsTeam{jo2}\,\FundedUsTeam{3}\TaskAssignmentDelimiter\UnfundedUsTeam{rv4}\,\UnfundedUsTeam{0.5}\TaskAssignmentDelimiter\FundedUsTeam{mc3}\,\FundedUsTeam{0.5}} &  % assignments for this task
+\FteTotalFormat{0.08} & \FteUnfundedFormat{0.01} & \FteFundedFormat{0.07}\\
+% begin task
+\TaskTitleLabel{A5}{Task A5 title} % title of this task
+ & \TimelineSize{} & \TimelineSize{} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % timeline for this task
+{\FundedUsTeam{jo2}\,\FundedUsTeam{4}\TaskAssignmentDelimiter\FundedUsTeam{mc3}\,\FundedUsTeam{1}\TaskAssignmentDelimiter\UnfundedUsTeam{rv4}\,\UnfundedUsTeam{0.5}} &  % assignments for this task
+\FteTotalFormat{0.11} & \FteUnfundedFormat{0.01} & \FteFundedFormat{0.10}\\
+% begin task
+\TaskTitleLabel{A6}{Task A6 title} % title of this task
+ & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % timeline for this task
+{\FundedUsTeam{al1}\,\FundedUsTeam{2}\TaskAssignmentDelimiter\FundedUsTeam{jo2}\,\FundedUsTeam{0.5}} &  % assignments for this task
+\FteTotalFormat{0.05} & \FteUnfundedFormat{0.00} & \FteFundedFormat{0.05}\\
+% begin task
+\TaskTitleLabel{A7}{Task A7 title} % title of this task
+ & \TimelineSize{} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % timeline for this task
+{\FundedUsTeam{al1}\,\FundedUsTeam{4}\TaskAssignmentDelimiter\FundedUsTeam{jo2}\,\FundedUsTeam{0.5}} &  % assignments for this task
+\FteTotalFormat{0.09} & \FteUnfundedFormat{0.00} & \FteFundedFormat{0.09}\\ % tasks under this category
+\hline
+\TaskCategoryLabel{B}{Goal B title} % category identification
+ & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % empty year slices
+{} &                           % empty assignments
+{} & {} & {}\\                 % empty total fte
+% begin task
+\TaskTitleLabel{B1}{Task B1 title} % title of this task
+ & \TimelineSize{} & \TimelineSize{} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % timeline for this task
+{\FundedUsTeam{jo2}\,\FundedUsTeam{3}\TaskAssignmentDelimiter\FundedUsTeam{al1}\,\FundedUsTeam{0.5}\TaskAssignmentDelimiter\FundedUsTeam{mc3}\,\FundedUsTeam{0.2}} &  % assignments for this task
+\FteTotalFormat{0.07} & \FteUnfundedFormat{0.00} & \FteFundedFormat{0.07}\\
+% begin task
+\TaskTitleLabel{B2}{Task B2 title} % title of this task
+ & \TimelineSize{} & \TimelineSize{} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % timeline for this task
+{\FundedUsTeam{jo2}\,\FundedUsTeam{2}\TaskAssignmentDelimiter\FundedUsTeam{al1}\,\FundedUsTeam{0.5}\TaskAssignmentDelimiter\FundedUsTeam{mc3}\,\FundedUsTeam{0.2}} &  % assignments for this task
+\FteTotalFormat{0.05} & \FteUnfundedFormat{0.00} & \FteFundedFormat{0.05}\\
+% begin task
+\TaskTitleLabel{B3}{Task B3 title} % title of this task
+ & \TimelineSize{} & \TimelineSize{} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % timeline for this task
+{\FundedUsTeam{jo2}\,\FundedUsTeam{6}\TaskAssignmentDelimiter\FundedUsTeam{al1}\,\FundedUsTeam{1}\TaskAssignmentDelimiter\UnfundedUsTeam{rv4}\,\UnfundedUsTeam{1}} &  % assignments for this task
+\FteTotalFormat{0.15} & \FteUnfundedFormat{0.02} & \FteFundedFormat{0.13}\\
+% begin task
+\TaskTitleLabel{B4}{Task B4 title} % title of this task
+ & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % timeline for this task
+{\FundedUsTeam{al1}\,\FundedUsTeam{3}\TaskAssignmentDelimiter\FundedUsTeam{jo2}\,\FundedUsTeam{0.5}} &  % assignments for this task
+\FteTotalFormat{0.07} & \FteUnfundedFormat{0.00} & \FteFundedFormat{0.07}\\
+% begin task
+\TaskTitleLabel{B5}{Task B5 title} % title of this task
+ & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % timeline for this task
+{\FundedUsTeam{al1}\,\FundedUsTeam{3}\TaskAssignmentDelimiter\FundedUsTeam{jo2}\,\FundedUsTeam{0.5}} &  % assignments for this task
+\FteTotalFormat{0.07} & \FteUnfundedFormat{0.00} & \FteFundedFormat{0.07}\\
+% begin task
+\TaskTitleLabel{B6}{Task B6 title} % title of this task
+ & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % timeline for this task
+{\FundedUsTeam{al1}\,\FundedUsTeam{3}\TaskAssignmentDelimiter\FundedUsTeam{jo2}\,\FundedUsTeam{0.5}} &  % assignments for this task
+\FteTotalFormat{0.07} & \FteUnfundedFormat{0.00} & \FteFundedFormat{0.07}\\
+% begin task
+\TaskTitleLabel{B7}{Task B7 title} % title of this task
+ & \TimelineSize{} & \TimelineSize{} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % timeline for this task
+{\FundedUsTeam{al1}\,\FundedUsTeam{6}\TaskAssignmentDelimiter\FundedUsTeam{jo2}\,\FundedUsTeam{0.5}} &  % assignments for this task
+\FteTotalFormat{0.13} & \FteUnfundedFormat{0.00} & \FteFundedFormat{0.13}\\
+% begin task
+\TaskTitleLabel{B8}{Task B8 title} % title of this task
+ & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % timeline for this task
+{\FundedUsTeam{jo2}\,\FundedUsTeam{4}\TaskAssignmentDelimiter\FundedUsTeam{mc3}\,\FundedUsTeam{0.5}\TaskAssignmentDelimiter\FundedUsTeam{al1}\,\FundedUsTeam{0.5}} &  % assignments for this task
+\FteTotalFormat{0.10} & \FteUnfundedFormat{0.00} & \FteFundedFormat{0.10}\\
+% begin task
+\TaskTitleLabel{B9}{Task B9 title} % title of this task
+ & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % timeline for this task
+{\FundedUsTeam{jo2}\,\FundedUsTeam{3}\TaskAssignmentDelimiter\FundedUsTeam{mc3}\,\FundedUsTeam{0.5}\TaskAssignmentDelimiter\FundedUsTeam{al1}\,\FundedUsTeam{0.5}} &  % assignments for this task
+\FteTotalFormat{0.08} & \FteUnfundedFormat{0.00} & \FteFundedFormat{0.08}\\ % tasks under this category
+\hline
+\TaskCategoryLabel{C}{Goal C title} % category identification
+ & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % empty year slices
+{} &                           % empty assignments
+{} & {} & {}\\                 % empty total fte
+% begin task
+\TaskTitleLabel{C1}{Task C1 title} % title of this task
+ & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % timeline for this task
+{\FundedUsTeam{al1}\,\FundedUsTeam{3}\TaskAssignmentDelimiter\FundedUsTeam{jo2}\,\FundedUsTeam{1}} &  % assignments for this task
+\FteTotalFormat{0.08} & \FteUnfundedFormat{0.00} & \FteFundedFormat{0.08}\\
+% begin task
+\TaskTitleLabel{C2}{Task C2 title} % title of this task
+ & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % timeline for this task
+{\FundedUsTeam{al1}\,\FundedUsTeam{3}\TaskAssignmentDelimiter\FundedUsTeam{jo2}\,\FundedUsTeam{1}} &  % assignments for this task
+\FteTotalFormat{0.08} & \FteUnfundedFormat{0.00} & \FteFundedFormat{0.08}\\
+% begin task
+\TaskTitleLabel{C3}{Task C3 title} % title of this task
+ & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % timeline for this task
+{\FundedUsTeam{al1}\,\FundedUsTeam{2}\TaskAssignmentDelimiter\FundedUsTeam{jo2}\,\FundedUsTeam{0.5}} &  % assignments for this task
+\FteTotalFormat{0.05} & \FteUnfundedFormat{0.00} & \FteFundedFormat{0.05}\\
+% begin task
+\TaskTitleLabel{C4}{Task C4 title} % title of this task
+ & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % timeline for this task
+{\FundedUsTeam{al1}\,\FundedUsTeam{2}\TaskAssignmentDelimiter\FundedUsTeam{jo2}\,\FundedUsTeam{0.5}} &  % assignments for this task
+\FteTotalFormat{0.05} & \FteUnfundedFormat{0.00} & \FteFundedFormat{0.05}\\
+% begin task
+\TaskTitleLabel{C5}{Task C5 title} % title of this task
+ & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % timeline for this task
+{\FundedUsTeam{al1}\,\FundedUsTeam{2}\TaskAssignmentDelimiter\FundedUsTeam{jo2}\,\FundedUsTeam{0.5}} &  % assignments for this task
+\FteTotalFormat{0.05} & \FteUnfundedFormat{0.00} & \FteFundedFormat{0.05}\\
+% begin task
+\TaskTitleLabel{C6}{Task C6 title} % title of this task
+ & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % timeline for this task
+{\FundedUsTeam{jo2}\,\FundedUsTeam{4}\TaskAssignmentDelimiter\FundedUsTeam{mc3}\,\FundedUsTeam{1}\TaskAssignmentDelimiter\FundedUsTeam{al1}\,\FundedUsTeam{0.5}} &  % assignments for this task
+\FteTotalFormat{0.11} & \FteUnfundedFormat{0.00} & \FteFundedFormat{0.11}\\
+% begin task
+\TaskTitleLabel{C7}{Task C7 title} % title of this task
+ & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % timeline for this task
+{\FundedUsTeam{al1}\,\FundedUsTeam{3}\TaskAssignmentDelimiter\FundedUsTeam{jo2}\,\FundedUsTeam{1}} &  % assignments for this task
+\FteTotalFormat{0.08} & \FteUnfundedFormat{0.00} & \FteFundedFormat{0.08}\\
+% begin task
+\TaskTitleLabel{C8}{Task C8 title} % title of this task
+ & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % timeline for this task
+{\FundedUsTeam{al1}\,\FundedUsTeam{3}\TaskAssignmentDelimiter\FundedUsTeam{jo2}\,\FundedUsTeam{0.5}\TaskAssignmentDelimiter\UnfundedUsTeam{rv4}\,\UnfundedUsTeam{0.5}} &  % assignments for this task
+\FteTotalFormat{0.08} & \FteUnfundedFormat{0.01} & \FteFundedFormat{0.07}\\ % tasks under this category
+\hline
+\TaskCategoryLabel{D}{Goal D title} % category identification
+ & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % empty year slices
+{} &                           % empty assignments
+{} & {} & {}\\                 % empty total fte
+% begin task
+\TaskTitleLabel{D1}{Task D1 title} % title of this task
+ & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % timeline for this task
+{\FundedUsTeam{al1}\,\FundedUsTeam{6}\TaskAssignmentDelimiter\UnfundedUsTeam{T}\,\UnfundedUsTeam{2}} &  % assignments for this task
+\FteTotalFormat{0.23} & \FteUnfundedFormat{0.04} & \FteFundedFormat{0.19}\\
+% begin task
+\TaskTitleLabel{D2}{Task D2 title} % title of this task
+ & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} &  % timeline for this task
+{\FundedUsTeam{al1}\,\FundedUsTeam{6}\TaskAssignmentDelimiter\UnfundedUsTeam{T}\,\UnfundedUsTeam{2}} &  % assignments for this task
+\FteTotalFormat{0.23} & \FteUnfundedFormat{0.04} & \FteFundedFormat{0.19}\\
+% begin task
+\TaskTitleLabel{D3}{Task D3 title} % title of this task
+ & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize{} &  % timeline for this task
+{\FundedUsTeam{al1}\,\FundedUsTeam{6}\TaskAssignmentDelimiter\UnfundedUsTeam{T}\,\UnfundedUsTeam{2}} &  % assignments for this task
+\FteTotalFormat{0.23} & \FteUnfundedFormat{0.04} & \FteFundedFormat{0.19}\\
+% begin task
+\TaskTitleLabel{D4}{Task D4 title} % title of this task
+ & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize{} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} & \TimelineSize\cellcolor{\TimelineColor} &  % timeline for this task
+{\FundedUsTeam{al1}\,\FundedUsTeam{6}\TaskAssignmentDelimiter\UnfundedUsTeam{T}\,\UnfundedUsTeam{2}} &  % assignments for this task
+\FteTotalFormat{0.23} & \FteUnfundedFormat{0.04} & \FteFundedFormat{0.19}\\ % tasks under this category
+\hline
+\end{longtable}
+\end{minipage}}}
+{%
+\ifLandScape
+  \end{sidewaystable*}
+\else
+  \end{table*}
+\fi
+}
