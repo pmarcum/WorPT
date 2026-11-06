@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-US">
 <head>
 <base target="_top">
 <meta charset="utf-8">
@@ -22,7 +22,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);fon
 a{color:var(--accent)} a:hover{color:#a0ccff}
 button,input,select,textarea{font:inherit;color:inherit}
 input,select,textarea{background:var(--bg);border:1px solid var(--border2);border-radius:5px;padding:6px 8px;color:var(--text)}
-input[type=number]{font-family:var(--mono);width:68px}
+input[data-num]{font-family:var(--mono);width:68px}
 input[type=checkbox],input[type=radio]{width:17px;height:17px;accent-color:var(--accent)}
 textarea{width:100%;min-height:54px;resize:vertical}
 ::placeholder{color:#8a8a98;opacity:1}
@@ -90,18 +90,18 @@ input.wk.on{border-color:#4a6a90}
 .tl{position:relative;height:100%;display:grid}
 .tl .q{height:100%;border-left:1px solid #222228}
 .tl .q.y{border-left-color:var(--border2)}
-.tl.leaf .q{cursor:pointer;touch-action:none}
+.tl.leaf .q{touch-action:none}
 .tl.leaf .q:hover{background:rgba(126,184,247,.08)}
 .sg-head .tl{height:auto}
 .yh{grid-column:span 4;text-align:center;font-family:var(--mono);font-size:11px;padding:3px 0;border-left:1px solid var(--border2)}
 .qh{text-align:center;font-family:var(--mono);font-size:10px;color:var(--muted);padding:2px 0 5px;border-left:1px solid #222228}
 .qh.y{border-left-color:var(--border2)}
 .bar{position:absolute;pointer-events:none;display:flex;align-items:center;padding:0 8px;font-family:var(--mono);font-size:11px;white-space:nowrap;overflow:visible}
-.bar.leaf{top:22%;bottom:22%;border-radius:5px;background:rgba(126,184,247,.55);box-shadow:inset 4px 0 0 rgba(255,255,255,.35),inset -4px 0 0 rgba(255,255,255,.35)}
+.bar.leaf{top:22%;bottom:22%;border-radius:5px;background:rgba(126,184,247,.55);box-shadow:inset 5px 0 0 rgba(255,255,255,.5),inset -5px 0 0 rgba(255,255,255,.5)}
 .bar.leaf.sub{background:rgba(126,184,247,.42)}
 .bar.parent{top:28%;bottom:28%;border-radius:4px;background:rgba(247,201,126,.14);border:1px dashed rgba(247,201,126,.55)}
 .bar.cat{top:40%;bottom:40%;border-radius:3px;background:rgba(247,201,126,.55);box-shadow:-2px 0 0 rgba(247,201,126,.9),2px 0 0 rgba(247,201,126,.9)}
-.sg-details{margin:2px 0 10px 52px;max-width:820px;border-color:#2a3a50;background:var(--surface2)}
+.sg-details{margin:4px 0 12px 52px;max-width:840px;background:#1b2332;border:1px solid #3d5a80;box-shadow:0 6px 18px rgba(0,0,0,.45)}
 .badge{font-family:var(--mono);font-size:12px;color:var(--accent);padding:3px 8px;border:1px solid #2a3a50;border-radius:4px}
 .level{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
 fieldset{border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin:0}
@@ -180,8 +180,15 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&a
 const f2 = x => (Math.round((+x || 0) * 100) / 100).toFixed(2);
 const money = x => '$' + Math.round(+x || 0).toLocaleString('en-US');
 const fteStep = x => { const s = x < 0.1 ? 0.01 : 0.05; return Math.round(x / s) * s; };
-const num = v => (v === '' || v == null || isNaN(+v)) ? null : +v;
-const when = iso => { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? iso : d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }); };
+// Numbers are always written with a decimal point, whatever the browser's language: inputs are plain text, and a comma
+// is read as a decimal point in weeks and other small numbers (3,5 = 3.5) and as a thousands separator in dollars (3,000).
+const num = (v, money) => {
+  if (v === '' || v == null) return null;
+  let t = String(v).trim().replace(/\s/g, '');
+  t = (t.includes('.') || money) ? t.replace(/,/g, '') : t.replace(/,/g, '.');
+  return t === '' || isNaN(+t) ? null : +t;
+};
+const when = iso => { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? iso : d.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }); };
 const personName = p => p ? [p.first, p.last].filter(Boolean).join(' ') || '(no name)' : '';
 const isColl = m => /^coll/i.test(m.role || '') || m.us === false;
 
@@ -224,7 +231,11 @@ function modal(html, onReady) {
   return m;
 }
 function closeModal() { const m = $('#modal'); m.hidden = true; m.innerHTML = ''; }
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#modal').hidden) closeModal(); });
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (!$('#modal').hidden) closeModal();
+  else if (S.open != null && S.tab === 'plan') { S.open = null; render(); }
+});
 function ask(title, text, buttons) {          // buttons: [[label, value, cls]] → Promise of the value (null if closed)
   return new Promise(resolve => {
     modal('<h2>' + esc(title) + '</h2><p style="margin:0;line-height:1.55">' + esc(text) + '</p><div class="actions">' +
@@ -242,7 +253,7 @@ const WHAT = { proposal: 'proposal', item: 'item', member: 'team member', assign
 
 function readInput(el) {
   if (el.type === 'checkbox' || el.type === 'radio') return el.checked;
-  if (el.dataset.type === 'num' || el.type === 'number') return num(el.value);
+  if (el.dataset.num) return el.dataset.type === 'int' ? Math.round(num(el.value) || 0) || null : num(el.value, el.dataset.num === 'money');
   if (el.dataset.type === 'int') return el.value === '' ? null : parseInt(el.value, 10);
   return el.value;
 }
@@ -382,10 +393,10 @@ function viewProposals() {
   const list = S.proposals.map(p =>
     '<button type="button" class="pcard" data-open="' + esc(p.id) + '"><b>' + esc(p.title) + '</b>' +
     '<span class="mono muted" style="font-size:11px">' + esc(p.program || 'no program set') + ' · ' + p.n_years + ' year' + (p.n_years === 1 ? '' : 's') + '</span>' +
-    '<span class="muted">Leads: ' + esc(p.leads || '—') + '</span>' +
+    '<span class="muted">Full editors: ' + esc(p.leads || '—') + '</span>' +
     '<span class="muted" style="font-size:11px;margin-top:auto">Last changed ' + esc(when(p.last_changed_at)) + '</span></button>').join('');
   const empty = S.cfg && S.cfg.access === 'admin' ? 'There are no proposals yet.' :
-    'You are not on any proposal yet. Ask a proposal lead to add you; they need the Google email you sign in with, ' + (S.cfg ? S.cfg.email : '') + '.';
+    'You are not on any proposal yet. Ask one of a proposal\'s full editors to add you; they need the Google email you sign in with, ' + (S.cfg ? S.cfg.email : '') + '.';
   return '<div class="row" style="margin-bottom:12px"><h1 style="margin:0;font-size:17px">Proposals</h1>' +
     (S.cfg && S.cfg.access === 'admin' ? '<span class="muted">(as an admin you see every proposal)</span>' : '') +
     (canCreate ? '<button type="button" class="btn primary" style="margin-left:auto" data-act="newProposal">New proposal work plan</button>' : '') + '</div>' +
@@ -399,8 +410,8 @@ async function newProposal() {
   modal('<h2>New proposal work plan</h2>' +
     '<label class="f">Title<input id="np-title" maxlength="300" placeholder="e.g. Mapping faint galaxy halos with the survey archive"></label>' +
     '<div class="row"><label class="f" style="flex:1">Program<input id="np-program" placeholder="e.g. NASA/ADAP"></label>' +
-    '<label class="f">Years<input id="np-years" type="number" min="1" step="1" value="3"></label></div>' +
-    '<fieldset><legend>First lead (more can be added on the Team tab)</legend><div class="row">' +
+    '<label class="f">Years<input id="np-years" type="text" inputmode="decimal" data-num="dec" value="3"></label></div>' +
+    '<fieldset><legend>First full editor (more can be added on the Team tab)</legend><div class="row">' +
     '<label class="f" style="flex:1">Person<select id="np-lead">' + (opts || '<option value="">No profiles yet</option>') + '</select></label>' +
     '<label class="f">Short ID<input id="np-sid" value="PI" style="width:80px"></label><label class="f">Role<input id="np-role" value="PI" style="width:100px"></label></div>' +
     '<p class="hint">Not in the list? <button type="button" class="btn" id="np-newperson">New person…</button></p></fieldset>' +
@@ -409,7 +420,7 @@ async function newProposal() {
     m.querySelector('#np-newperson').onclick = async () => { closeModal(); const p = await editPerson(null); if (p) newProposal(); };
     m.querySelector('#np-go').onclick = async () => {
       const lead = num($('#np-lead').value);
-      if (!lead) return toast('Choose the first lead (make a profile with New person… if needed).');
+      if (!lead) return toast('Choose the first full editor (make a profile with New person… if needed).');
       try {
         const r = await api('createProposal', { title: $('#np-title').value, program: $('#np-program').value, n_years: num($('#np-years').value),
           leads: [{ person_id: lead, short_id: $('#np-sid').value, role: $('#np-role').value }] });
@@ -424,7 +435,7 @@ function viewPeople() {
   const me = S.me && S.me.profile;
   const mine = me ? '<p>Your profile: <b>' + esc(personName(me)) + '</b> · ' + esc(me.institution || 'no institution') + ' · ' + (me.us ? 'US institution' : 'non-US institution') +
     ' <button type="button" class="btn" data-editperson="' + me.id + '">Edit my profile</button></p>' :
-    '<p class="muted">You have no profile yet. A proposal lead or core member makes it, with your Google email (' + esc(S.cfg ? S.cfg.email : '') + ').</p>';
+    '<p class="muted">You have no profile yet. One of a proposal\'s full editors, or a core member, makes it, with your Google email (' + esc(S.cfg ? S.cfg.email : '') + ').</p>';
   const others = S.people.filter(p => !me || p.id !== me.id);
   const rows = others.map(p => '<tr><td>' + esc(personName(p)) + '</td><td class="mono">' + esc(p.email || '—') + '</td><td>' + esc(p.institution) + '</td><td>' + (p.us ? 'US' : 'non-US') + '</td>' +
     '<td><button type="button" class="btn" data-editperson="' + p.id + '">Edit</button></td></tr>').join('');
@@ -478,7 +489,7 @@ function viewProposal() {
   const leads = P.members.filter(m => m.is_lead).map(personName).join(', ');
   const body = { plan: viewPlan, team: viewTeam, budget: viewBudget, tables: viewTables, history: viewHistory, settings: viewSettings }[S.tab]();
   return '<div class="ptitle"><h1>' + esc(p.title) + '</h1><span class="meta">' + esc(p.program || 'no program set') + ' · ' + p.n_years + ' year' + (p.n_years === 1 ? '' : 's') +
-    ' · leads: ' + esc(leads || '—') + (P.you.lead ? ' · you are a lead' : P.you.member_id ? '' : ' · viewing as admin') + '</span></div>' +
+    ' · full editors: ' + esc(leads || '—') + (P.you.member_id ? '' : ' · viewing as admin') + '</span></div>' +
     '<nav class="tabs" aria-label="Proposal sections">' + TABS.map(t => '<button type="button" data-tab="' + t[0] + '" aria-current="' + (S.tab === t[0] ? 'page' : 'false') + '">' + esc(t[1]) + '</button>').join('') + '</nav>' + body;
 }
 
@@ -540,8 +551,8 @@ function viewPlan() {
       }
       const a = work.find(x => !x.is_team && x.member_id === m.id);
       const ph = !a && team ? '(' + (+team.weeks || 0) + ')' : '–';
-      return '<span class="sg-cell"><input type="number" min="0" step="0.5" class="wk' + (a ? ' on' : '') + '" data-cell="' + it.id + ':' + m.id + '" data-key="cell:' + it.id + ':' + m.id + '" value="' + (a ? esc(a.weeks) : '') + '" placeholder="' + ph + '" aria-label="Weeks for ' + esc(personName(m)) + ' on ' + esc(labelOf(it.id)) + '">' +
-        '<button type="button" class="star' + (a && a.is_lead ? ' lead' : '') + (a ? '' : ' none') + '"' + (a ? ' data-star="' + a.id + '"' : ' disabled') + ' aria-label="Make ' + esc(personName(m)) + ' lead of ' + esc(labelOf(it.id)) + '" title="Lead">★</button></span>';
+      return '<span class="sg-cell"><input type="text" inputmode="decimal" data-num="dec" class="wk' + (a ? ' on' : '') + '" data-cell="' + it.id + ':' + m.id + '" data-key="cell:' + it.id + ':' + m.id + '" value="' + (a ? esc(a.weeks) : '') + '" placeholder="' + ph + '" aria-label="Weeks for ' + esc(personName(m)) + ' on ' + esc(labelOf(it.id)) + '">' +
+        '<button type="button" class="star' + (a && a.is_lead ? ' lead' : '') + (a ? '' : ' none') + '"' + (a ? ' data-star="' + a.id + '"' : ' disabled') + ' aria-label="Make ' + esc(personName(m)) + ' task lead of ' + esc(labelOf(it.id)) + '" title="Task lead">★</button></span>';
     }).join('');
     return '<div class="sg-row ' + (d === 0 ? 'cat' : '') + (open ? ' open' : '') + '" style="' + tmpl + '">' +
       '<span class="sg-lab">' + esc(labelOf(it.id)) + '</span>' +
@@ -555,8 +566,8 @@ function viewPlan() {
     '<div class="scroll"><div style="min-width:' + minW + 'px">' + head +
     (rows || '<p class="muted" style="padding:14px 4px">No task categories yet. Start with a task category (a group of related tasks), then add tasks to it.</p>') + '</div></div>' +
     '<div class="row" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"><button type="button" class="btn" data-act="addCategory">+ Task category</button>' +
-    '<span class="hint" style="margin:0;flex:1;min-width:260px">Drag across a task\'s quarters to draw its bar; drag a bar\'s ends to lengthen or shorten it, or its middle to move it. ' +
-    (cols ? 'Type weeks straight into a person\'s column (a gray (2) is weeks they get through "team"); ★ makes them the lead. ' : '') + 'Click a title for its details.</span></div></section>' +
+    '<span class="hint" style="margin:0;flex:1;min-width:260px">Drag across a task\'s quarters to draw its bar; drag a bar\'s ends (the cursor becomes ↔) to lengthen or shorten it, or its middle to move it. ' +
+    (cols ? 'Type weeks straight into a person\'s column (a gray (2) is weeks they get through "team"); ★ makes them the task lead. ' : '') + 'Click a title for its details; Close (or Esc) hides them.</span></div></section>' +
     '<div class="cols" style="margin-top:14px"><div style="flex:2 1 520px;min-width:0">' + viewRipple() + '</div><div style="flex:1 1 300px;min-width:0">' + viewChecks() + '</div></div>';
 }
 function weeksFor(itemId, memberId) {          // a member's weeks on everything under an item, "team" included
@@ -581,7 +592,8 @@ function viewItem(n, nodes) {
     '<button type="button" class="btn icon" data-move="1" aria-label="Move down"' + (idx < siblings.length - 1 ? '' : ' disabled') + '>↓</button>' +
     (parents.length ? '<select data-act="moveUnder" aria-label="Move under another ' + (d === 1 ? 'task category' : 'task') + '"><option value="">Move under…</option>' +
       parents.map(x => '<option value="' + x.item.id + '">' + esc(labelOf(x.item.id) + ' ' + x.item.title) + '</option>').join('') + '</select>' : '') +
-    '<button type="button" class="btn danger" data-act="deleteItem">Delete…</button></span></div>' +
+    '<button type="button" class="btn danger" data-act="deleteItem">Delete…</button>' +
+    '<button type="button" class="btn" data-act="closeDetails" aria-label="Close these details">Close ✕</button></span></div>' +
     '<label class="f">Title<input data-save="item:' + it.id + ':title" data-version="' + it.version + '" value="' + esc(it.title) + '" maxlength="500"></label>';
   if (d === 0) return html + '<p class="muted" style="margin:0;line-height:1.5">A task category groups related tasks. It has no timeline or people of its own; its line on the calendar and its numbers come from its tasks (' + (+itemWeeks(it.id).toFixed(1)) + ' weeks in all).</p>' +
     '<div><button type="button" class="btn" data-act="addTask">+ Task in this category</button></div>';
@@ -604,16 +616,16 @@ function viewItem(n, nodes) {
     const name = a.is_team ? 'Everyone not named (team)' : personName(m);
     const role = a.is_team ? unnamed.length + ' people, each gets these weeks' : (m.short_id + ' · ' + m.role + (coll ? ' · collaborator' : ''));
     return '<div class="pgrid prow"><span style="display:flex;flex-direction:column;min-width:0"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(name) + '</span><span class="sub">' + esc(role) + '</span></span>' +
-      '<input type="radio" name="lead-' + it.id + '" aria-label="Make ' + esc(name) + ' the lead"' + (a.is_lead ? ' checked' : '') + ' data-save="assignment:' + a.id + ':is_lead" data-version="' + a.version + '">' +
-      '<span class="row" style="gap:6px;flex-wrap:nowrap"><input type="number" min="0" step="0.5" aria-label="Weeks for ' + esc(name) + '" value="' + esc(a.weeks) + '" data-save="assignment:' + a.id + ':weeks" data-version="' + a.version + '" data-fte="fte-' + a.id + '">' +
+      '<input type="radio" name="lead-' + it.id + '" aria-label="Make ' + esc(name) + ' the task lead"' + (a.is_lead ? ' checked' : '') + ' data-save="assignment:' + a.id + ':is_lead" data-version="' + a.version + '">' +
+      '<span class="row" style="gap:6px;flex-wrap:nowrap"><input type="text" inputmode="decimal" data-num="dec" aria-label="Weeks for ' + esc(name) + '" value="' + esc(a.weeks) + '" data-save="assignment:' + a.id + ':weeks" data-version="' + a.version + '" data-fte="fte-' + a.id + '">' +
       '<span class="fte" id="fte-' + a.id + '">= ' + f2(fteStep((+a.weeks || 0) / (P.proposal.weeks_per_fte || 52))) + ' FTE</span></span>' +
       (coll ? '<span class="muted" style="font-size:11px">all unfunded (collaborator)</span>' :
-        '<input type="number" min="0" step="0.5" aria-label="Unfunded weeks for ' + esc(name) + '" value="' + esc(a.unfunded) + '" data-save="assignment:' + a.id + ':unfunded" data-version="' + a.version + '">') +
+        '<input type="text" inputmode="decimal" data-num="dec" aria-label="Unfunded weeks for ' + esc(name) + '" value="' + esc(a.unfunded) + '" data-save="assignment:' + a.id + ':unfunded" data-version="' + a.version + '">') +
       '<button type="button" class="btn icon" data-unassign="' + a.id + '" aria-label="Remove ' + esc(name) + ' from this item">✕</button></div>';
   }).join('');
   const addable = P.members.filter(m => !named.has(m.id)).map(m => '<option value="m' + m.id + '">' + esc(personName(m) + ' (' + m.short_id + ', ' + m.role + ')') + '</option>').join('') +
     (work.some(a => a.is_team) ? '' : '<option value="team">Everyone not named (team)</option>');
-  return html + '<div><div class="pgrid head"><span>Person</span><span>Lead</span><span>Weeks</span><span>Unfunded weeks</span><span></span></div>' + rows +
+  return html + '<div><div class="pgrid head"><span>Person</span><span>Task lead</span><span>Weeks</span><span>Unfunded weeks</span><span></span></div>' + rows +
     '<label class="row prow" style="gap:8px"><span class="muted">Add a person</span><select data-act="assign" style="flex:1;max-width:340px"><option value="">Choose…</option>' + addable + '</select></label>' +
     (P.members.length ? '' : '<p class="hint">The team is empty: add people on the Team tab first.</p>') +
     '<p class="hint">The green figure is that person\'s effort on this item in FTE, counted over the whole item (weeks ÷ ' + (P.proposal.weeks_per_fte || 52) + '), updated as you type. The panel below the calendar shows how it lands in each year once saved.</p></div>';
@@ -656,8 +668,8 @@ function viewTeam() {
       '<button type="button" class="btn" style="margin-top:6px" data-editperson="' + m.person_id + '">Profile…</button></td>' +
       '<td><input data-save="member:' + m.id + ':short_id" value="' + esc(m.short_id) + '" style="width:70px" aria-label="Short ID"' + v + '></td>' +
       '<td><input data-save="member:' + m.id + ':role" value="' + esc(m.role) + '" style="width:90px" aria-label="Role"' + v + (m.us ? '' : ' title="non-US: always a collaborator"') + '></td>' +
-      '<td><input type="checkbox" data-save="member:' + m.id + ':is_lead" aria-label="Lead"' + (m.is_lead ? ' checked' : '') + v + '></td>' +
-      '<td><input type="number" min="0.01" step="0.01" data-save="member:' + m.id + ':fte_accuracy" value="' + esc(m.fte_accuracy == null ? '' : m.fte_accuracy) + '" placeholder="0.05" aria-label="FTE accuracy"' + v + '></td>' +
+      '<td><input type="checkbox" data-save="member:' + m.id + ':is_lead" aria-label="Full editor"' + (m.is_lead ? ' checked' : '') + v + '></td>' +
+      '<td><input type="text" inputmode="decimal" data-num="dec" data-save="member:' + m.id + ':fte_accuracy" value="' + esc(m.fte_accuracy == null ? '' : m.fte_accuracy) + '" placeholder="0.05" aria-label="FTE accuracy"' + v + '></td>' +
       '<td style="min-width:200px"><textarea data-save="member:' + m.id + ':bio_summary" aria-label="Team summary"' + v + '>' + esc(m.bio_summary) + '</textarea></td>' +
       '<td style="min-width:160px"><textarea data-save="member:' + m.id + ':task_summary" aria-label="HST role text"' + v + '>' + esc(m.task_summary) + '</textarea></td>' +
       '<td>' + (can ? '<button type="button" class="btn danger" data-removemember="' + m.id + '">Remove…</button>' : '') + '</td></tr>';
@@ -668,12 +680,12 @@ function viewTeam() {
     '<label class="f" style="flex:1;min-width:220px">Person<select id="am-person"><option value="">Choose…</option>' + options + '</select></label>' +
     '<label class="f">Short ID<input id="am-sid" style="width:80px" placeholder="e.g. JD"></label>' +
     '<label class="f">Role<input id="am-role" style="width:110px" placeholder="e.g. co-I(1)"></label>' +
-    '<label class="row" style="gap:6px;align-self:flex-end;padding-bottom:8px"><input type="checkbox" id="am-lead"> lead</label>' +
+    '<label class="row" style="gap:6px;align-self:flex-end;padding-bottom:8px"><input type="checkbox" id="am-lead"> full editor</label>' +
     '<button type="button" class="btn primary" style="align-self:flex-end" data-act="addMember">Add</button>' +
     '<button type="button" class="btn" style="align-self:flex-end" data-act="newPerson">New person…</button></div>' +
     '<p class="hint">Roles: PI, Sci-PI, Admin-PI, co-I(1), co-I(2)…, coll(1)…, gst(1) (graduate student), pd(1) (postdoc)… Someone at a non-US institution is always given a coll role.</p></fieldset>' : '';
-  return '<div class="card"><h2 class="h2">Team</h2>' + (can ? '' : '<p class="hint" style="margin:0 0 8px">Only this proposal\'s leads (and admins) change the team; you can see it here.</p>') +
-    '<div class="scroll"><table class="t"><thead><tr><th>Person</th><th>Short ID</th><th>Role</th><th>Lead</th><th>FTE accuracy</th><th>Team summary</th><th>HST role text</th><th></th></tr></thead><tbody>' +
+  return '<div class="card"><h2 class="h2">Team</h2>' + (can ? '' : '<p class="hint" style="margin:0 0 8px">Only this proposal\'s full editors (and admins) change the team; you can see it here.</p>') +
+    '<div class="scroll"><table class="t"><thead><tr><th>Person</th><th>Short ID</th><th>Role</th><th>Full editor</th><th>FTE accuracy</th><th>Team summary</th><th>HST role text</th><th></th></tr></thead><tbody>' +
     (rows || '<tr><td colspan="8" class="muted">No one yet.</td></tr>') + '</tbody></table></div>' + add + '</div>';
 }
 
@@ -681,16 +693,16 @@ function viewTeam() {
 function viewBudget() {
   const P = S.P, ny = P.proposal.n_years, tr = P.proposal.travel || {}, years = Array.from({ length: ny }, (_, y) => y);
   const trips = P.members.map(m => '<tr><td>' + esc(personName(m)) + '<div class="sub">' + esc(m.short_id + ' · ' + m.role) + '</div></td>' + years.map(y =>
-    ['dom', 'int'].map((k, j) => '<td><input type="number" min="0" step="1" data-trip="' + m.id + ':' + y + ':' + j + '" data-key="trip:' + m.id + ':' + y + ':' + j + '" value="' + esc(((m.trips || [])[y] || [0, 0])[j] || 0) + '" aria-label="' + esc(personName(m)) + ' year ' + (y + 1) + ' ' + (j ? 'international' : 'domestic') + ' trips" style="width:56px"></td>').join('')).join('') + '</tr>').join('');
+    ['dom', 'int'].map((k, j) => '<td><input type="text" inputmode="decimal" data-num="dec" data-trip="' + m.id + ':' + y + ':' + j + '" data-key="trip:' + m.id + ':' + y + ':' + j + '" value="' + esc(((m.trips || [])[y] || [0, 0])[j] || 0) + '" aria-label="' + esc(personName(m)) + ' year ' + (y + 1) + ' ' + (j ? 'international' : 'domestic') + ' trips" style="width:56px"></td>').join('')).join('') + '</tr>').join('');
   const rowsT = [['airfare', 'Airfare (per trip)'], ['perdiem', 'Per diem (per day)'], ['conference', 'Conference fees (per trip)'], ['ground', 'Ground travel (per day)']];
   const tv = (k, i) => ((tr[k] || [])[i] == null ? 0 : tr[k][i]);
-  const assumptions = rowsT.map(r => '<tr><td>' + r[1] + '</td>' + [0, 1].map(i => '<td><input type="number" min="0" step="1" data-travel="' + r[0] + ':' + i + '" data-key="travel:' + r[0] + ':' + i + '" value="' + esc(tv(r[0], i)) + '" style="width:90px" aria-label="' + r[1] + (i ? ' international' : ' domestic') + '"></td>').join('') +
-    '<td><input type="number" min="0" step="0.1" data-travel="' + r[0] + ':2" data-key="travel:' + r[0] + ':2" data-pct="1" value="' + esc(+(tv(r[0], 2) * 100).toFixed(3)) + '" style="width:70px" aria-label="' + r[1] + ' yearly increase, percent"> %</td></tr>').join('') +
-    '<tr><td>Days per trip</td>' + [0, 1].map(i => '<td><input type="number" min="0" step="1" data-travel="days:' + i + '" data-key="travel:days:' + i + '" value="' + esc(tv('days', i)) + '" style="width:90px" aria-label="Days per ' + (i ? 'international' : 'domestic') + ' trip"></td>').join('') + '<td></td></tr>';
+  const assumptions = rowsT.map(r => '<tr><td>' + r[1] + '</td>' + [0, 1].map(i => '<td><input type="text" inputmode="decimal" data-num="money" data-travel="' + r[0] + ':' + i + '" data-key="travel:' + r[0] + ':' + i + '" value="' + esc(tv(r[0], i)) + '" style="width:90px" aria-label="' + r[1] + (i ? ' international' : ' domestic') + '"></td>').join('') +
+    '<td><input type="text" inputmode="decimal" data-num="dec" data-travel="' + r[0] + ':2" data-key="travel:' + r[0] + ':2" data-pct="1" value="' + esc(+(tv(r[0], 2) * 100).toFixed(3)) + '" style="width:70px" aria-label="' + r[1] + ' yearly increase, percent"> %</td></tr>').join('') +
+    '<tr><td>Days per trip</td>' + [0, 1].map(i => '<td><input type="text" inputmode="decimal" data-num="dec" data-travel="days:' + i + '" data-key="travel:days:' + i + '" value="' + esc(tv('days', i)) + '" style="width:90px" aria-label="Days per ' + (i ? 'international' : 'domestic') + ' trip"></td>').join('') + '<td></td></tr>';
   const sum = (P.computed.travel || []).map(t => '<tr><td>Year ' + t.year + '</td><td class="num">' + t.dom_trips + ' × ' + money(t.dom_per_trip) + '</td><td class="num">' + money(t.dom_total) + '</td>' +
     '<td class="num">' + t.int_trips + ' × ' + money(t.int_per_trip) + '</td><td class="num">' + money(t.int_total) + '</td><td class="num"><b>' + money(t.dom_total + t.int_total) + '</b></td></tr>').join('');
   const lines = P.nonlabor.map(r => '<tr><td><input data-save="nonlabor:' + r.id + ':item" data-version="' + r.version + '" value="' + esc(r.item) + '" style="width:100%;min-width:180px" aria-label="Budget item"></td>' +
-    years.map(y => '<td><input type="number" min="0" step="1" data-nl="' + r.id + ':' + y + '" data-key="nl:' + r.id + ':' + y + '" value="' + esc((r.amounts || [])[y] || 0) + '" style="width:90px" aria-label="' + esc(r.item) + ' year ' + (y + 1) + '"></td>').join('') +
+    years.map(y => '<td><input type="text" inputmode="decimal" data-num="money" data-nl="' + r.id + ':' + y + '" data-key="nl:' + r.id + ':' + y + '" value="' + esc((r.amounts || [])[y] || 0) + '" style="width:90px" aria-label="' + esc(r.item) + ' year ' + (y + 1) + '"></td>').join('') +
     '<td class="num">' + money((r.amounts || []).slice(0, ny).reduce((a, b) => a + (+b || 0), 0)) + '</td><td><button type="button" class="btn icon" data-delnl="' + r.id + '" aria-label="Delete this line">✕</button></td></tr>').join('');
   return '<div class="stack">' +
     '<div class="card"><h2 class="h2">Trips per person</h2><div class="scroll"><table class="t"><thead><tr><th>Person</th>' + years.map(y => '<th colspan="2">Year ' + (y + 1) + '</th>').join('') + '</tr>' +
@@ -748,7 +760,7 @@ function viewSettings() {
   return '<div class="cols"><div class="card stack" style="flex:2 1 460px">' +
     '<label class="f">Title<input data-save="proposal:' + esc(p.id) + ':title"' + v + ' value="' + esc(p.title) + '"></label>' +
     '<label class="f">Program (contains "HST": team summaries use full role names)<input data-save="proposal:' + esc(p.id) + ':program"' + v + ' value="' + esc(p.program) + '"></label>' +
-    '<div class="row"><label class="f">Years<input type="number" min="1" step="1" data-type="int" data-save="proposal:' + esc(p.id) + ':n_years"' + v + ' value="' + p.n_years + '"></label>' +
+    '<div class="row"><label class="f">Years<input type="text" inputmode="decimal" data-num="dec" data-type="int" data-save="proposal:' + esc(p.id) + ':n_years"' + v + ' value="' + p.n_years + '"></label>' +
     '<label class="f">FTE rounding<select data-save="proposal:' + esc(p.id) + ':rounding"' + v + '><option value="nearest"' + (p.rounding === 'nearest' ? ' selected' : '') + '>to the nearest step</option>' +
     '<option value="up"' + (p.rounding === 'up' ? ' selected' : '') + '>up (as the old Sheet did)</option></select></label></div>' +
     '<p class="hint">Created ' + esc(when(p.created_at)) + ' by ' + esc(p.created_by) + '.</p></div>' +
@@ -774,6 +786,7 @@ const ACTIONS = {
   addCategory: () => addItem(null, 'New task category'),
   addTask: () => { const n = tree().find(x => x.item.id === S.sel); let g = n && n.item; while (g && g.parent_id != null) g = S.P.items.find(i => i.id === g.parent_id); if (g) addItem(g.id, 'New task'); },
   addSub: () => { const n = tree().find(x => x.item.id === S.sel); if (!n || n.depth === 0) return; addItem(n.depth === 2 ? n.item.parent_id : n.item.id, 'New subtask'); },
+  closeDetails: () => { S.open = null; render(); },
   deleteItem: () => attempt(async () => {
     const pre = await api('deleteItem', S.sel, false);
     const ok = await ask('Delete this item?', pre.message + ' The history keeps a copy.', [['Delete', true, 'danger']]);
@@ -804,14 +817,23 @@ function startDrag(ev, tl) {
   const id = +tl.dataset.tl, it = S.P.items.find(i => i.id === id), NQ = S.P.proposal.n_years * 4, r = tl.getBoundingClientRect();
   const qAt = x => Math.max(0, Math.min(NQ - 1, Math.floor((x - r.left) / r.width * NQ)));
   const q = qAt(ev.clientX), s = qIndex(it.start_year, it.start_q), e = qIndex(it.end_year, it.end_q);
-  let mode = 'draw';
-  if (s != null && e != null && q >= s && q <= e) mode = (q === s && e > s) ? 'start' : (q === e && e > s) ? 'end' : 'move';
+  const mode = barZone(ev, tl) || 'draw';
   let bar = tl.querySelector('.bar');
   if (!bar) { bar = document.createElement('span'); bar.className = 'bar leaf'; tl.appendChild(bar); }
   DRAG = { id, it, NQ, qAt, mode, a: q, s0: s, e0: e, s: mode === 'draw' ? q : s, e: mode === 'draw' ? q : e, bar };
   placeBar(); ev.preventDefault();
   try { tl.setPointerCapture(ev.pointerId); } catch (err) { /* older browsers: the drag still works inside the row */ }
-  tl.onpointermove = moveDrag; tl.onpointerup = tl.onpointercancel = endDrag;
+}
+/** Where the pointer is on a bar: near either end (within 16 pixels, or a third of a short bar) resizes, the rest moves. */
+function barZone(ev, tl) {
+  const bar = tl.querySelector('.bar'); if (!bar) return null;
+  const r = bar.getBoundingClientRect(), x = ev.clientX, grip = Math.min(16, r.width / 3);
+  if (x < r.left - 6 || x > r.right + 6) return null;
+  return x - r.left <= grip ? 'start' : r.right - x <= grip ? 'end' : 'move';
+}
+function hoverBar(ev, tl) {
+  const z = barZone(ev, tl);
+  tl.style.cursor = z === 'start' || z === 'end' ? 'ew-resize' : z === 'move' ? 'grab' : 'crosshair';
 }
 function placeBar() {
   const d = DRAG;
@@ -842,8 +864,12 @@ function wire() {
   app.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { S.tab = b.dataset.tab; if (S.tab === 'history') S.history = null; render(); });
   app.querySelectorAll('[data-openitem]').forEach(b => b.onclick = () => { const id = +b.dataset.openitem; S.open = S.open === id ? null : id; S.sel = id; render(); });
   app.querySelectorAll('[data-teamview]').forEach(b => b.onclick = () => setTeamView(b.dataset.teamview));
-  app.querySelectorAll('.tl.leaf').forEach(tl => tl.onpointerdown = ev => startDrag(ev, tl));
-  // a weeks cell: typing a number assigns the person (the first person on a task becomes its lead); emptying it, or 0, takes them off
+  app.querySelectorAll('.tl.leaf').forEach(tl => {
+    tl.onpointerdown = ev => startDrag(ev, tl);
+    tl.onpointermove = ev => DRAG ? moveDrag(ev) : hoverBar(ev, tl);
+    tl.onpointerup = tl.onpointercancel = endDrag;
+  });
+  // a weeks cell: typing a number assigns the person (the first person on a task becomes its task lead); emptying it, or 0, takes them off
   app.querySelectorAll('input[data-cell]').forEach(el => el.onchange = () => attempt(async () => {
     const [iid, mid] = el.dataset.cell.split(':').map(Number), v = num(el.value) || 0;
     const a = S.P.assignments.find(x => x.item_id === iid && !x.is_team && x.member_id === mid);
@@ -860,7 +886,7 @@ function wire() {
     const id = +b.dataset.editperson;
     let p = S.people.find(x => x.id === id) || (S.me && S.me.profile && S.me.profile.id === id ? S.me.profile : null);
     if (!p) { await loadPeople(); p = S.people.find(x => x.id === id); }
-    if (p) editPerson(p); else toast('You can edit your own profile, or the profiles of people on proposals you lead.');
+    if (p) editPerson(p); else toast('You can edit your own profile, or the profiles of people on proposals where you are a full editor.');
   });
   app.querySelectorAll('[data-move]').forEach(b => b.onclick = () => attempt(async () => {
     const it = S.P.items.find(i => i.id === S.sel);
@@ -899,13 +925,13 @@ function wire() {
   app.querySelectorAll('[data-travel]').forEach(el => el.onchange = () => attempt(() => {
     const [k, i] = el.dataset.travel.split(':'), p = S.P.proposal, tr = JSON.parse(JSON.stringify(p.travel || {}));
     tr[k] = (tr[k] || (k === 'days' ? [0, 0] : [0, 0, 0])).slice();
-    tr[k][+i] = (num(el.value) || 0) / (el.dataset.pct ? 100 : 1);
+    tr[k][+i] = (num(el.value, el.dataset.num === 'money') || 0) / (el.dataset.pct ? 100 : 1);
     return change('updateProposal', p.id, { version: p.version, travel: tr });
   }));
   app.querySelectorAll('[data-nl]').forEach(el => el.onchange = () => attempt(() => {
     const [rid, y] = el.dataset.nl.split(':').map(Number), r = S.P.nonlabor.find(x => x.id === rid);
     const amounts = Array.from({ length: S.P.proposal.n_years }, (_, k) => +((r.amounts || [])[k] || 0));
-    amounts[y] = num(el.value) || 0;
+    amounts[y] = num(el.value, true) || 0;
     return change('updateNonlabor', rid, { version: r.version, amounts });
   }));
 }

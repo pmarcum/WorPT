@@ -60,10 +60,11 @@ nightly copy of the database and keeps the newest 14.
 Rules the server applies to every change:
 
 - Admins and core members create proposals; admins see every proposal, everyone else only the ones they are on.
-- Anyone on a proposal edits its plan and budget (including each member's trips); its leads (and
-  admins) manage the team and leads, and may
-  delete the proposal after typing its title. A proposal always keeps at least one lead.
-- A profile may be edited by its owner, leads of a proposal the person is on, core members and admins.
+- Anyone on a proposal edits its plan and budget (including each member's trips); its full editors (and
+  admins) manage the team and its full editors, and may
+  delete the proposal after typing its title. A proposal always keeps at least one full editor
+  (stored as `is_lead` on a member; a task's lead is `is_lead` on an assignment).
+- A profile may be edited by its owner, full editors of a proposal the person is on, core members and admins.
   Someone at a non-US institution is a collaborator (`coll(n)`) on every proposal.
 - Three levels (goal > task > subtask); effort and timelines only on the lowest level. Adding a
   subtask to a task that has effort asks whether to move that effort into the subtask or remove it.

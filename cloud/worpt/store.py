@@ -163,7 +163,7 @@ class Store:
         if p is None or not (user.admin or m):
             raise WorptError('That proposal does not exist, or you are not on its team.', 'not_found')
         if need == 'team' and not (user.admin or m['is_lead']):
-            raise WorptError("Only this proposal's leads (or an admin) can change its team and leads.")
+            raise WorptError("Only this proposal's full editors (or an admin) can change its team and full editors.")
         return p
 
     def can_edit_person(self, db, user, person_id):
@@ -197,7 +197,7 @@ class Store:
     def create_person(self, user, fields):
         with self.connect() as db:
             if not (user.core or self.is_any_lead(db, user)):
-                raise WorptError('Only admins, core members and proposal leads can add people.')
+                raise WorptError('Only admins, core members and full editors of a proposal can add people.')
             f = self.clean_person({k: v for k, v in fields.items() if k in EDITABLE['people']})
             if not f.get('last'): raise WorptError('A profile needs at least a last name.', 'missing')
             self.check_email_free(db, f.get('email'))
@@ -206,7 +206,7 @@ class Store:
     def update_person(self, user, person_id, version, fields):
         with self.connect() as db:
             if not self.can_edit_person(db, user, person_id):
-                raise WorptError("You can edit your own profile, or the profiles of people on proposals you lead.")
+                raise WorptError("You can edit your own profile, or the profiles of people on proposals where you are a full editor.")
             f = self.clean_person(fields)
             if 'email' in f: self.check_email_free(db, f['email'], person_id)
             p = self.update_row(db, user, 'people', person_id, version, f, None, 'profile')
@@ -235,7 +235,7 @@ class Store:
         title = (title or '').strip()
         if not title: raise WorptError('A proposal needs a title.', 'missing')
         n_years = self.check_years(n_years)
-        if not leads: raise WorptError('Name at least one lead for the new proposal.', 'missing')
+        if not leads: raise WorptError('Name at least one full editor for the new proposal.', 'missing')
         with self.connect() as db:
             pid = secrets.token_urlsafe(9)
             p = self.insert_row(db, user, 'proposals', dict(id=pid, title=title, program=(program or '').strip(), n_years=n_years,
@@ -338,7 +338,7 @@ class Store:
 
     def keep_a_lead(self, db, m):
         n = db.execute('SELECT count(*) FROM members WHERE proposal_id = ? AND is_lead = 1', (m['proposal_id'],)).fetchone()[0]
-        if n <= 1: raise WorptError('A proposal must always have at least one lead. Make someone else a lead first.', 'last_lead')
+        if n <= 1: raise WorptError('A proposal must always have at least one full editor. Make someone else a full editor first.', 'last_lead')
 
     def remove_member(self, user, member_id, confirm=False):
         with self.connect() as db:

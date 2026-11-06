@@ -110,7 +110,7 @@ def compute(members, goals, n_years, weeks_per_fte=52, rounding='nearest'):
     rows, cols, wk, uf = [], [], [], []
     for li, (lab, it) in enumerate(leaves):
         named = {a.person for a in it.assignments if a.person.lower() != TEAM}
-        if not any(a.lead for a in it.assignments): checks.append(Check('fix', lab, 'has no lead'))
+        if not any(a.lead for a in it.assignments): checks.append(Check('fix', lab, 'has no task lead'))
         if not it.assignments or not any(a.weeks for a in it.assignments): checks.append(Check('fix', lab, 'has no weeks assigned'))
         for a in it.assignments:
             if a.unfunded > a.weeks: checks.append(Check('warn', lab, f'{a.person}: unfunded weeks ({a.unfunded:g}) exceed weeks ({a.weeks:g})'))
