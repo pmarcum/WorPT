@@ -105,7 +105,7 @@ sudo ls -l /home/bibman/worpt_data/                              # → worpt.db 
 If the service is not running, `journalctl -u worpt -n 30 --no-pager` says why. A missing or short key
 gives "refusing to start" and the service stops after one try (it does not restart in a loop).
 
-**6. Add WorPT to nginx.** First note how BibMan and gooTeX answer now, so you can check afterwards
+**6. Add WorPT to nginx.** First note how BibMan and gooTeX answer now, so you can check afterward
 that nothing changed for them (use your own address in `HOST`):
 
 ```bash
@@ -196,7 +196,7 @@ allows it once, the first time they open it.
 
 **5. Try it.** Open the link. Admins and core members go straight in; everyone else types the access code
 once. Then, in **People & profiles**, make a profile for each person (with the Google email they sign in
-with: that is how WorPT recognises them), and in **Proposals**, **New proposal work plan**.
+with: that is how WorPT recognizes them), and in **Proposals**, **New proposal work plan**.
 
 ### Updating the dashboard
 

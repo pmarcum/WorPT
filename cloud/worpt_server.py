@@ -60,7 +60,7 @@ def create_app(db_path=None, credential=None, read_credential=None):
         if request.path == '/health': return None
         k = key()
         if k == 'full' or (k == 'read' and request.method == 'GET' and '/tables' in request.path): return None
-        return refuse('WorPT did not recognise the credential (check the WorPT_CREDENTIAL setting).', 'credential')
+        return refuse('WorPT did not recognize the credential (check the WorPT_CREDENTIAL setting).', 'credential')
 
     @app.errorhandler(WorptError)
     def worpt_error(e): return refuse(e.message, e.code, **e.extra)

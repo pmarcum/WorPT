@@ -408,8 +408,7 @@ function viewPeople() {
     (canAdd ? '<button type="button" class="btn primary" style="margin-left:auto" data-act="newPerson">New person</button>' : '') + '</div>' +
     '<div class="card stack">' + mine +
     (others.length ? '<div class="scroll"><table class="t"><thead><tr><th>Name</th><th>Google email</th><th>Institution</th><th>US?</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '') +
-    '<p class="hint">A profile is shared by every proposal the person is on. Its email must be the Google email they sign in with, or they will not see their proposals. ' +
-    'Someone at a non-US institution is always a collaborator (100% unfunded) on every proposal.</p></div>';
+    '<p class="hint">A profile is shared by every proposal the person is on. Its email must be the Google email they use to access WorPT, or they will not see their proposals.</p></div>';
 }
 
 /** Edit (or, with person = null, make) a profile. Resolves to the saved profile, or null. */
@@ -426,7 +425,7 @@ function editPerson(person) {
     '<div class="row"><label class="f" style="flex:1">Institution<input id="pp-inst" placeholder="e.g. NASA Goddard Space Flight Center" value="' + esc(p.institution) + '"></label>' +
     '<label class="f" style="flex:1">Position<input id="pp-pos" placeholder="e.g. postdoc, professor, research scientist" value="' + esc(p.position) + '"></label></div>' +
     '<label class="row" style="gap:8px"><input type="checkbox" id="pp-us"' + (p.us ? ' checked' : '') + '> US institution?</label>' +
-    (own ? '<p class="hint">Your own email can only be changed by a core member or admin, because WorPT recognises you by it.</p>' : '') +
+    (own ? '<p class="hint">Your own email can only be changed by a core member or admin, because WorPT recognizes you by it.</p>' : '') +
     '<div class="actions"><button type="button" class="btn" data-x>Cancel</button><button type="button" class="btn primary" id="pp-go">Save</button></div>', m => {
     m.querySelector('[data-x]').onclick = () => { closeModal(); resolve(null); };
     m.querySelector('#pp-go').onclick = async () => {

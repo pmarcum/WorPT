@@ -140,7 +140,7 @@ be turned into plain test by removing the "\textbf", eg {{#1}}
 </tr>
 
 <tr>
-<td><b>Section summary labelling</b></td>
+<td><b>Section summary labeling</b></td>
 <td><pre><code>
 \def\FteFundedSummaryText{<mark>Total Funded Work Effort</mark>}
 \def\FteUnfundedSummaryText{<mark>Total Unfunded Work Effort</mark>}

@@ -4,7 +4,7 @@ Ported from the Google Sheet version (Code.gs, Jan 2025) so that, given the same
 matches the Sheet's output line for line, except for the deliberate corrections marked FIX:
   FIX-1 non-labor table: the Domestic travel line is the year's total, not the cost of one trip.
   FIX-2 schedule: "team" weeks are multiplied by the number of people it covers (unnamed members),
-        and its colour follows whether those weeks are unfunded or international.
+        and its color follows whether those weeks are unfunded or international.
   FIX-3 HST table: a missing Science/Admin PI falls back to the PI's full name, not its first letter.
   FIX-4 travel caption: trips are counted only within the grant years, and "1 trip" is singular.
   FIX-5 anonymous task list: "team" alongside named experts is shown as "team".
