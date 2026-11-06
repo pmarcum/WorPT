@@ -191,6 +191,8 @@ const num = (v, money) => {
 const when = iso => { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? iso : d.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }); };
 const personName = p => p ? [p.first, p.last].filter(Boolean).join(' ') || '(no name)' : '';
 const isColl = m => /^coll/i.test(m.role || '') || m.us === false;
+// a member's short ID and role, written once when they are the same (e.g. PI, not "PI · PI")
+const idRole = (m, sep) => (m.short_id || '').toLowerCase() === (m.role || '').toLowerCase() ? m.role : m.short_id + (sep || ' · ') + m.role;
 
 function gas(fn, ...args) {
   return new Promise((resolve, reject) => google.script.run
@@ -413,10 +415,15 @@ async function newProposal() {
     '<label class="f">Years<input id="np-years" type="text" inputmode="decimal" data-num="dec" value="3"></label></div>' +
     '<fieldset><legend>First full editor (more can be added on the Team tab)</legend><div class="row">' +
     '<label class="f" style="flex:1">Person<select id="np-lead">' + (opts || '<option value="">No profiles yet</option>') + '</select></label>' +
-    '<label class="f">Short ID<input id="np-sid" value="PI" style="width:80px"></label><label class="f">Role<input id="np-role" value="PI" style="width:100px"></label></div>' +
+    '<label class="f">Short ID<input id="np-sid" placeholder="e.g. PM" style="width:80px"></label><label class="f">Role<input id="np-role" value="PI" style="width:100px"></label></div>' +
     '<p class="hint">Not in the list? <button type="button" class="btn" id="np-newperson">New person…</button></p></fieldset>' +
     '<div class="actions"><button type="button" class="btn" data-x>Cancel</button><button type="button" class="btn primary" id="np-go">Create</button></div>', m => {
     m.querySelector('[data-x]').onclick = closeModal;
+    // the short ID starts as the chosen person's initials (it stays as typed once you change it)
+    const initials = () => { const p = S.people.find(x => x.id === num($('#np-lead').value)); return p ? ((p.first || '')[0] || '') + ((p.last || '')[0] || '') : ''; };
+    const sid = m.querySelector('#np-sid'); sid.value = initials().toUpperCase();
+    sid.oninput = () => { sid.dataset.typed = '1'; };
+    m.querySelector('#np-lead').onchange = () => { if (!sid.dataset.typed) sid.value = initials().toUpperCase(); };
     m.querySelector('#np-newperson').onclick = async () => { closeModal(); const p = await editPerson(null); if (p) newProposal(); };
     m.querySelector('#np-go').onclick = async () => {
       const lead = num($('#np-lead').value);
@@ -614,7 +621,7 @@ function viewItem(n, nodes) {
   const rows = work.map(a => {
     const m = a.is_team ? null : memberById(a.member_id), coll = m && isColl(m);
     const name = a.is_team ? 'Everyone not named (team)' : personName(m);
-    const role = a.is_team ? unnamed.length + ' people, each gets these weeks' : (m.short_id + ' · ' + m.role + (coll ? ' · collaborator' : ''));
+    const role = a.is_team ? unnamed.length + ' people, each gets these weeks' : (idRole(m) + (coll ? ' · collaborator' : ''));
     return '<div class="pgrid prow"><span style="display:flex;flex-direction:column;min-width:0"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(name) + '</span><span class="sub">' + esc(role) + '</span></span>' +
       '<input type="radio" name="lead-' + it.id + '" aria-label="Make ' + esc(name) + ' the task lead"' + (a.is_lead ? ' checked' : '') + ' data-save="assignment:' + a.id + ':is_lead" data-version="' + a.version + '">' +
       '<span class="row" style="gap:6px;flex-wrap:nowrap"><input type="text" inputmode="decimal" data-num="dec" aria-label="Weeks for ' + esc(name) + '" value="' + esc(a.weeks) + '" data-save="assignment:' + a.id + ':weeks" data-version="' + a.version + '" data-fte="fte-' + a.id + '">' +
@@ -623,7 +630,7 @@ function viewItem(n, nodes) {
         '<input type="text" inputmode="decimal" data-num="dec" aria-label="Unfunded weeks for ' + esc(name) + '" value="' + esc(a.unfunded) + '" data-save="assignment:' + a.id + ':unfunded" data-version="' + a.version + '">') +
       '<button type="button" class="btn icon" data-unassign="' + a.id + '" aria-label="Remove ' + esc(name) + ' from this item">✕</button></div>';
   }).join('');
-  const addable = P.members.filter(m => !named.has(m.id)).map(m => '<option value="m' + m.id + '">' + esc(personName(m) + ' (' + m.short_id + ', ' + m.role + ')') + '</option>').join('') +
+  const addable = P.members.filter(m => !named.has(m.id)).map(m => '<option value="m' + m.id + '">' + esc(personName(m) + ' (' + idRole(m, ', ') + ')') + '</option>').join('') +
     (work.some(a => a.is_team) ? '' : '<option value="team">Everyone not named (team)</option>');
   return html + '<div><div class="pgrid head"><span>Person</span><span>Task lead</span><span>Weeks</span><span>Unfunded weeks</span><span></span></div>' + rows +
     '<label class="row prow" style="gap:8px"><span class="muted">Add a person</span><select data-act="assign" style="flex:1;max-width:340px"><option value="">Choose…</option>' + addable + '</select></label>' +
@@ -639,7 +646,7 @@ function viewRipple() {
   const cell = (v, mid, y, all) => '<span class="c' + (all ? ' all' : '') + (S.lit[mid + ':' + y] ? ' lit' : '') + '"><span>' + f2(v[0]) + '</span><span class="sub">' + (v[1] > 0 ? f2(v[1]) + ' unf.' : '—') + '</span></span>';
   const rows = P.members.map(m => {
     const r = c.people[m.id] || { per_year: [], total: [0, 0, 0] };
-    return '<span class="n"><span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(personName(m)) + '</span><span class="sub">' + esc(m.short_id + ' · ' + m.role) + '</span></span>' +
+    return '<span class="n"><span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(personName(m)) + '</span><span class="sub">' + esc(idRole(m)) + '</span></span>' +
       Array.from({ length: ny }, (_, y) => cell(r.per_year[y] || [0, 0, 0], m.id, y)).join('') + cell(r.total, m.id, ny, true);
   }).join('');
   // project total per year = the sum of the people's rounded yearly figures (as in the tables); all years: the engine's total
@@ -692,7 +699,7 @@ function viewTeam() {
 // ── travel and budget ────────────────────────────────────────────────────────────────────────────────────────
 function viewBudget() {
   const P = S.P, ny = P.proposal.n_years, tr = P.proposal.travel || {}, years = Array.from({ length: ny }, (_, y) => y);
-  const trips = P.members.map(m => '<tr><td>' + esc(personName(m)) + '<div class="sub">' + esc(m.short_id + ' · ' + m.role) + '</div></td>' + years.map(y =>
+  const trips = P.members.map(m => '<tr><td>' + esc(personName(m)) + '<div class="sub">' + esc(idRole(m)) + '</div></td>' + years.map(y =>
     ['dom', 'int'].map((k, j) => '<td><input type="text" inputmode="decimal" data-num="dec" data-trip="' + m.id + ':' + y + ':' + j + '" data-key="trip:' + m.id + ':' + y + ':' + j + '" value="' + esc(((m.trips || [])[y] || [0, 0])[j] || 0) + '" aria-label="' + esc(personName(m)) + ' year ' + (y + 1) + ' ' + (j ? 'international' : 'domestic') + ' trips" style="width:56px"></td>').join('')).join('') + '</tr>').join('');
   const rowsT = [['airfare', 'Airfare (per trip)'], ['perdiem', 'Per diem (per day)'], ['conference', 'Conference fees (per trip)'], ['ground', 'Ground travel (per day)']];
   const tv = (k, i) => ((tr[k] || [])[i] == null ? 0 : tr[k][i]);
