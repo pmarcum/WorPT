@@ -1,0 +1,549 @@
+{
+ "source": "WorPT Proposal Demo 2023 (Google Sheet, xlsx export)",
+ "n_years": 3,
+ "weeks_per_fte": 52,
+ "team": [
+  {
+   "id": "dd",
+   "role": "PI",
+   "last": "Dent{\\'{o}}n",
+   "first": "Dan",
+   "institution": "University of CBA",
+   "us": true,
+   "fte_accuracy": null,
+   "sheet_fte_per_year": [
+    [
+     0.2,
+     0.0,
+     0.2
+    ],
+    [
+     0.15000000000000002,
+     0.0,
+     0.15000000000000002
+    ],
+    [
+     0.1,
+     0.0,
+     0.1
+    ],
+    [
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0
+    ]
+   ],
+   "sheet_fte_total": [
+    0.45000000000000007,
+    0.0,
+    0.45000000000000007
+   ]
+  },
+  {
+   "id": "pm",
+   "role": "co-I(1)",
+   "last": "Marcum",
+   "first": "Pamela",
+   "institution": "NASA ARC",
+   "us": true,
+   "fte_accuracy": null,
+   "sheet_fte_per_year": [
+    [
+     0.15000000000000002,
+     0.1,
+     0.05000000000000002
+    ],
+    [
+     0.1,
+     0.1,
+     0.0
+    ],
+    [
+     0.15000000000000002,
+     0.03,
+     0.12000000000000002
+    ],
+    [
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0
+    ]
+   ],
+   "sheet_fte_total": [
+    0.4,
+    0.23,
+    0.17000000000000004
+   ]
+  },
+  {
+   "id": "ss",
+   "role": "Sci-PI",
+   "last": "Smith",
+   "first": "Sally",
+   "institution": "University of CBA",
+   "us": true,
+   "fte_accuracy": null,
+   "sheet_fte_per_year": [
+    [
+     0.4,
+     0.04,
+     0.36000000000000004
+    ],
+    [
+     0.2,
+     0.0,
+     0.2
+    ],
+    [
+     0.15000000000000002,
+     0.0,
+     0.15000000000000002
+    ],
+    [
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0
+    ]
+   ],
+   "sheet_fte_total": [
+    0.7500000000000001,
+    0.04,
+    0.7100000000000001
+   ]
+  },
+  {
+   "id": "gg",
+   "role": "coll(1)",
+   "last": "Gala",
+   "first": "Gisella",
+   "institution": "ZXY Institute of Science",
+   "us": false,
+   "fte_accuracy": null,
+   "sheet_fte_per_year": [
+    [
+     0.05,
+     0.05,
+     0.0
+    ],
+    [
+     0.15000000000000002,
+     0.15000000000000002,
+     0.0
+    ],
+    [
+     0.2,
+     0.2,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0
+    ]
+   ],
+   "sheet_fte_total": [
+    0.4,
+    0.4,
+    0.0
+   ]
+  }
+ ],
+ "goals": [
+  {
+   "title": "Data and models preparation",
+   "sheet_id": "T1",
+   "tasks": [
+    {
+     "title": "Generate simulated data",
+     "sheet_id": "T1-1",
+     "start": [
+      1,
+      1
+     ],
+     "end": [
+      1,
+      2
+     ],
+     "assignments": [
+      {
+       "person": "ss",
+       "weeks": 8.0,
+       "unfunded": 2.0,
+       "lead": true
+      },
+      {
+       "person": "dd",
+       "weeks": 4.0,
+       "unfunded": 0.0,
+       "lead": false
+      },
+      {
+       "person": "pm",
+       "weeks": 2.0,
+       "unfunded": 0.0,
+       "lead": false
+      }
+     ],
+     "sheet_year_fraction": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "sheet_fte": [
+      0.2692307692307692,
+      0.038461538461538464,
+      0.23076923076923075
+     ]
+    },
+    {
+     "title": "Make emission maps",
+     "sheet_id": "T1-2",
+     "start": [
+      1,
+      1
+     ],
+     "end": [
+      1,
+      3
+     ],
+     "assignments": [
+      {
+       "person": "dd",
+       "weeks": 6.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "ss",
+       "weeks": 6.0,
+       "unfunded": 0.0,
+       "lead": false
+      }
+     ],
+     "sheet_year_fraction": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "sheet_fte": [
+      0.23076923076923078,
+      0.0,
+      0.23076923076923078
+     ]
+    },
+    {
+     "title": "Incorporate thermal emission models",
+     "sheet_id": "T1-3",
+     "start": [
+      1,
+      3
+     ],
+     "end": [
+      1,
+      3
+     ],
+     "assignments": [
+      {
+       "person": "ss",
+       "weeks": 6.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "pm",
+       "weeks": 4.0,
+       "unfunded": 4.0,
+       "lead": false
+      }
+     ],
+     "sheet_year_fraction": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "sheet_fte": [
+      0.19230769230769232,
+      0.07692307692307693,
+      0.11538461538461539
+     ]
+    }
+   ]
+  },
+  {
+   "title": "Application to archive",
+   "sheet_id": "T2",
+   "tasks": [
+    {
+     "title": "Determine fields of interest",
+     "sheet_id": "T2-1",
+     "start": [
+      1,
+      3
+     ],
+     "end": [
+      2,
+      1
+     ],
+     "assignments": [
+      {
+       "person": "pm",
+       "weeks": 2.0,
+       "unfunded": 2.0,
+       "lead": true
+      },
+      {
+       "person": "ss",
+       "weeks": 1.0,
+       "unfunded": 0.0,
+       "lead": false
+      },
+      {
+       "person": "dd",
+       "weeks": 1.0,
+       "unfunded": 0.0,
+       "lead": false
+      },
+      {
+       "person": "gg",
+       "weeks": 4.0,
+       "unfunded": 4.0,
+       "lead": false
+      }
+     ],
+     "sheet_year_fraction": [
+      0.6666666667,
+      0.3333333333,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "sheet_fte": [
+      0.15384615384615385,
+      0.11538461538461539,
+      0.038461538461538464
+     ]
+    },
+    {
+     "title": "Reduction of image mosaics",
+     "sheet_id": "T2-2",
+     "start": [
+      2,
+      1
+     ],
+     "end": [
+      2,
+      3
+     ],
+     "assignments": [
+      {
+       "person": "dd",
+       "weeks": 4.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "ss",
+       "weeks": 3.0,
+       "unfunded": 0.0,
+       "lead": false
+      },
+      {
+       "person": "gg",
+       "weeks": 5.0,
+       "unfunded": 5.0,
+       "lead": false
+      }
+     ],
+     "sheet_year_fraction": [
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "sheet_fte": [
+      0.23076923076923078,
+      0.09615384615384616,
+      0.13461538461538464
+     ]
+    }
+   ]
+  },
+  {
+   "title": "Documentation and publications",
+   "sheet_id": "T3",
+   "tasks": [
+    {
+     "title": "Code documentation \\& sys. verification",
+     "sheet_id": "T3-1",
+     "start": [
+      2,
+      2
+     ],
+     "end": [
+      3,
+      1
+     ],
+     "assignments": [
+      {
+       "person": "ss",
+       "weeks": 8.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "pm",
+       "weeks": 6.0,
+       "unfunded": 6.0,
+       "lead": false
+      },
+      {
+       "person": "dd",
+       "weeks": 3.0,
+       "unfunded": 0.0,
+       "lead": false
+      }
+     ],
+     "sheet_year_fraction": [
+      0.0,
+      0.75,
+      0.25,
+      0.0,
+      0.0
+     ],
+     "sheet_fte": [
+      0.3269230769230769,
+      0.11538461538461539,
+      0.21153846153846154
+     ]
+    },
+    {
+     "title": "Pub 1: pipeline and improved images",
+     "sheet_id": "T3-2",
+     "start": [
+      2,
+      4
+     ],
+     "end": [
+      3,
+      2
+     ],
+     "assignments": [
+      {
+       "person": "dd",
+       "weeks": 4.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "ss",
+       "weeks": 4.0,
+       "unfunded": 0.0,
+       "lead": false
+      },
+      {
+       "person": "pm",
+       "weeks": 2.0,
+       "unfunded": 0.0,
+       "lead": false
+      },
+      {
+       "person": "gg",
+       "weeks": 6.0,
+       "unfunded": 6.0,
+       "lead": false
+      }
+     ],
+     "sheet_year_fraction": [
+      0.0,
+      0.3333333333,
+      0.6666666667,
+      0.0,
+      0.0
+     ],
+     "sheet_fte": [
+      0.3076923076923077,
+      0.11538461538461539,
+      0.19230769230769232
+     ]
+    },
+    {
+     "title": "Pub 2: galaxy identification",
+     "sheet_id": "T3-3",
+     "start": [
+      3,
+      1
+     ],
+     "end": [
+      3,
+      4
+     ],
+     "assignments": [
+      {
+       "person": "pm",
+       "weeks": 4.0,
+       "unfunded": 0.0,
+       "lead": true
+      },
+      {
+       "person": "ss",
+       "weeks": 3.0,
+       "unfunded": 0.0,
+       "lead": false
+      },
+      {
+       "person": "dd",
+       "weeks": 3.0,
+       "unfunded": 0.0,
+       "lead": false
+      },
+      {
+       "person": "gg",
+       "weeks": 6.0,
+       "unfunded": 6.0,
+       "lead": false
+      }
+     ],
+     "sheet_year_fraction": [
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0
+     ],
+     "sheet_fte": [
+      0.3076923076923077,
+      0.11538461538461539,
+      0.19230769230769232
+     ]
+    }
+   ]
+  }
+ ]
+}
