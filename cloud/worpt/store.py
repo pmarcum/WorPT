@@ -1,0 +1,578 @@
+"""WorPT storage: one SQLite database, with the permission rules and work-plan rules applied on every change.
+
+Every editable row carries a `version`; an update must quote the version it started from, otherwise it is
+refused as a conflict and the current row is returned (nothing is overwritten silently). Every change is
+written to the `history` table (who, when, the row before and after), so anything can be restored.
+
+Who may do what (agreed 5 November 2026):
+  * admin (ADMIN_EMAILS) and core (CORE_MEMBERS) may create proposals; access-code users may not.
+  * admins see every proposal; everyone else sees the proposals they are on.
+  * anyone on a proposal may edit its plan (goals, tasks, effort, budget); leads and admins manage its team and leads.
+  * a proposal always keeps at least one lead; leads and admins may delete it, after typing its title.
+  * a profile may be edited by its owner, leads of any proposal the person is on, core members and admins.
+"""
+import contextlib, datetime, json, secrets, sqlite3
+from .model import Person, Assignment, Item, Proposal, TravelCosts, NonlaborItem
+
+SCHEMA = """
+PRAGMA foreign_keys = ON;
+CREATE TABLE IF NOT EXISTS people (
+  id INTEGER PRIMARY KEY, email TEXT UNIQUE, first TEXT NOT NULL DEFAULT '', middle TEXT NOT NULL DEFAULT '',
+  last TEXT NOT NULL DEFAULT '', prefix TEXT NOT NULL DEFAULT '', suffix TEXT NOT NULL DEFAULT '',
+  institution TEXT NOT NULL DEFAULT '', position TEXT NOT NULL DEFAULT '', us INTEGER NOT NULL DEFAULT 1,
+  version INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS proposals (
+  id TEXT PRIMARY KEY, title TEXT NOT NULL, program TEXT NOT NULL DEFAULT '', n_years INTEGER NOT NULL DEFAULT 3,
+  rounding TEXT NOT NULL DEFAULT 'nearest', latex_subdir TEXT NOT NULL DEFAULT 'do_NOT_manually_edit',
+  travel TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL, created_by TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS members (
+  id INTEGER PRIMARY KEY, proposal_id TEXT NOT NULL REFERENCES proposals(id) ON DELETE CASCADE,
+  person_id INTEGER NOT NULL REFERENCES people(id), short_id TEXT NOT NULL, role TEXT NOT NULL,
+  is_lead INTEGER NOT NULL DEFAULT 0, fte_accuracy REAL, bio_summary TEXT NOT NULL DEFAULT '',
+  task_summary TEXT NOT NULL DEFAULT '', trips TEXT NOT NULL DEFAULT '[]', version INTEGER NOT NULL DEFAULT 1,
+  UNIQUE (proposal_id, short_id), UNIQUE (proposal_id, person_id));
+CREATE TABLE IF NOT EXISTS items (
+  id INTEGER PRIMARY KEY, proposal_id TEXT NOT NULL REFERENCES proposals(id) ON DELETE CASCADE,
+  parent_id INTEGER REFERENCES items(id) ON DELETE CASCADE, position INTEGER NOT NULL, title TEXT NOT NULL DEFAULT '',
+  start_year INTEGER, start_q INTEGER, end_year INTEGER, end_q INTEGER, version INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS assignments (
+  id INTEGER PRIMARY KEY, item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+  member_id INTEGER REFERENCES members(id) ON DELETE CASCADE, is_team INTEGER NOT NULL DEFAULT 0,
+  is_lead INTEGER NOT NULL DEFAULT 0, weeks REAL NOT NULL DEFAULT 0, unfunded REAL NOT NULL DEFAULT 0,
+  position INTEGER NOT NULL DEFAULT 0, version INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS nonlabor (
+  id INTEGER PRIMARY KEY, proposal_id TEXT NOT NULL REFERENCES proposals(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL, item TEXT NOT NULL DEFAULT '', amounts TEXT NOT NULL DEFAULT '[]', version INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS history (
+  id INTEGER PRIMARY KEY, at TEXT NOT NULL, user TEXT NOT NULL, proposal_id TEXT, tbl TEXT NOT NULL,
+  row_id TEXT NOT NULL, action TEXT NOT NULL, before TEXT, after TEXT);
+CREATE INDEX IF NOT EXISTS history_proposal ON history (proposal_id, id);
+"""
+LEVELS = ('goal', 'task', 'subtask')
+TRAVEL_DEFAULT = dict(airfare=[0, 0, 0], perdiem=[0, 0, 0], conference=[0, 0, 0], ground=[0, 0, 0], days=[0, 0])
+EDITABLE = dict(
+    people=('email', 'first', 'middle', 'last', 'prefix', 'suffix', 'institution', 'position', 'us'),
+    proposals=('title', 'program', 'n_years', 'rounding', 'travel'),
+    members=('short_id', 'role', 'is_lead', 'fte_accuracy', 'bio_summary', 'task_summary', 'trips'),
+    items=('title', 'start_year', 'start_q', 'end_year', 'end_q'),
+    assignments=('member_id', 'is_team', 'is_lead', 'weeks', 'unfunded'),
+    nonlabor=('item', 'amounts'))
+JSON_COLS = {'travel', 'trips', 'amounts'}
+
+
+class WorptError(Exception):
+    """A refusal with a plain explanation; `code` lets the dashboard react (e.g. 'conflict', 'parent_has_effort')."""
+    def __init__(self, message, code='refused', **extra):
+        super().__init__(message); self.message, self.code, self.extra = message, code, extra
+
+
+class User:
+    def __init__(self, email, access):
+        self.email, self.access = (email or '').strip().lower(), access   # access: 'admin', 'core' or 'code'
+    admin = property(lambda s: s.access == 'admin')
+    core = property(lambda s: s.access in ('admin', 'core'))
+
+
+def now():
+    return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds')
+
+
+class Store:
+    def __init__(self, path):
+        self.path = path
+        with self.connect() as db: db.executescript(SCHEMA)
+
+    @contextlib.contextmanager
+    def connect(self):
+        """One transaction: everything inside is saved together, or (on any refusal or error) nothing is."""
+        db = sqlite3.connect(self.path, timeout=30)
+        db.row_factory = sqlite3.Row
+        db.execute('PRAGMA foreign_keys = ON'); db.execute('PRAGMA journal_mode = WAL')
+        try:
+            with db: yield db
+        finally:
+            db.close()
+
+    # ------------------------------------------------ small helpers
+    @staticmethod
+    def row(r):
+        if r is None: return None
+        d = dict(r)
+        for k in JSON_COLS & d.keys(): d[k] = json.loads(d[k])
+        for k in ('us', 'is_lead', 'is_team'):
+            if k in d: d[k] = bool(d[k])
+        return d
+
+    def one(self, db, sql, *args):
+        return self.row(db.execute(sql, args).fetchone())
+
+    def all(self, db, sql, *args):
+        return [self.row(r) for r in db.execute(sql, args).fetchall()]
+
+    def log(self, db, user, proposal_id, tbl, row_id, action, before=None, after=None):
+        db.execute('INSERT INTO history (at, user, proposal_id, tbl, row_id, action, before, after) VALUES (?,?,?,?,?,?,?,?)',
+                   (now(), user.email, proposal_id, tbl, str(row_id), action,
+                    None if before is None else json.dumps(before), None if after is None else json.dumps(after)))
+
+    def get(self, db, tbl, rid, what):
+        r = self.one(db, f'SELECT * FROM {tbl} WHERE id = ?', rid)
+        if r is None: raise WorptError(f'That {what} no longer exists (someone may have deleted it).', 'not_found')
+        return r
+
+    def update_row(self, db, user, tbl, rid, version, fields, proposal_id, what):
+        before = self.get(db, tbl, rid, what)
+        if version is None or int(version) != before['version']:
+            raise WorptError(f'Someone else changed this {what} after you opened it. Both versions are shown so you can choose.',
+                             'conflict', current=before)
+        fields = {k: v for k, v in fields.items() if k in EDITABLE[tbl]}
+        if not fields: return before
+        sets = ', '.join(f'{k} = ?' for k in fields)
+        vals = [json.dumps(v) if k in JSON_COLS else v for k, v in fields.items()]
+        db.execute(f'UPDATE {tbl} SET {sets}, version = version + 1 WHERE id = ?', (*vals, rid))
+        after = self.get(db, tbl, rid, what)
+        self.log(db, user, proposal_id, tbl, rid, 'update', before, after)
+        return after
+
+    def insert_row(self, db, user, tbl, values, proposal_id):
+        cols = ', '.join(values)
+        vals = [json.dumps(v) if k in JSON_COLS else v for k, v in values.items()]
+        cur = db.execute(f'INSERT INTO {tbl} ({cols}) VALUES ({",".join("?" * len(values))})', vals)
+        rid = values.get('id', cur.lastrowid)
+        after = self.get(db, tbl, rid, tbl)
+        self.log(db, user, proposal_id, tbl, rid, 'insert', None, after)
+        return after
+
+    def delete_row(self, db, user, tbl, rid, proposal_id, what):
+        before = self.get(db, tbl, rid, what)
+        db.execute(f'DELETE FROM {tbl} WHERE id = ?', (rid,))
+        self.log(db, user, proposal_id, tbl, rid, 'delete', before, None)
+        return before
+
+    # ------------------------------------------------ who is who
+    def person_for(self, db, user):
+        return self.one(db, 'SELECT * FROM people WHERE email = ?', user.email) if user.email else None
+
+    def membership(self, db, user, proposal_id):
+        me = self.person_for(db, user)
+        return me and self.one(db, 'SELECT * FROM members WHERE proposal_id = ? AND person_id = ?', proposal_id, me['id'])
+
+    def proposal(self, db, user, proposal_id, need='view'):
+        p = self.one(db, 'SELECT * FROM proposals WHERE id = ?', proposal_id)
+        m = p and self.membership(db, user, proposal_id)
+        if p is None or not (user.admin or m):
+            raise WorptError('That proposal does not exist, or you are not on its team.', 'not_found')
+        if need == 'team' and not (user.admin or m['is_lead']):
+            raise WorptError("Only this proposal's leads (or an admin) can change its team and leads.")
+        return p
+
+    def can_edit_person(self, db, user, person_id):
+        if user.core: return True
+        me = self.person_for(db, user)
+        if me and me['id'] == person_id: return True
+        return bool(me and db.execute(
+            'SELECT 1 FROM members l JOIN members m ON m.proposal_id = l.proposal_id '
+            'WHERE l.person_id = ? AND l.is_lead = 1 AND m.person_id = ?', (me['id'], person_id)).fetchone())
+
+    def is_any_lead(self, db, user):
+        me = self.person_for(db, user)
+        return bool(me and db.execute('SELECT 1 FROM members WHERE person_id = ? AND is_lead = 1', (me['id'],)).fetchone())
+
+    # ------------------------------------------------ people (profiles)
+    @staticmethod
+    def clean_person(fields):
+        f = dict(fields)
+        if 'email' in f: f['email'] = (f['email'] or '').strip().lower() or None
+        if 'us' in f: f['us'] = 1 if f['us'] else 0
+        for k in ('first', 'middle', 'last', 'prefix', 'suffix', 'institution', 'position'):
+            if k in f: f[k] = (f[k] or '').strip()
+        return f
+
+    def check_email_free(self, db, email, person_id=None):
+        if email:
+            other = self.one(db, 'SELECT * FROM people WHERE email = ? AND id != ?', email, person_id or -1)
+            if other: raise WorptError(f'{email} already belongs to the profile of {other["first"]} {other["last"]}; '
+                                       'each Google email can have only one profile.', 'duplicate_email', existing=other)
+
+    def create_person(self, user, fields):
+        with self.connect() as db:
+            if not (user.core or self.is_any_lead(db, user)):
+                raise WorptError('Only admins, core members and proposal leads can add people.')
+            f = self.clean_person({k: v for k, v in fields.items() if k in EDITABLE['people']})
+            if not f.get('last'): raise WorptError('A profile needs at least a last name.', 'missing')
+            self.check_email_free(db, f.get('email'))
+            return self.insert_row(db, user, 'people', f, None)
+
+    def update_person(self, user, person_id, version, fields):
+        with self.connect() as db:
+            if not self.can_edit_person(db, user, person_id):
+                raise WorptError("You can edit your own profile, or the profiles of people on proposals you lead.")
+            f = self.clean_person(fields)
+            if 'email' in f: self.check_email_free(db, f['email'], person_id)
+            p = self.update_row(db, user, 'people', person_id, version, f, None, 'profile')
+            if not p['us']:                                        # non-US means collaborator, on every proposal
+                for m in self.all(db, 'SELECT * FROM members WHERE person_id = ?', person_id):
+                    if not m['role'].lower().startswith('coll'):
+                        self.update_row(db, user, 'members', m['id'], m['version'], {'role': self.free_coll_role(db, m['proposal_id'])},
+                                        m['proposal_id'], 'team member')
+            return p
+
+    def my_profile(self, user):
+        with self.connect() as db: return self.person_for(db, user)
+
+    def people(self, user, query=''):
+        with self.connect() as db:
+            if not (user.core or self.is_any_lead(db, user)):
+                me = self.person_for(db, user)
+                return [me] if me else []
+            q = f'%{query.strip().lower()}%'
+            return self.all(db, "SELECT * FROM people WHERE lower(first || ' ' || last || ' ' || coalesce(email, '')) LIKE ? "
+                            "ORDER BY last, first", q)
+
+    # ------------------------------------------------ proposals
+    def create_proposal(self, user, title, program='', n_years=3, leads=()):
+        if not user.core: raise WorptError('Only admins and core members can create proposals.')
+        title = (title or '').strip()
+        if not title: raise WorptError('A proposal needs a title.', 'missing')
+        n_years = self.check_years(n_years)
+        if not leads: raise WorptError('Name at least one lead for the new proposal.', 'missing')
+        with self.connect() as db:
+            pid = secrets.token_urlsafe(9)
+            p = self.insert_row(db, user, 'proposals', dict(id=pid, title=title, program=(program or '').strip(), n_years=n_years,
+                                travel=TRAVEL_DEFAULT, created_at=now(), created_by=user.email), pid)
+            for lead in leads:
+                self.add_member_db(db, user, pid, dict(lead, is_lead=True))
+            return p
+
+    @staticmethod
+    def check_years(n):
+        try: n = int(n)
+        except (TypeError, ValueError): raise WorptError('The number of years must be a whole number.', 'invalid')
+        if n < 1: raise WorptError('A proposal needs at least one year.', 'invalid')
+        return n
+
+    def list_proposals(self, user):
+        with self.connect() as db:
+            if user.admin: return self.all(db, 'SELECT * FROM proposals ORDER BY created_at DESC')
+            me = self.person_for(db, user)
+            return self.all(db, 'SELECT p.* FROM proposals p JOIN members m ON m.proposal_id = p.id WHERE m.person_id = ? '
+                            'ORDER BY p.created_at DESC', me['id']) if me else []
+
+    def update_proposal(self, user, proposal_id, version, fields):
+        with self.connect() as db:
+            self.proposal(db, user, proposal_id)
+            f = dict(fields)
+            if 'n_years' in f: f['n_years'] = self.check_years(f['n_years'])
+            if 'title' in f and not (f['title'] or '').strip(): raise WorptError('A proposal needs a title.', 'missing')
+            if 'rounding' in f and f['rounding'] not in ('nearest', 'up'): raise WorptError('Rounding is "nearest" or "up".', 'invalid')
+            return self.update_row(db, user, 'proposals', proposal_id, version, f, proposal_id, 'proposal')
+
+    def delete_proposal(self, user, proposal_id, confirm_title):
+        with self.connect() as db:
+            p = self.proposal(db, user, proposal_id, need='team')
+            if (confirm_title or '').strip() != p['title'].strip():
+                raise WorptError('To delete this proposal, type its title exactly as it appears.', 'confirm_title')
+            snapshot = self.export(db, proposal_id)
+            db.execute('DELETE FROM proposals WHERE id = ?', (proposal_id,))
+            self.log(db, user, proposal_id, 'proposal_snapshot', proposal_id, 'delete', snapshot, None)
+            return {'deleted': p['title']}
+
+    # ------------------------------------------------ team members
+    def free_coll_role(self, db, proposal_id):
+        used = {m['role'] for m in self.all(db, 'SELECT role FROM members WHERE proposal_id = ?', proposal_id)}
+        k = 1
+        while f'coll({k})' in used: k += 1
+        return f'coll({k})'
+
+    def check_member_fields(self, db, proposal_id, f, member_id=None, person=None):
+        if 'short_id' in f:
+            f['short_id'] = (f['short_id'] or '').strip()
+            if not f['short_id']: raise WorptError('Each team member needs a short ID (e.g. initials).', 'missing')
+            if f['short_id'].lower() == 'team': raise WorptError('"team" is reserved for "everyone not named"; choose another ID.', 'invalid')
+            if self.one(db, 'SELECT id FROM members WHERE proposal_id = ? AND short_id = ? AND id != ?', proposal_id, f['short_id'], member_id or -1):
+                raise WorptError(f'The ID "{f["short_id"]}" is already used on this proposal.', 'duplicate')
+        if 'role' in f:
+            f['role'] = (f['role'] or '').strip()
+            if not f['role']: raise WorptError('Each team member needs a role.', 'missing')
+            if person is not None and not person['us'] and not f['role'].lower().startswith('coll'):
+                f['role'] = self.free_coll_role(db, proposal_id)          # non-US institution: always a collaborator
+        if 'is_lead' in f: f['is_lead'] = 1 if f['is_lead'] else 0
+        return f
+
+    def add_member_db(self, db, user, proposal_id, fields):
+        person = self.get(db, 'people', fields.get('person_id'), 'profile')
+        if self.one(db, 'SELECT id FROM members WHERE proposal_id = ? AND person_id = ?', proposal_id, person['id']):
+            raise WorptError(f'{person["first"]} {person["last"]} is already on this proposal.', 'duplicate')
+        f = {k: v for k, v in fields.items() if k in EDITABLE['members']}
+        f.setdefault('short_id', ''); f.setdefault('role', '')
+        f = self.check_member_fields(db, proposal_id, f, person=person)
+        return self.insert_row(db, user, 'members', dict(f, proposal_id=proposal_id, person_id=person['id']), proposal_id)
+
+    def add_member(self, user, proposal_id, fields):
+        with self.connect() as db:
+            self.proposal(db, user, proposal_id, need='team')
+            return self.add_member_db(db, user, proposal_id, fields)
+
+    def update_member(self, user, member_id, version, fields):
+        with self.connect() as db:
+            m = self.get(db, 'members', member_id, 'team member')
+            self.proposal(db, user, m['proposal_id'], need='team')
+            f = self.check_member_fields(db, m['proposal_id'], dict(fields), member_id, self.get(db, 'people', m['person_id'], 'profile'))
+            if m['is_lead'] and 'is_lead' in f and not f['is_lead']: self.keep_a_lead(db, m)
+            return self.update_row(db, user, 'members', member_id, version, f, m['proposal_id'], 'team member')
+
+    def keep_a_lead(self, db, m):
+        n = db.execute('SELECT count(*) FROM members WHERE proposal_id = ? AND is_lead = 1', (m['proposal_id'],)).fetchone()[0]
+        if n <= 1: raise WorptError('A proposal must always have at least one lead. Make someone else a lead first.', 'last_lead')
+
+    def remove_member(self, user, member_id, confirm=False):
+        with self.connect() as db:
+            m = self.get(db, 'members', member_id, 'team member')
+            self.proposal(db, user, m['proposal_id'], need='team')
+            if m['is_lead']: self.keep_a_lead(db, m)
+            work = self.all(db, 'SELECT * FROM assignments WHERE member_id = ?', member_id)
+            if not confirm:
+                return {'needs_confirmation': True, 'assignments': len(work),
+                        'message': f'Removing {m["short_id"]} also removes their {len(work)} assignment(s).'}
+            for a in work: self.delete_row(db, user, 'assignments', a['id'], m['proposal_id'], 'assignment')
+            return self.delete_row(db, user, 'members', member_id, m['proposal_id'], 'team member')
+
+    # ------------------------------------------------ goals, tasks, subtasks
+    def depth(self, db, item_id):
+        d = 0
+        while True:
+            parent = db.execute('SELECT parent_id FROM items WHERE id = ?', (item_id,)).fetchone()[0]
+            if parent is None: return d
+            item_id, d = parent, d + 1
+
+    def height(self, db, item_id):
+        kids = [r[0] for r in db.execute('SELECT id FROM items WHERE parent_id = ?', (item_id,))]
+        return 1 + max((self.height(db, k) for k in kids), default=0)
+
+    def has_children(self, db, item_id):
+        return bool(db.execute('SELECT 1 FROM items WHERE parent_id = ?', (item_id,)).fetchone())
+
+    def renumber(self, db, proposal_id, parent_id):
+        ids = [r[0] for r in db.execute('SELECT id FROM items WHERE proposal_id = ? AND parent_id IS ? ORDER BY position, id', (proposal_id, parent_id))]
+        db.executemany('UPDATE items SET position = ? WHERE id = ?', [(k, i) for k, i in enumerate(ids)])
+
+    def place(self, db, proposal_id, parent_id, position):
+        n = db.execute('SELECT count(*) FROM items WHERE proposal_id = ? AND parent_id IS ?', (proposal_id, parent_id)).fetchone()[0]
+        position = n if position is None else max(0, min(int(position), n))
+        db.execute('UPDATE items SET position = position + 1 WHERE proposal_id = ? AND parent_id IS ? AND position >= ?', (proposal_id, parent_id, position))
+        return position
+
+    def check_new_parent(self, db, user, proposal_id, parent_id, subtree_height, effort_destination=None, new_item_id=None):
+        """A new parent must be in the same proposal, keep the tree within 3 levels, and must not hold effort itself."""
+        if parent_id is None: return
+        parent = self.get(db, 'items', parent_id, 'item')
+        if parent['proposal_id'] != proposal_id: raise WorptError('An item can only be placed inside the same proposal.', 'invalid')
+        if self.depth(db, parent_id) + subtree_height > 2:
+            raise WorptError('WorPT has three levels: goal, task and subtask. This would make a fourth.', 'too_deep')
+        work = self.all(db, 'SELECT * FROM assignments WHERE item_id = ?', parent_id)
+        timed = parent['start_year'] is not None or parent['end_year'] is not None
+        if (work or timed) and not self.has_children(db, parent_id):
+            if effort_destination not in ('new_child', 'remove'):
+                raise WorptError(f'"{parent["title"]}" has its own effort ({len(work)} assignment(s)) and timeline. Once it has subtasks, '
+                                 'effort is entered on the subtasks: move its effort into the new subtask, or remove it?',
+                                 'parent_has_effort', assignments=work)
+            return dict(work=work, parent=parent, destination=effort_destination)
+
+    def add_item(self, user, proposal_id, parent_id=None, title='', position=None, effort_destination=None):
+        with self.connect() as db:
+            self.proposal(db, user, proposal_id)
+            move = self.check_new_parent(db, user, proposal_id, parent_id, 1, effort_destination)
+            pos = self.place(db, proposal_id, parent_id, position)
+            item = self.insert_row(db, user, 'items', dict(proposal_id=proposal_id, parent_id=parent_id, position=pos,
+                                                           title=(title or '').strip()), proposal_id)
+            if move: item = self.move_effort(db, user, proposal_id, move, item)
+            return item
+
+    def move_effort(self, db, user, proposal_id, move, child):
+        parent = move['parent']
+        for a in move['work']:
+            if move['destination'] == 'new_child':
+                db.execute('UPDATE assignments SET item_id = ?, version = version + 1 WHERE id = ?', (child['id'], a['id']))
+                self.log(db, user, proposal_id, 'assignments', a['id'], 'move', a, self.get(db, 'assignments', a['id'], 'assignment'))
+            else:
+                self.delete_row(db, user, 'assignments', a['id'], proposal_id, 'assignment')
+        timeline = {k: parent[k] for k in ('start_year', 'start_q', 'end_year', 'end_q')}
+        self.update_row(db, user, 'items', parent['id'], parent['version'], dict.fromkeys(timeline), proposal_id, 'item')
+        if move['destination'] == 'new_child':
+            child = self.update_row(db, user, 'items', child['id'], child['version'], timeline, proposal_id, 'item')
+        return child
+
+    def update_item(self, user, item_id, version, fields):
+        with self.connect() as db:
+            it = self.get(db, 'items', item_id, 'item')
+            self.proposal(db, user, it['proposal_id'])
+            f = dict(fields)
+            if any(k in f for k in ('start_year', 'start_q', 'end_year', 'end_q')):
+                if self.depth(db, item_id) == 0: raise WorptError('Goals have no timeline of their own; give their tasks timelines.', 'invalid')
+                if self.has_children(db, item_id): raise WorptError("This task's timeline comes from its subtasks.", 'invalid')
+                for k in ('start_year', 'end_year'):
+                    if f.get(k) is not None and int(f[k]) < 1: raise WorptError('Years are counted from 1.', 'invalid')
+                for k in ('start_q', 'end_q'):
+                    if f.get(k) is not None and int(f[k]) not in (1, 2, 3, 4): raise WorptError('Quarters are 1 to 4.', 'invalid')
+            if 'title' in f: f['title'] = (f['title'] or '').strip()
+            out = self.update_row(db, user, 'items', item_id, version, f, it['proposal_id'], 'item')
+            if 'parent_id' in fields or 'position' in fields:
+                out = self.move_item(db, user, out, fields.get('parent_id', it['parent_id']), fields.get('position'), fields.get('effort_destination'))
+            return out
+
+    def move_item(self, db, user, it, parent_id, position, effort_destination):
+        pid = it['proposal_id']
+        node = parent_id
+        while node is not None:                                      # not into itself or its own subtasks
+            if node == it['id']: raise WorptError('An item cannot be moved inside itself.', 'invalid')
+            node = db.execute('SELECT parent_id FROM items WHERE id = ?', (node,)).fetchone()[0]
+        h = self.height(db, it['id'])
+        if parent_id is None:
+            if h > 3: raise WorptError('WorPT has three levels: goal, task and subtask.', 'too_deep')
+            if it['start_year'] is not None or self.one(db, 'SELECT id FROM assignments WHERE item_id = ?', it['id']):
+                raise WorptError('This item has its own effort or timeline, so it cannot become a goal; goals carry no effort.', 'invalid')
+        move = self.check_new_parent(db, user, pid, parent_id, h, effort_destination) if parent_id != it['parent_id'] else None
+        old_parent = it['parent_id']
+        db.execute('UPDATE items SET position = -1 WHERE id = ?', (it['id'],))
+        self.renumber(db, pid, old_parent)
+        pos = self.place(db, pid, parent_id, position)
+        db.execute('UPDATE items SET parent_id = ?, position = ?, version = version + 1 WHERE id = ?', (parent_id, pos, it['id']))
+        self.renumber(db, pid, parent_id)
+        moved = self.get(db, 'items', it['id'], 'item')
+        self.log(db, user, pid, 'items', it['id'], 'move', it, moved)
+        if move: moved = self.move_effort(db, user, pid, move, moved)
+        return moved
+
+    def delete_item(self, user, item_id, confirm=False):
+        with self.connect() as db:
+            it = self.get(db, 'items', item_id, 'item')
+            pid = it['proposal_id']
+            self.proposal(db, user, pid)
+            ids, frontier = [item_id], [item_id]
+            while frontier:
+                frontier = [r[0] for r in db.execute(f'SELECT id FROM items WHERE parent_id IN ({",".join("?" * len(frontier))})', frontier)]
+                ids += frontier
+            work = self.all(db, f'SELECT * FROM assignments WHERE item_id IN ({",".join("?" * len(ids))})', *ids)
+            if not confirm:
+                return {'needs_confirmation': True, 'items_below': len(ids) - 1, 'assignments': len(work),
+                        'message': f'Deleting "{it["title"]}" also deletes {len(ids) - 1} item(s) under it and {len(work)} assignment(s).'}
+            for a in work: self.delete_row(db, user, 'assignments', a['id'], pid, 'assignment')
+            for i in reversed(ids): self.delete_row(db, user, 'items', i, pid, 'item')
+            self.renumber(db, pid, it['parent_id'])
+            return it
+
+    # ------------------------------------------------ effort
+    def check_assignment(self, db, item, f, assignment_id=None):
+        if self.depth(db, item['id']) == 0: raise WorptError('Goals carry no effort; add a task under the goal and assign people there.', 'invalid')
+        if self.has_children(db, item['id']): raise WorptError('This task has subtasks; enter effort on its subtasks.', 'invalid')
+        if f.get('is_team'): f['member_id'] = None
+        elif 'member_id' in f:
+            m = self.get(db, 'members', f['member_id'], 'team member')
+            if m['proposal_id'] != item['proposal_id']: raise WorptError('That person is not on this proposal.', 'invalid')
+        who = 'is_team = 1' if f.get('is_team') else 'member_id = ?'
+        args = () if f.get('is_team') else (f.get('member_id'),)
+        if ('member_id' in f or f.get('is_team')) and self.one(db, f'SELECT id FROM assignments WHERE item_id = ? AND {who} AND id != ?', item['id'], *args, assignment_id or -1):
+            raise WorptError('That person is already on this item; change their weeks instead.', 'duplicate')
+        for k in ('weeks', 'unfunded'):
+            if k in f:
+                f[k] = float(f[k] or 0)
+                if f[k] < 0: raise WorptError('Weeks cannot be negative.', 'invalid')
+        for k in ('is_team', 'is_lead'):
+            if k in f: f[k] = 1 if f[k] else 0
+        return f
+
+    def add_assignment(self, user, item_id, fields):
+        with self.connect() as db:
+            item = self.get(db, 'items', item_id, 'item')
+            self.proposal(db, user, item['proposal_id'])
+            f = self.check_assignment(db, item, {k: v for k, v in fields.items() if k in EDITABLE['assignments']})
+            if not f.get('is_team') and f.get('member_id') is None: raise WorptError('Choose a person (or "Everyone not named").', 'missing')
+            if f.get('is_lead'): self.clear_lead(db, user, item)
+            pos = db.execute('SELECT coalesce(max(position) + 1, 0) FROM assignments WHERE item_id = ?', (item_id,)).fetchone()[0]
+            return self.insert_row(db, user, 'assignments', dict(f, item_id=item_id, position=pos), item['proposal_id'])
+
+    def clear_lead(self, db, user, item, keep=None):
+        for a in self.all(db, 'SELECT * FROM assignments WHERE item_id = ? AND is_lead = 1 AND id != ?', item['id'], keep or -1):
+            self.update_row(db, user, 'assignments', a['id'], a['version'], {'is_lead': 0}, item['proposal_id'], 'assignment')
+
+    def update_assignment(self, user, assignment_id, version, fields):
+        with self.connect() as db:
+            a = self.get(db, 'assignments', assignment_id, 'assignment')
+            item = self.get(db, 'items', a['item_id'], 'item')
+            self.proposal(db, user, item['proposal_id'])
+            f = self.check_assignment(db, item, dict(fields), assignment_id)
+            out = self.update_row(db, user, 'assignments', assignment_id, version, f, item['proposal_id'], 'assignment')
+            if f.get('is_lead'): self.clear_lead(db, user, item, keep=assignment_id)
+            return out
+
+    def delete_assignment(self, user, assignment_id):
+        with self.connect() as db:
+            a = self.get(db, 'assignments', assignment_id, 'assignment')
+            item = self.get(db, 'items', a['item_id'], 'item')
+            self.proposal(db, user, item['proposal_id'])
+            return self.delete_row(db, user, 'assignments', assignment_id, item['proposal_id'], 'assignment')
+
+    # ------------------------------------------------ non-labor budget
+    def add_nonlabor(self, user, proposal_id, item, amounts):
+        with self.connect() as db:
+            self.proposal(db, user, proposal_id)
+            pos = db.execute('SELECT coalesce(max(position) + 1, 0) FROM nonlabor WHERE proposal_id = ?', (proposal_id,)).fetchone()[0]
+            return self.insert_row(db, user, 'nonlabor', dict(proposal_id=proposal_id, position=pos, item=item or '',
+                                                              amounts=[float(v or 0) for v in amounts or []]), proposal_id)
+
+    def update_nonlabor(self, user, row_id, version, fields):
+        with self.connect() as db:
+            r = self.get(db, 'nonlabor', row_id, 'budget line')
+            self.proposal(db, user, r['proposal_id'])
+            f = dict(fields)
+            if 'amounts' in f: f['amounts'] = [float(v or 0) for v in f['amounts']]
+            return self.update_row(db, user, 'nonlabor', row_id, version, f, r['proposal_id'], 'budget line')
+
+    def delete_nonlabor(self, user, row_id):
+        with self.connect() as db:
+            r = self.get(db, 'nonlabor', row_id, 'budget line')
+            self.proposal(db, user, r['proposal_id'])
+            return self.delete_row(db, user, 'nonlabor', row_id, r['proposal_id'], 'budget line')
+
+    # ------------------------------------------------ reading a whole proposal
+    def export(self, db, proposal_id):
+        p = self.one(db, 'SELECT * FROM proposals WHERE id = ?', proposal_id)
+        members = self.all(db, 'SELECT m.*, p.first, p.middle, p.last, p.prefix, p.suffix, p.institution, p.position, p.us, '
+                           'p.email, p.version AS person_version FROM members m JOIN people p ON p.id = m.person_id '
+                           'WHERE m.proposal_id = ? ORDER BY m.id', proposal_id)
+        items = self.all(db, 'SELECT * FROM items WHERE proposal_id = ? ORDER BY position, id', proposal_id)
+        ids = [i['id'] for i in items] or [-1]
+        work = self.all(db, f'SELECT * FROM assignments WHERE item_id IN ({",".join("?" * len(ids))}) ORDER BY position, id', *ids)
+        budget = self.all(db, 'SELECT * FROM nonlabor WHERE proposal_id = ? ORDER BY position, id', proposal_id)
+        return dict(proposal=p, members=members, items=items, assignments=work, nonlabor=budget)
+
+    def read(self, user, proposal_id):
+        with self.connect() as db:
+            p = self.proposal(db, user, proposal_id)
+            m = self.membership(db, user, proposal_id)
+            return dict(self.export(db, proposal_id), you=dict(email=user.email, access=user.access,
+                        member_id=m and m['id'], lead=bool(m and m['is_lead']), can_manage_team=user.admin or bool(m and m['is_lead'])))
+
+    def history(self, user, proposal_id, limit=200):
+        with self.connect() as db:
+            self.proposal(db, user, proposal_id)
+            return self.all(db, 'SELECT * FROM history WHERE proposal_id = ? ORDER BY id DESC LIMIT ?', proposal_id, int(limit))
+
+    def model(self, proposal_id, data=None):
+        """The proposal as worpt.model objects (for the effort engine and the tables), plus id maps for the dashboard."""
+        if data is None:
+            with self.connect() as db: data = self.export(db, proposal_id)
+        p, short = data['proposal'], {m['id']: m['short_id'] for m in data['members']}
+        members = [Person(m['short_id'], m['role'], m['us'], m['fte_accuracy'], last=m['last'], first=m['first'], middle=m['middle'],
+                          prefix=m['prefix'], suffix=m['suffix'], institution=m['institution'], position=m['position'],
+                          bio_summary=m['bio_summary'], task_summary=m['task_summary'], trips=m['trips']) for m in data['members']]
+        nodes = {i['id']: Item(i['title'], start=(i['start_year'], i['start_q']) if i['start_year'] and i['start_q'] else None,
+                               end=(i['end_year'], i['end_q']) if i['end_year'] and i['end_q'] else None) for i in data['items']}
+        for a in data['assignments']:
+            nodes[a['item_id']].assignments.append(Assignment('team' if a['is_team'] else short[a['member_id']], a['weeks'], a['unfunded'], a['is_lead']))
+        goals, order = [], {}
+        for i in data['items']:                                     # items are sorted by position
+            (goals if i['parent_id'] is None else nodes[i['parent_id']].children).append(nodes[i['id']])
+        travel = dict(TRAVEL_DEFAULT, **(p['travel'] or {}))
+        prop = Proposal(p['title'], p['program'], p['n_years'], members, goals, [NonlaborItem(r['item'], r['amounts']) for r in data['nonlabor']],
+                        TravelCosts(**travel), p['latex_subdir'], p['rounding'])
+        return prop, {id(n): iid for iid, n in nodes.items()}

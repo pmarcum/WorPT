@@ -1,0 +1,376 @@
+"""End-to-end tests of the WorPT server through its HTTP API (Flask test client, a fresh database per test).
+
+Covers the credential gate, the permission rules, every kind of change, conflicts, the work-plan rules
+(three levels, effort only on the lowest level, at least one lead, non-US means collaborator), delete
+previews, history, and that tables read through the API are identical to the tables built directly
+from the parity fixtures (so storing a proposal loses nothing).
+"""
+import json, pathlib, sys
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+import pytest
+from worpt_server import create_app
+from worpt.tables import build, TABLES
+from test_parity_tables import load, CASES
+
+KEY, READ = 'k' * 24, 'r' * 24
+
+
+class Api:
+    def __init__(self, client, email, access='code', key=KEY):
+        self.c, self.h = client, {'X-WorPT-Credential': key, 'X-WorPT-User': email, 'X-WorPT-Access': access}
+
+    def __getattr__(self, verb):                     # api.get(url), api.post(url, json), api.patch(...), api.delete(...)
+        def call(url, body=None):
+            r = getattr(self.c, verb)(url, headers=self.h, json=body)
+            assert r.status_code == 200, (r.status_code, r.get_data(as_text=True))
+            return r.get_json()
+        return call
+
+    def ok(self, verb, url, body=None):
+        out = getattr(self, verb)(url, body); assert out['status'] == 'ok', out; return out
+
+    def no(self, verb, url, body=None, code=None):
+        out = getattr(self, verb)(url, body); assert out['status'] == 'error', out
+        if code: assert out['code'] == code, out
+        return out
+
+
+@pytest.fixture
+def client(tmp_path):
+    return create_app(str(tmp_path / 'worpt.db'), KEY, READ).test_client()
+
+
+@pytest.fixture
+def team(client):
+    """A proposal led by Ann (core) with Bob as a plain member; Cat (core) and Dan (code) are not on it; Eve is an admin."""
+    ann, bob, cat = Api(client, 'Ann@x.org', 'core'), Api(client, 'bob@x.org'), Api(client, 'cat@x.org', 'core')
+    dan, eve = Api(client, 'dan@x.org'), Api(client, 'eve@x.org', 'admin')
+    p = {n: ann.ok('post', '/api/people', dict(first=n.title(), last=n.title() + 'son', email=f'{n}@x.org'))['person']
+         for n in ('ann', 'bob', 'cat', 'dan')}
+    prop = ann.ok('post', '/api/proposals', dict(title='Test Proposal', program='NASA/ADAP', n_years=3,
+                                                 leads=[dict(person_id=p['ann']['id'], short_id='AA', role='PI')]))['proposal']
+    bob_m = ann.ok('post', f"/api/proposals/{prop['id']}/members", dict(person_id=p['bob']['id'], short_id='BB', role='co-I(1)'))['member']
+    goal = ann.ok('post', f"/api/proposals/{prop['id']}/items", dict(title='Goal A'))['item']
+    task = ann.ok('post', f"/api/proposals/{prop['id']}/items", dict(title='Task A1', parent_id=goal['id']))['item']
+    return dict(ann=ann, bob=bob, cat=cat, dan=dan, eve=eve, people=p, prop=prop, pid=prop['id'], bob_m=bob_m, goal=goal, task=task)
+
+
+def timed(api, task, years=(1, 1, 1, 4)):
+    sy, sq, ey, eq = years
+    return api.ok('patch', f"/api/items/{task['id']}", dict(version=task['version'], start_year=sy, start_q=sq, end_year=ey, end_q=eq))['item']
+
+
+# ------------------------------------------------ credential gate
+def test_health_needs_no_credential(client):
+    assert client.get('/health').get_json() == {'service': 'worpt', 'status': 'ok'}
+
+
+def test_wrong_or_missing_credential_is_refused(client):
+    Api(client, 'a@x.org', key='wrong' * 5).no('get', '/api/me', code='credential')
+    assert client.get('/api/me').get_json()['code'] == 'credential'
+
+
+def test_short_credential_refuses_to_start(tmp_path):
+    with pytest.raises(SystemExit): create_app(str(tmp_path / 'w.db'), 'short')
+
+
+def test_short_read_credential_is_ignored(tmp_path, client):
+    app = create_app(str(tmp_path / 'w.db'), KEY, 'short-read')
+    assert app.test_client().get('/api/proposals/x/tables', headers={'X-WorPT-Credential': 'short-read'}).get_json()['code'] == 'credential'
+
+
+def test_sign_in_needed(client):
+    Api(client, '').no('get', '/api/me', code='signin')
+
+
+def test_read_key_only_reads_tables(team, client):
+    r = Api(client, '', key=READ)
+    r.no('get', '/api/proposals', code='credential')
+    r.no('get', f"/api/proposals/{team['pid']}", code='credential')
+    r.no('post', '/api/people', dict(last='X'), code='credential')
+    r.no('delete', f"/api/proposals/{team['pid']}/tables/isANONfte", code='credential')
+    assert r.ok('get', f"/api/proposals/{team['pid']}/tables")['tables'] == list(TABLES)
+    assert 'Goal' in json.dumps(r.ok('get', f"/api/proposals/{team['pid']}/tables/NOTANONtasks"))
+    r.no('get', '/api/proposals/nosuch/tables/isANONfte', code='not_found')
+    r.no('get', '/api/proposals/nosuch/tables', code='not_found')
+    r.no('get', f"/api/proposals/{team['pid']}/tables/nosuch", code='unknown_table')
+
+
+def test_unknown_route(client):
+    Api(client, 'a@x.org').no('get', '/api/nothing-here', code='unknown')
+    Api(client, 'a@x.org').no('put', '/api/proposals', code='unknown')
+
+
+# ------------------------------------------------ who sees and does what
+def test_emails_are_case_insensitive(team):
+    me = team['ann'].ok('get', '/api/me')
+    assert me['email'] == 'ann@x.org' and me['profile']['first'] == 'Ann' and len(me['proposals']) == 1
+
+
+def test_who_sees_the_proposal(team):
+    pid = team['pid']
+    for who in ('ann', 'bob', 'eve'): assert [p['id'] for p in team[who].ok('get', '/api/proposals')['proposals']] == [pid]
+    for who in ('cat', 'dan'):
+        assert team[who].ok('get', '/api/proposals')['proposals'] == []
+        team[who].no('get', f'/api/proposals/{pid}', code='not_found')
+    you = team['bob'].ok('get', f'/api/proposals/{pid}')['you']
+    assert you['member_id'] == team['bob_m']['id'] and not you['lead'] and not you['can_manage_team']
+    assert team['eve'].ok('get', f'/api/proposals/{pid}')['you']['can_manage_team']
+
+
+def test_who_creates_proposals(team):
+    lead = [dict(person_id=team['people']['dan']['id'], short_id='DD', role='PI')]
+    team['dan'].no('post', '/api/proposals', dict(title='T', leads=lead))
+    team['cat'].no('post', '/api/proposals', dict(title='T', leads=[]), code='missing')
+    team['cat'].no('post', '/api/proposals', dict(title=' ', leads=lead), code='missing')
+    team['cat'].no('post', '/api/proposals', dict(title='T', n_years=0, leads=lead), code='invalid')
+    p = team['cat'].ok('post', '/api/proposals', dict(title='Cat proposal', n_years=7, leads=lead))['proposal']
+    assert p['n_years'] == 7 and [x['title'] for x in team['dan'].ok('get', '/api/proposals')['proposals']] == ['Cat proposal']
+
+
+def test_any_member_edits_the_plan_but_only_leads_manage_the_team(team):
+    pid, bob = team['pid'], team['bob']
+    bob.ok('post', f'/api/proposals/{pid}/items', dict(title='Goal B'))
+    bob.ok('post', f"/api/items/{team['task']['id']}/assignments", dict(member_id=team['bob_m']['id'], weeks=4))
+    bob.ok('post', f'/api/proposals/{pid}/nonlabor', dict(item='Publications', amounts=[1000, 0, 2000]))
+    bob.no('post', f'/api/proposals/{pid}/members', dict(person_id=team['people']['cat']['id'], short_id='CC', role='co-I(2)'))
+    bob.no('patch', f"/api/members/{team['bob_m']['id']}", dict(version=1, is_lead=True))
+    bob.no('delete', f'/api/proposals/{pid}', dict(confirm_title='Test Proposal'))
+    team['dan'].no('post', f'/api/proposals/{pid}/items', dict(title='X'), code='not_found')
+    team['eve'].ok('post', f'/api/proposals/{pid}/members', dict(person_id=team['people']['cat']['id'], short_id='CC', role='co-I(2)'))
+
+
+def test_profiles(team):
+    ann, bob, dan, p = team['ann'], team['bob'], team['dan'], team['people']
+    dan.no('post', '/api/people', dict(last='Nobody'))                                   # not core, not a lead
+    ann.no('post', '/api/people', dict(first='No last name'), code='missing')
+    ann.no('post', '/api/people', dict(last='Dup', email='BOB@x.org'), code='duplicate_email')
+    bob.ok('patch', f"/api/people/{p['bob']['id']}", dict(version=1, institution='GSFC'))           # own profile
+    bob.no('patch', f"/api/people/{p['ann']['id']}", dict(version=1, institution='X'))             # someone else's
+    ann.ok('patch', f"/api/people/{p['bob']['id']}", dict(version=2, position='Scientist'))        # a lead of Bob's proposal
+    assert [x['first'] for x in dan.ok('get', '/api/people')['people']] == ['Dan']               # others see only themselves
+    assert [x['first'] for x in ann.ok('get', '/api/people?q=BOB')['people']] == ['Bob']
+
+
+def test_non_us_person_becomes_a_collaborator_everywhere(team):
+    ann, pid, p = team['ann'], team['pid'], team['people']
+    ann.ok('patch', f"/api/people/{p['bob']['id']}", dict(version=1, us=False))
+    roles = {m['short_id']: m['role'] for m in ann.ok('get', f'/api/proposals/{pid}')['members']}
+    assert roles == {'AA': 'PI', 'BB': 'coll(1)'}
+    ann.ok('patch', f"/api/people/{p['cat']['id']}", dict(version=1, us=False))
+    cat_m = ann.ok('post', f'/api/proposals/{pid}/members', dict(person_id=p['cat']['id'], short_id='CC', role='co-I(2)'))['member']
+    assert cat_m['role'] == 'coll(2)'
+    timed(ann, team['task'])
+    ann.ok('post', f"/api/items/{team['task']['id']}/assignments", dict(member_id=cat_m['id'], weeks=26))
+    people = ann.ok('get', f'/api/proposals/{pid}')['computed']['people']
+    unfunded, funded = people[str(cat_m['id'])]['total'][1:]                # [total, unfunded, funded]
+    assert funded == 0 and unfunded > 0                                      # collaborators are 100% unfunded
+
+
+# ------------------------------------------------ team and leads
+def test_member_fields(team):
+    ann, pid, p = team['ann'], team['pid'], team['people']
+    url = f'/api/proposals/{pid}/members'
+    ann.no('post', url, dict(person_id=p['bob']['id'], short_id='B2', role='co-I(3)'), code='duplicate')
+    ann.no('post', url, dict(person_id=p['cat']['id'], short_id='BB', role='co-I(2)'), code='duplicate')
+    ann.no('post', url, dict(person_id=p['cat']['id'], short_id='Team', role='co-I(2)'), code='invalid')
+    ann.no('post', url, dict(person_id=p['cat']['id'], short_id='CC', role=''), code='missing')
+    ann.no('post', url, dict(person_id=9999, short_id='ZZ', role='co-I(2)'), code='not_found')
+
+
+def test_a_proposal_always_keeps_a_lead(team):
+    ann, aa = team['ann'], team['ann'].ok('get', f"/api/proposals/{team['pid']}")['members'][0]
+    ann.no('patch', f"/api/members/{aa['id']}", dict(version=aa['version'], is_lead=False), code='last_lead')
+    ann.no('delete', f"/api/members/{aa['id']}", dict(confirm=True), code='last_lead')
+    ann.ok('patch', f"/api/members/{team['bob_m']['id']}", dict(version=1, is_lead=True))
+    assert team['bob'].ok('get', f"/api/proposals/{team['pid']}")['you']['can_manage_team']
+    ann.ok('patch', f"/api/members/{aa['id']}", dict(version=aa['version'], is_lead=False))
+    ann.no('post', f"/api/proposals/{team['pid']}/members", dict(person_id=team['people']['cat']['id'], short_id='CC', role='x'))
+
+
+def test_removing_a_member_previews_then_removes_their_effort(team):
+    ann, m = team['ann'], team['bob_m']
+    ann.ok('post', f"/api/items/{team['task']['id']}/assignments", dict(member_id=m['id'], weeks=4))
+    preview = ann.ok('delete', f"/api/members/{m['id']}", {})
+    assert preview['needs_confirmation'] and preview['assignments'] == 1
+    assert len(ann.ok('get', f"/api/proposals/{team['pid']}")['members']) == 2           # nothing removed yet
+    ann.ok('delete', f"/api/members/{m['id']}", dict(confirm=True))
+    data = ann.ok('get', f"/api/proposals/{team['pid']}")
+    assert len(data['members']) == 1 and data['assignments'] == []
+    team['bob'].no('get', f"/api/proposals/{team['pid']}", code='not_found')
+
+
+# ------------------------------------------------ goals, tasks, subtasks and effort
+def test_three_levels_and_labels(team):
+    ann, pid, task = team['ann'], team['pid'], team['task']
+    sub = ann.ok('post', f'/api/proposals/{pid}/items', dict(title='Sub', parent_id=task['id']))['item']
+    ann.no('post', f'/api/proposals/{pid}/items', dict(title='Too deep', parent_id=sub['id']), code='too_deep')
+    first = ann.ok('post', f'/api/proposals/{pid}/items', dict(title='Sub first', parent_id=task['id'], position=0))['item']
+    labels = {i: v['label'] for i, v in ann.ok('get', f'/api/proposals/{pid}')['computed']['items'].items()}
+    assert labels == {str(team['goal']['id']): 'A', str(task['id']): 'A1', str(first['id']): 'A1.1', str(sub['id']): 'A1.2'}
+
+
+def test_effort_only_on_the_lowest_level(team):
+    ann, pid, goal, task, m = team['ann'], team['pid'], team['goal'], team['task'], team['bob_m']
+    ann.no('post', f"/api/items/{goal['id']}/assignments", dict(member_id=m['id'], weeks=2), code='invalid')
+    ann.no('post', f"/api/items/{task['id']}/assignments", dict(weeks=2), code='missing')
+    ann.no('post', f"/api/items/{task['id']}/assignments", dict(member_id=m['id'], weeks=-1), code='invalid')
+    a = ann.ok('post', f"/api/items/{task['id']}/assignments", dict(member_id=m['id'], weeks=10, unfunded=2))['assignment']
+    ann.no('post', f"/api/items/{task['id']}/assignments", dict(member_id=m['id'], weeks=3), code='duplicate')
+    t = ann.ok('patch', f"/api/items/{task['id']}", dict(version=task['version'], start_year=1, start_q=1, end_year=2, end_q=4))['item']
+    # adding a subtask under a task with effort asks where the effort goes
+    out = ann.no('post', f'/api/proposals/{pid}/items', dict(title='Sub', parent_id=task['id']), code='parent_has_effort')
+    assert len(out['assignments']) == 1
+    sub = ann.ok('post', f'/api/proposals/{pid}/items', dict(title='Sub', parent_id=task['id'], effort_destination='new_child'))['item']
+    assert (sub['start_year'], sub['end_q']) == (1, 4)
+    data = ann.ok('get', f'/api/proposals/{pid}')
+    assert [x['item_id'] for x in data['assignments']] == [sub['id']]
+    assert {i['id']: i['start_year'] for i in data['items']}[task['id']] is None
+    ann.no('post', f"/api/items/{task['id']}/assignments", dict(member_id=m['id'], weeks=1), code='invalid')
+    ann.no('patch', f"/api/items/{task['id']}", dict(version=t['version'] + 1, start_year=1), code='invalid')
+    ann.no('patch', f"/api/items/{goal['id']}", dict(version=goal['version'], start_year=1), code='invalid')
+    ann.no('patch', f"/api/items/{sub['id']}", dict(version=sub['version'], start_q=5), code='invalid')
+    computed = data['computed']
+    assert computed['items'][str(task['id'])]['fte'] == computed['items'][str(sub['id'])]['fte']   # parents roll up
+    assert computed['items'][str(task['id'])]['start'] == [1, 1]
+
+
+def test_remove_effort_when_adding_a_subtask(team):
+    ann, pid, task, m = team['ann'], team['pid'], team['task'], team['bob_m']
+    ann.ok('post', f"/api/items/{task['id']}/assignments", dict(member_id=m['id'], weeks=10))
+    ann.ok('post', f'/api/proposals/{pid}/items', dict(title='Sub', parent_id=task['id'], effort_destination='remove'))
+    assert ann.ok('get', f'/api/proposals/{pid}')['assignments'] == []
+
+
+def test_one_lead_per_item_and_team_assignment(team):
+    ann, task, m = team['ann'], timed(team['ann'], team['task']), team['bob_m']
+    a1 = ann.ok('post', f"/api/items/{task['id']}/assignments", dict(member_id=m['id'], weeks=4, is_lead=True))['assignment']
+    a2 = ann.ok('post', f"/api/items/{task['id']}/assignments", dict(is_team=True, weeks=2, is_lead=True))['assignment']
+    ann.no('post', f"/api/items/{task['id']}/assignments", dict(is_team=True, weeks=1), code='duplicate')
+    leads = {a['id']: a['is_lead'] for a in ann.ok('get', f"/api/proposals/{team['pid']}")['assignments']}
+    assert leads == {a1['id']: False, a2['id']: True}
+    people = ann.ok('get', f"/api/proposals/{team['pid']}")['computed']['people']
+    totals = {k: v['total'][0] for k, v in people.items()}
+    aa = ann.ok('get', f"/api/proposals/{team['pid']}")['members'][0]['id']
+    assert totals[str(aa)] > 0 and totals[str(m['id'])] > totals[str(aa)]      # 'team' gives its weeks to each unnamed member
+
+
+def test_moving_items(team):
+    ann, pid, goal, task = team['ann'], team['pid'], team['goal'], team['task']
+    g2 = ann.ok('post', f'/api/proposals/{pid}/items', dict(title='Goal B'))['item']
+    sub = ann.ok('post', f'/api/proposals/{pid}/items', dict(title='Sub', parent_id=task['id']))['item']
+    ann.no('patch', f"/api/items/{goal['id']}", dict(version=goal['version'], parent_id=sub['id']), code='invalid')   # into itself
+    ann.no('patch', f"/api/items/{task['id']}", dict(version=task['version'], parent_id=sub['id']), code='invalid')
+    moved = ann.ok('patch', f"/api/items/{task['id']}", dict(version=task['version'], parent_id=g2['id']))['item']
+    assert moved['parent_id'] == g2['id'] and moved['version'] == task['version'] + 1
+    ann.no('patch', f"/api/items/{g2['id']}", dict(version=g2['version'], parent_id=goal['id']), code='too_deep')
+    labels = {v['label'] for v in ann.ok('get', f'/api/proposals/{pid}')['computed']['items'].values()}
+    assert labels == {'A', 'B', 'B1', 'B1.1'}
+
+
+def test_deleting_an_item_previews_counts(team):
+    ann, pid, task, m = team['ann'], team['pid'], team['task'], team['bob_m']
+    sub = ann.ok('post', f'/api/proposals/{pid}/items', dict(title='Sub', parent_id=task['id']))['item']
+    ann.ok('post', f"/api/items/{sub['id']}/assignments", dict(member_id=m['id'], weeks=3))
+    preview = ann.ok('delete', f"/api/items/{team['goal']['id']}", {})
+    assert (preview['items_below'], preview['assignments']) == (2, 1)
+    ann.ok('delete', f"/api/items/{team['goal']['id']}", dict(confirm=True))
+    data = ann.ok('get', f'/api/proposals/{pid}')
+    assert data['items'] == [] and data['assignments'] == []
+
+
+# ------------------------------------------------ conflicts, deletes, history
+def test_editing_conflict_returns_the_current_version(team):
+    ann, bob, task = team['ann'], team['bob'], team['task']
+    ann.ok('patch', f"/api/items/{task['id']}", dict(version=task['version'], title='Ann title'))
+    out = bob.no('patch', f"/api/items/{task['id']}", dict(version=task['version'], title='Bob title'), code='conflict')
+    assert out['current']['title'] == 'Ann title'
+    bob.no('patch', f"/api/items/{task['id']}", dict(title='No version'), code='conflict')
+    bob.ok('patch', f"/api/items/{task['id']}", dict(version=out['current']['version'], title='Bob title'))
+
+
+def test_a_refused_change_saves_nothing(team):
+    ann, pid, p = team['ann'], team['pid'], team['people']
+    before = len(ann.ok('get', f'/api/proposals/{pid}/history')['history'])
+    ann.no('post', '/api/proposals', dict(title='Two leads', leads=[dict(person_id=p['cat']['id'], short_id='CC', role='PI'),
+                                                                     dict(person_id=p['cat']['id'], short_id='C2', role='co-I')]), code='duplicate')
+    assert len(team['eve'].ok('get', '/api/proposals')['proposals']) == 1
+    assert len(ann.ok('get', f'/api/proposals/{pid}/history')['history']) == before
+
+
+def test_deleting_a_proposal_needs_its_title(team):
+    ann, pid = team['ann'], team['pid']
+    ann.no('delete', f'/api/proposals/{pid}', dict(confirm_title='test proposal'), code='confirm_title')
+    ann.ok('delete', f'/api/proposals/{pid}', dict(confirm_title='Test Proposal'))
+    assert team['eve'].ok('get', '/api/proposals')['proposals'] == []
+
+
+def test_history_records_every_change(team):
+    ann, pid = team['ann'], team['pid']
+    ann.ok('patch', f'/api/proposals/{pid}', dict(version=team['prop']['version'], program='NASA/XRP'))
+    h = ann.ok('get', f'/api/proposals/{pid}/history')['history']
+    assert {(x['tbl'], x['action']) for x in h} >= {('proposals', 'insert'), ('members', 'insert'), ('items', 'insert'), ('proposals', 'update')}
+    upd = next(x for x in h if x['tbl'] == 'proposals' and x['action'] == 'update')
+    assert upd['user'] == 'ann@x.org' and json.loads(upd['before'])['program'] == 'NASA/ADAP' and json.loads(upd['after'])['program'] == 'NASA/XRP'
+    team['dan'].no('get', f'/api/proposals/{pid}/history', code='not_found')
+
+
+def test_proposal_settings(team):
+    ann, pid, v = team['ann'], team['pid'], team['prop']['version']
+    ann.no('patch', f'/api/proposals/{pid}', dict(version=v, rounding='down'), code='invalid')
+    ann.no('patch', f'/api/proposals/{pid}', dict(version=v, n_years='x'), code='invalid')
+    ann.no('patch', f'/api/proposals/{pid}', dict(version=v, title=''), code='missing')
+    p = ann.ok('patch', f'/api/proposals/{pid}', dict(version=v, rounding='up', n_years=5, created_by='someone@else'))['proposal']
+    assert (p['rounding'], p['n_years'], p['created_by']) == ('up', 5, 'ann@x.org')
+
+
+def test_budget_lines(team):
+    ann, pid = team['ann'], team['pid']
+    line = ann.ok('post', f'/api/proposals/{pid}/nonlabor', dict(item='Publications', amounts=[1000, '', 2000]))['line']
+    assert line['amounts'] == [1000, 0, 2000]
+    line = ann.ok('patch', f"/api/nonlabor/{line['id']}", dict(version=line['version'], amounts=[5, 6, 7]))['line']
+    assert 'Publications' in ann.ok('get', f'/api/proposals/{pid}/tables/isANONnonlabor')['latex']
+    ann.ok('delete', f"/api/nonlabor/{line['id']}")
+    assert ann.ok('get', f'/api/proposals/{pid}')['nonlabor'] == []
+
+
+# ------------------------------------------------ tables through the API = tables from the fixtures
+def store_fixture(api, folder):
+    """Enter a parity fixture through the API, the way the dashboard would."""
+    d = json.loads((folder / 'proposal.json').read_text())
+    people = [api.ok('post', '/api/people', {k: t[k] for k in ('first', 'middle', 'last', 'prefix', 'suffix', 'institution', 'position', 'us')})['person']
+              for t in d['team']]
+    member = lambda t, p: dict(person_id=p['id'], short_id=t['id'], role=t['role'], fte_accuracy=t['fte_accuracy'],
+                               bio_summary=t['bio_summary'], task_summary=t['task_summary'], trips=t['trips'])
+    prop = api.ok('post', '/api/proposals', dict(title=d['title'], program=d['program'], n_years=d['n_years'],
+                                                 leads=[member(d['team'][0], people[0])]))['proposal']
+    pid = prop['id']
+    api.ok('patch', f'/api/proposals/{pid}', dict(version=prop['version'], travel=d['travel'], rounding=d.get('rounding', 'up')))
+    ids = {d['team'][0]['id']: api.ok('get', f'/api/proposals/{pid}')['members'][0]['id']}
+    for t, p in zip(d['team'][1:], people[1:]):
+        ids[t['id']] = api.ok('post', f'/api/proposals/{pid}/members', member(t, p))['member']['id']
+    for g in d['goals']:
+        goal = api.ok('post', f'/api/proposals/{pid}/items', dict(title=g['title']))['item']
+        for t in g['tasks']:
+            task = api.ok('post', f'/api/proposals/{pid}/items', dict(title=t['title'], parent_id=goal['id']))['item']
+            if t['start'] or t['end']:
+                (sy, sq), (ey, eq) = t['start'] or (None, None), t['end'] or (None, None)
+                api.ok('patch', f"/api/items/{task['id']}", dict(version=task['version'], start_year=sy, start_q=sq, end_year=ey, end_q=eq))
+            for a in t['assignments']:
+                who = dict(is_team=True) if a['person'] == 'team' else dict(member_id=ids[a['person']])
+                api.ok('post', f"/api/items/{task['id']}/assignments", dict(who, weeks=a['weeks'], unfunded=a['unfunded'], is_lead=a['lead']))
+    for n in d['nonlabor']:
+        api.ok('post', f'/api/proposals/{pid}/nonlabor', dict(item=n['item'], amounts=n['amounts']))
+    return pid
+
+
+@pytest.mark.parametrize('folder', CASES, ids=[c.name for c in CASES])
+def test_tables_through_the_api_match_the_fixture(client, folder):
+    admin = Api(client, 'admin@x.org', 'admin')
+    pid = store_fixture(admin, folder)
+    direct = build(load(folder))
+    for name in TABLES:
+        got = admin.ok('get', f'/api/proposals/{pid}/tables/{name}')
+        assert got['latex'] == direct[name], f'{folder.name}/{name} differs after storing'
+    gootex = Api(client, '', key=READ)                          # gooTeX's read-only key gets the same tables
+    assert gootex.ok('get', f'/api/proposals/{pid}/tables/isANONfte')['latex'] == direct['isANONfte']

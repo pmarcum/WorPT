@@ -1,0 +1,22 @@
+# /etc/systemd/system/worpt.service  (copy of this file; the secrets go in a drop-in, never here)
+#   sudo systemctl edit worpt      ->  add, between the comment lines it shows:
+#       [Service]
+#       Environment=WORPT_CREDENTIAL=REPLACE_ME
+#       Environment=WORPT_READ_CREDENTIAL=REPLACE_ME
+[Unit]
+Description=WorPT server (proposal work plans and LaTeX tables)
+After=network.target
+
+[Service]
+User=bibman
+Group=bibman
+WorkingDirectory=/home/bibman/worpt/cloud
+Environment=WORPT_DB=/home/bibman/worpt_data/worpt.db
+ExecStart=/home/bibman/worpt/venv/bin/gunicorn --workers 1 --threads 2 --timeout 60 --bind 127.0.0.1:8083 'worpt_server:create_app()'
+Restart=always
+RestartSec=5
+# keeps WorPT from ever starving BibMan or gooTeX on the shared e2-micro
+MemoryMax=400M
+
+[Install]
+WantedBy=multi-user.target

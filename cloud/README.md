@@ -1,7 +1,9 @@
 # WorPT server (in progress)
 
-The server half of the rebuilt WorPT. It will run on the shared VM beside BibMan and gooTeX
-(port 8083, behind nginx). So far it holds the **effort engine** and the **LaTeX table generators**.
+The server half of the rebuilt WorPT. It runs on the shared VM beside BibMan and gooTeX
+(port 8083, behind nginx at `/worpt/`). It holds the **effort engine**, the **LaTeX table
+generators**, and the **storage and API** the WorPT dashboard uses. (The dashboard and the
+deployment guide come next.)
 
 ## Effort engine — `worpt/effort.py`
 
@@ -37,12 +39,45 @@ Corrections compared with the Google Sheet version (each is covered by a test):
 
 (Biosketch and current & pending tables come later, with the people profiles.)
 
+## Server — `worpt_server.py` and `worpt/store.py`
+
+A Flask app (one gunicorn worker, localhost only) with one SQLite database. Browsers never reach it
+directly: the WorPT dashboard (Apps Script) calls it with a shared credential, the signed-in Google
+email and the person's access level (`admin` from ADMIN_EMAILS, `core` from CORE_MEMBERS, otherwise
+`code` for access-code users). gooTeX may use a separate read-only key that only reads tables.
+
+| Setting (environment) | Meaning |
+|---|---|
+| `WORPT_CREDENTIAL` | shared secret for the dashboard; the server will not start without one of 16+ characters |
+| `WORPT_READ_CREDENTIAL` | optional read-only key for gooTeX (table routes only) |
+| `WORPT_DB` | database file, default `/home/bibman/worpt_data/worpt.db` |
+| `WORPT_TEMPLATES` | LaTeX templates folder, default `latexTableTemplates/` in this repository |
+
+Secrets go in a systemd drop-in (`sudo systemctl edit worpt`), never in a committed file;
+see `systemd/worpt.service.example` and `nginx/worpt-location.conf`. `worpt_backup.py` makes a
+nightly copy of the database and keeps the newest 14.
+
+Rules the server applies to every change:
+
+- Admins and core members create proposals; admins see every proposal, everyone else only the ones they are on.
+- Anyone on a proposal edits its plan; its leads (and admins) manage the team and leads, and may
+  delete the proposal after typing its title. A proposal always keeps at least one lead.
+- A profile may be edited by its owner, leads of a proposal the person is on, core members and admins.
+  Someone at a non-US institution is a collaborator (`coll(n)`) on every proposal.
+- Three levels (goal > task > subtask); effort and timelines only on the lowest level. Adding a
+  subtask to a task that has effort asks whether to move that effort into the subtask or remove it.
+- Removing a member or deleting an item first returns what would be removed; nothing goes until confirmed.
+- Every row has a version: a change based on an outdated version is refused and the current row is
+  returned, so nothing is overwritten silently. Every change is recorded in `history` (who, when,
+  before and after). A refused request saves nothing.
+- Refusals are HTTP 200 with `{"status": "error", "code": ..., "message": ...}`.
+
 ## Tests
 
 ```
 cd cloud
 pip install -r requirements.txt
-python3 -m pytest tests            # parity with the Google Sheet version + one test per rule
+python3 -m pytest tests            # parity with the Google Sheet version, one test per rule, and the server API
 python3 tests/parity_report.py     # side-by-side old vs new numbers for the demo proposal
 python3 tests/test_parity_tables.py   # table-by-table comparison with the Sheet version's output
 ```
@@ -52,3 +87,6 @@ python3 tests/test_parity_tables.py   # table-by-table comparison with the Sheet
 hold two real proposals with every name, ID, narrative and task title replaced by placeholders,
 the tables the Sheet version made from them (`expected/`), and the deliberate differences with
 their reasons (`known_differences.json`).
+
+`tests/test_server.py` drives the API end to end with a fresh database for each test, and checks
+that the two real proposals, entered through the API, give exactly the same tables as the fixtures.

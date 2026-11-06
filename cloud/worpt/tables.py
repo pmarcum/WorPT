@@ -13,12 +13,12 @@ matches the Sheet's output line for line, except for the deliberate corrections 
 New: subtasks (A1.1, A1.2 ...) appear as task rows; a task that has subtasks shows its rolled-up
 timeline and FTE with no people of its own.
 """
-import math, pathlib, re
+import math, os, pathlib, re
 from decimal import Decimal, ROUND_HALF_UP
 import numpy as np
 from .effort import compute, label_tree, TEAM
 
-TEMPLATE_DIR = pathlib.Path(__file__).resolve().parents[2] / 'latexTableTemplates'
+TEMPLATE_DIR = pathlib.Path(os.environ.get('WORPT_TEMPLATES') or pathlib.Path(__file__).resolve().parents[2] / 'latexTableTemplates')
 ROUND_DOLLARS = 5
 TABLES = ('NOTANONteamSummaries', 'NOTANONtasks', 'NOTANONfte', 'NOTANONhst', 'NOTANONschedule',
           'isANONfte', 'isANONtasks', 'isANONtravel', 'isANONnonlabor')
