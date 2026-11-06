@@ -48,6 +48,10 @@ CREATE TABLE IF NOT EXISTS history (
   id INTEGER PRIMARY KEY, at TEXT NOT NULL, user TEXT NOT NULL, proposal_id TEXT, tbl TEXT NOT NULL,
   row_id TEXT NOT NULL, action TEXT NOT NULL, before TEXT, after TEXT);
 CREATE INDEX IF NOT EXISTS history_proposal ON history (proposal_id, id);
+CREATE TABLE IF NOT EXISTS snapshots (
+  id INTEGER PRIMARY KEY, proposal_id TEXT NOT NULL REFERENCES proposals(id) ON DELETE CASCADE,
+  at TEXT NOT NULL, user TEXT NOT NULL, kind TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', data TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS snapshots_proposal ON snapshots (proposal_id, id);
 """
 LEVELS = ('goal', 'task', 'subtask')
 TRAVEL_DEFAULT = dict(airfare=[0, 0, 0], perdiem=[0, 0, 0], conference=[0, 0, 0], ground=[0, 0, 0], days=[0, 0])
@@ -61,6 +65,7 @@ EDITABLE = dict(
 JSON_COLS = {'travel', 'trips', 'amounts'}
 DERIVED = dict(members=('short_id',))           # set by the server itself, never taken from a request
 PRONOUNS = ('', 'he', 'she', 'they')
+AUTO_SNAPSHOT_DAYS = 60          # automatic snapshots are kept this long; named ones until someone deletes them
 # Columns added after the first release, so an existing database gains them when the server starts.
 ADDED_COLUMNS = [('people', 'expertise', "TEXT NOT NULL DEFAULT ''"), ('people', 'pronoun', "TEXT NOT NULL DEFAULT ''")]
 ROLE_WORDS = {'co-i': 'co-I', 'coi': 'co-I', 'coll': 'collab', 'gst': 'grad', 'pd': 'postdoc'}
@@ -143,6 +148,7 @@ class Store:
         return r
 
     def update_row(self, db, user, tbl, rid, version, fields, proposal_id, what):
+        self.daily_snapshot(db, user, proposal_id)
         before = self.get(db, tbl, rid, what)
         if version is None or int(version) != before['version']:
             raise WorptError(f'Someone else changed this {what} after you opened it. Both versions are shown so you can choose.',
@@ -157,6 +163,7 @@ class Store:
         return after
 
     def insert_row(self, db, user, tbl, values, proposal_id):
+        self.daily_snapshot(db, user, proposal_id)
         cols = ', '.join(values)
         vals = [json.dumps(v) if k in JSON_COLS else v for k, v in values.items()]
         cur = db.execute(f'INSERT INTO {tbl} ({cols}) VALUES ({",".join("?" * len(values))})', vals)
@@ -166,6 +173,7 @@ class Store:
         return after
 
     def delete_row(self, db, user, tbl, rid, proposal_id, what):
+        self.daily_snapshot(db, user, proposal_id)
         before = self.get(db, tbl, rid, what)
         db.execute(f'DELETE FROM {tbl} WHERE id = ?', (rid,))
         self.log(db, user, proposal_id, tbl, rid, 'delete', before, None)
@@ -305,6 +313,9 @@ class Store:
             if 'n_years' in f: f['n_years'] = self.check_years(f['n_years'])
             if 'title' in f and not (f['title'] or '').strip(): raise WorptError('A proposal needs a title.', 'missing')
             if 'rounding' in f and f['rounding'] not in ('nearest', 'up'): raise WorptError('Rounding is "nearest" or "up".', 'invalid')
+            old = self.one(db, 'SELECT n_years, version FROM proposals WHERE id = ?', proposal_id)
+            if 'n_years' in f and f['n_years'] != old['n_years'] and version is not None and int(version) == old['version']:
+                self.snapshot(db, user, proposal_id, 'before', f'Before changing the number of years from {old["n_years"]} to {f["n_years"]}')
             return self.update_row(db, user, 'proposals', proposal_id, version, f, proposal_id, 'proposal')
 
     def delete_proposal(self, user, proposal_id, confirm_title):
@@ -375,6 +386,8 @@ class Store:
             if not confirm:
                 return {'needs_confirmation': True, 'assignments': len(work),
                         'message': f'Removing {m["short_id"]} also removes their {len(work)} assignment(s).'}
+            person = self.get(db, 'people', m['person_id'], 'profile')
+            self.snapshot(db, user, m['proposal_id'], 'before', f'Before taking {person["first"]} {person["last"]} ({m["short_id"]}) off the team')
             for a in work: self.delete_row(db, user, 'assignments', a['id'], m['proposal_id'], 'assignment')
             return self.delete_row(db, user, 'members', member_id, m['proposal_id'], 'team member')
 
@@ -497,6 +510,8 @@ class Store:
             if not confirm:
                 return {'needs_confirmation': True, 'items_below': len(ids) - 1, 'assignments': len(work),
                         'message': f'Deleting "{it["title"]}" also deletes {len(ids) - 1} item(s) under it and {len(work)} assignment(s).'}
+            if it['parent_id'] is None or len(ids) > 1:                # a task category, or a task with subtasks
+                self.snapshot(db, user, pid, 'before', f'Before deleting "{it["title"]}" and what was under it')
             for a in work: self.delete_row(db, user, 'assignments', a['id'], pid, 'assignment')
             for i in reversed(ids): self.delete_row(db, user, 'items', i, pid, 'item')
             self.renumber(db, pid, it['parent_id'])
@@ -598,6 +613,89 @@ class Store:
         with self.connect() as db:
             self.proposal(db, user, proposal_id)
             return self.all(db, 'SELECT * FROM history WHERE proposal_id = ? ORDER BY id DESC LIMIT ?', proposal_id, int(limit))
+
+    # ------------------------------------------------ snapshots
+    def snapshot(self, db, user, proposal_id, kind, name=''):
+        """Save the whole proposal as it stands (plan, team, budget, settings). kind: 'daily', 'before' (automatic, just
+        before something drastic) or 'named' (saved by someone). Automatic ones older than AUTO_SNAPSHOT_DAYS are removed."""
+        data = self.export(db, proposal_id)
+        if data['proposal'] is None: return None
+        cur = db.execute('INSERT INTO snapshots (proposal_id, at, user, kind, name, data) VALUES (?,?,?,?,?,?)',
+                         (proposal_id, now(), user.email, kind, name, json.dumps(data)))
+        cutoff = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=AUTO_SNAPSHOT_DAYS)).isoformat(timespec='seconds')
+        db.execute("DELETE FROM snapshots WHERE proposal_id = ? AND kind != 'named' AND at < ?", (proposal_id, cutoff))
+        return cur.lastrowid
+
+    def daily_snapshot(self, db, user, proposal_id):
+        """The first change of each day (UTC) saves how the proposal stood before it."""
+        if proposal_id and not db.execute("SELECT 1 FROM snapshots WHERE proposal_id = ? AND kind = 'daily' AND substr(at, 1, 10) = ?",
+                                          (proposal_id, now()[:10])).fetchone():
+            self.snapshot(db, user, proposal_id, 'daily', 'Start of the day')
+
+    def snapshots(self, user, proposal_id):
+        with self.connect() as db:
+            self.proposal(db, user, proposal_id)
+            return self.all(db, 'SELECT id, at, user, kind, name FROM snapshots WHERE proposal_id = ? ORDER BY id DESC', proposal_id)
+
+    def save_snapshot(self, user, proposal_id, name):
+        name = (name or '').strip()[:200]
+        if not name: raise WorptError('Give the snapshot a name, e.g. "before the co-I review".', 'missing')
+        with self.connect() as db:
+            self.proposal(db, user, proposal_id)
+            sid = self.snapshot(db, user, proposal_id, 'named', name)
+            return self.one(db, 'SELECT id, at, user, kind, name FROM snapshots WHERE id = ?', sid)
+
+    def delete_snapshot(self, user, snapshot_id):
+        with self.connect() as db:
+            s = self.get(db, 'snapshots', snapshot_id, 'snapshot')
+            self.proposal(db, user, s['proposal_id'], need='team')
+            db.execute('DELETE FROM snapshots WHERE id = ?', (snapshot_id,))
+            return {'id': snapshot_id}
+
+    def restore_snapshot(self, user, snapshot_id):
+        """Put the proposal back as it was in a snapshot: its settings, team, plan, effort and budget. Profiles are shared
+        between proposals and stay as they are. How things stood just before is saved first, so a restore can be undone."""
+        with self.connect() as db:
+            s = self.get(db, 'snapshots', snapshot_id, 'snapshot')
+            pid = s['proposal_id']
+            self.proposal(db, user, pid, need='team')
+            data, me = json.loads(s['data']), self.person_for(db, user)
+            if not user.admin and not any(me and m['person_id'] == me['id'] and m['is_lead'] for m in data['members']):
+                raise WorptError('That snapshot is from before you were a full editor of this proposal, so restoring it would take '
+                                 'away your access. Ask another full editor or an admin to restore it.', 'refused')
+            self.snapshot(db, user, pid, 'before', f'Before restoring the snapshot of {s["at"]}')
+            p = data['proposal']
+            db.execute('UPDATE proposals SET title = ?, program = ?, n_years = ?, rounding = ?, travel = ?, version = version + 1 WHERE id = ?',
+                       (p['title'], p['program'], p['n_years'], p['rounding'], json.dumps(p['travel']), pid))
+            for tbl in ('items', 'members', 'nonlabor'):                  # assignments go with their items and members
+                db.execute(f'DELETE FROM {tbl} WHERE proposal_id = ?', (pid,))
+            member_id = {}
+            for m in data['members']:
+                person = self.one(db, 'SELECT * FROM people WHERE id = ?', m['person_id'])
+                if person is None: continue
+                role = m['role'] if person['us'] or m['role'].lower().startswith('coll') else self.free_coll_role(db, pid)
+                cur = db.execute('INSERT INTO members (proposal_id, person_id, short_id, role, is_lead, fte_accuracy, bio_summary, task_summary, trips) '
+                                 'VALUES (?,?,?,?,?,?,?,?,?)', (pid, m['person_id'], role_label(role), role, int(m['is_lead']), m['fte_accuracy'],
+                                                                m['bio_summary'], m['task_summary'], json.dumps(m['trips'])))
+                member_id[m['id']] = cur.lastrowid
+            item_id, pending = {}, list(data['items'])
+            while pending:                                                  # parents before their children
+                ready = [i for i in pending if i['parent_id'] is None or i['parent_id'] in item_id]
+                if not ready: break
+                for i in ready:
+                    cur = db.execute('INSERT INTO items (proposal_id, parent_id, position, title, start_year, start_q, end_year, end_q) VALUES (?,?,?,?,?,?,?,?)',
+                                     (pid, item_id.get(i['parent_id']), i['position'], i['title'], i['start_year'], i['start_q'], i['end_year'], i['end_q']))
+                    item_id[i['id']] = cur.lastrowid
+                    pending.remove(i)
+            for a in data['assignments']:
+                if a['item_id'] not in item_id or (not a['is_team'] and a['member_id'] not in member_id): continue
+                db.execute('INSERT INTO assignments (item_id, member_id, is_team, is_lead, weeks, unfunded, position) VALUES (?,?,?,?,?,?,?)',
+                           (item_id[a['item_id']], None if a['is_team'] else member_id[a['member_id']], int(a['is_team']), int(a['is_lead']),
+                            a['weeks'], a['unfunded'], a['position']))
+            for r in data['nonlabor']:
+                db.execute('INSERT INTO nonlabor (proposal_id, position, item, amounts) VALUES (?,?,?,?)', (pid, r['position'], r['item'], json.dumps(r['amounts'])))
+            self.log(db, user, pid, 'proposal_snapshot', snapshot_id, 'restore', None, {'snapshot_at': s['at'], 'name': s['name']})
+            return {'restored': s['at'], 'name': s['name']}
 
     def model(self, proposal_id, data=None):
         """The proposal as worpt.model objects (for the effort engine and the tables), plus id maps for the dashboard."""

@@ -169,9 +169,9 @@ pre.latex{background:var(--bg);border:1px solid var(--border);border-radius:6px;
 // ── state ────────────────────────────────────────────────────────────────────────────────────────────────────
 const S = {
   cfg: null, me: null, view: 'proposals', proposals: [], people: [], pid: null, P: null, prev: null,
-  tab: 'plan', sel: null, lastChange: 0, lit: {}, saving: 0, table: null, tableOut: null, history: null,
+  tab: 'plan', sel: null, lastChange: 0, lit: {}, saving: 0, table: null, tableOut: null, snaps: null,
 };
-const TABS = [['plan', 'Plan'], ['team', 'Team'], ['budget', 'Travel & budget'], ['tables', 'Tables'], ['history', 'History'], ['settings', 'Settings']];
+const TABS = [['plan', 'Plan'], ['team', 'Team'], ['budget', 'Travel & budget'], ['tables', 'Tables'], ['snapshots', 'Snapshots'], ['settings', 'Settings']];
 const TABLE_NAMES = {
   NOTANONschedule: ['Schedule', 'named'], NOTANONtasks: ['Task list', 'named'], NOTANONfte: ['FTE by person', 'named'],
   NOTANONteamSummaries: ['Team summaries', 'named'], NOTANONhst: ['HST roles', 'named'], isANONtasks: ['Task list', 'anonymous'],
@@ -331,7 +331,7 @@ function go(view) {
 document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
 
 async function openProposal(pid) {
-  S.view = 'proposal'; S.pid = pid; S.tab = 'plan'; S.sel = null; S.open = null; S.prev = null; S.table = null; S.tableOut = null; S.history = null;
+  S.view = 'proposal'; S.pid = pid; S.tab = 'plan'; S.sel = null; S.open = null; S.prev = null; S.table = null; S.tableOut = null; S.snaps = null;
   document.querySelectorAll('[data-go]').forEach(b => b.setAttribute('aria-current', 'false'));
   $('#app').innerHTML = '<p class="empty">Opening the proposal…</p>';
   try {
@@ -361,7 +361,7 @@ function applyProposal(r) {
   if (S.sel && !r.items.some(i => i.id === S.sel)) S.sel = null;
   if (S.open && !r.items.some(i => i.id === S.open)) S.open = null;
   if (!S.sel) { const first = leafOrder()[0] || r.items[0]; S.sel = first ? first.id : null; }
-  if (S.tab === 'history') S.history = null;
+  S.snaps = null;                                   // the list is fetched again when the Snapshots tab is shown
   if (S.tab === 'tables' && S.table) loadTable(S.table, true);
   render();
 }
@@ -498,7 +498,7 @@ function editPerson(person) {
 function viewProposal() {
   const P = S.P, p = P.proposal;
   const leads = P.members.filter(m => m.is_lead).map(personName).join(', ');
-  const body = { plan: viewPlan, team: viewTeam, budget: viewBudget, tables: viewTables, history: viewHistory, settings: viewSettings }[S.tab]();
+  const body = { plan: viewPlan, team: viewTeam, budget: viewBudget, tables: viewTables, snapshots: viewSnapshots, settings: viewSettings }[S.tab]();
   return '<div class="ptitle"><h1>' + esc(p.title) + '</h1><span class="meta">' + esc(p.program || 'no program set') + ' · ' + p.n_years + ' year' + (p.n_years === 1 ? '' : 's') +
     ' · full editors: ' + esc(leads || '—') + (P.you.member_id ? '' : ' · viewing as admin') + '</span></div>' +
     '<nav class="tabs" aria-label="Proposal sections">' + TABS.map(t => '<button type="button" data-tab="' + t[0] + '" aria-current="' + (S.tab === t[0] ? 'page' : 'false') + '">' + esc(t[1]) + '</button>').join('') + '</nav>' + body;
@@ -778,26 +778,32 @@ async function loadTable(name, quiet) {
   if (S.tab === 'tables' && S.table === name) render();
 }
 
-// ── history ──────────────────────────────────────────────────────────────────────────────────────────────────
-function viewHistory() {
-  if (!S.history) {
-    if (!S.historyLoading) {
-      S.historyLoading = true;
-      api('history', S.pid).then(r => { S.history = r.history; }, showError).then(() => { S.historyLoading = false; if (S.tab === 'history' && S.history) render(); });
+// ── snapshots ────────────────────────────────────────────────────────────────────────────────────────────────
+const SNAP_KIND = { daily: 'automatic', before: 'automatic', named: 'saved by name' };
+function viewSnapshots() {
+  if (!S.snaps) {
+    if (!S.snapsLoading) {
+      S.snapsLoading = true;
+      api('snapshots', S.pid).then(r => { S.snaps = r.snapshots; S.snapsError = null; }, e => { S.snaps = []; S.snapsError = e; })
+        .then(() => { S.snapsLoading = false; if (S.tab === 'snapshots') render(); });
     }
-    return '<p class="muted">Loading the history…</p>';
+    return '<p class="muted">Loading the snapshots…</p>';
   }
-  const NAMES = { proposals: 'proposal settings', members: 'team member', items: 'item', assignments: 'assignment', nonlabor: 'budget line', people: 'profile', proposal_snapshot: 'whole proposal' };
-  const rows = S.history.map(h => {
-    const b = h.before ? JSON.parse(h.before) : null, a = h.after ? JSON.parse(h.after) : null, x = a || b || {};
-    const name = x.title || x.item || x.short_id || (x.last ? personName(x) : '') || (x.member_id ? 'member ' + x.member_id : x.is_team ? 'team' : '');
-    let what = '';
-    if (h.action === 'update' && a && b) what = Object.keys(a).filter(k => k !== 'version' && JSON.stringify(a[k]) !== JSON.stringify(b[k]))
-      .map(k => k + ': ' + JSON.stringify(b[k]) + ' → ' + JSON.stringify(a[k])).join('; ');
-    return '<tr><td class="mono" style="white-space:nowrap">' + esc(when(h.at)) + '</td><td>' + esc(h.user) + '</td><td>' + esc(h.action) + ' ' + esc(NAMES[h.tbl] || h.tbl) + '</td><td>' + esc(name) + '</td><td class="muted" style="word-break:break-word">' + esc(what) + '</td></tr>';
-  }).join('');
-  return '<div class="card"><h2 class="h2">History (newest first)</h2><div class="scroll"><table class="t"><thead><tr><th>When</th><th>Who</th><th>What</th><th>Which</th><th>Change</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
-    '<p class="hint">Every change is kept, so anything can be put back; restore buttons come in a later version.</p></div>';
+  if (S.snapsError) return '<div class="card"><p style="margin:0;line-height:1.6">' + esc(S.snapsError.code === 'unknown'
+    ? 'Snapshots need the newer WorPT Core library (Core 2). Whoever looks after this WorPT can switch the dashboard to it; see the banner at the top.'
+    : S.snapsError.message) + '</p></div>';
+  const can = S.P.you.can_manage_team;
+  const rows = S.snaps.map(s => '<tr><td class="mono" style="white-space:nowrap">' + esc(when(s.at)) + '</td><td>' + esc(s.name) + '</td>' +
+    '<td class="muted">' + esc(SNAP_KIND[s.kind] || s.kind) + '</td><td class="muted">' + esc(s.user) + '</td><td style="white-space:nowrap">' +
+    (can ? '<button type="button" class="btn" data-restore="' + s.id + '">Restore…</button> <button type="button" class="btn icon" data-delsnap="' + s.id + '" aria-label="Delete this snapshot">✕</button>' : '') +
+    '</td></tr>').join('');
+  return '<div class="card stack"><h2 class="h2" style="margin:0">Snapshots</h2>' +
+    '<p class="hint" style="margin:0">WorPT saves a snapshot of the whole proposal (plan, team, budget and settings) at the first change of each day, and just before anything drastic: deleting a task category or a task with subtasks, taking someone off the team, changing the number of years, or restoring. Automatic snapshots are kept for 60 days; the ones you name, until deleted. Profiles are shared between proposals and are not part of a snapshot.</p>' +
+    '<div class="row"><input id="snap-name" placeholder="e.g. before the co-I review" style="flex:1;min-width:220px;max-width:420px" aria-label="Name for the snapshot">' +
+    '<button type="button" class="btn primary" data-act="saveSnapshot">Save a snapshot now</button></div>' +
+    (rows ? '<div class="scroll"><table class="t"><thead><tr><th>When</th><th>Snapshot</th><th>Kind</th><th>By</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+          : '<p class="muted" style="margin:0">No snapshots yet. The first one is saved automatically at the first change of the day.</p>') +
+    (can ? '' : '<p class="hint" style="margin:0">Only this proposal\'s full editors (and admins) can restore or delete snapshots.</p>') + '</div>';
 }
 
 // ── settings ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -833,9 +839,13 @@ const ACTIONS = {
   addTask: () => { const n = tree().find(x => x.item.id === S.sel); let g = n && n.item; while (g && g.parent_id != null) g = S.P.items.find(i => i.id === g.parent_id); if (g) addItem(g.id, 'New task'); },
   addSub: () => { const n = tree().find(x => x.item.id === S.sel); if (!n || n.depth === 0) return; addItem(n.depth === 2 ? n.item.parent_id : n.item.id, 'New subtask'); },
   closeDetails: () => { S.open = null; render(); },
+  saveSnapshot: () => attempt(async () => {
+    await api('saveSnapshot', S.pid, $('#snap-name').value);
+    S.snaps = null; toast('Snapshot saved.', true); render();
+  }),
   deleteItem: () => attempt(async () => {
     const pre = await api('deleteItem', S.sel, false);
-    const ok = await ask('Delete this item?', pre.message + ' The history keeps a copy.', [['Delete', true, 'danger']]);
+    const ok = await ask('Delete this item?', pre.message + ' A snapshot is saved first, so it can be undone.', [['Delete', true, 'danger']]);
     if (ok) await change('deleteItem', S.sel, true);
   }),
   addMember: () => attempt(async () => {
@@ -907,7 +917,7 @@ function wire() {
     if (b.tagName === 'SELECT') return;
     b.onclick = () => ACTIONS[b.dataset.act] && ACTIONS[b.dataset.act]();
   });
-  app.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { S.tab = b.dataset.tab; if (S.tab === 'history') S.history = null; render(); });
+  app.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { S.tab = b.dataset.tab; if (S.tab === 'snapshots') S.snaps = null; render(); });
   app.querySelectorAll('[data-openitem]').forEach(b => b.onclick = () => { const id = +b.dataset.openitem; S.open = S.open === id ? null : id; S.sel = id; render(); });
   app.querySelectorAll('[data-teamview]').forEach(b => b.onclick = () => setTeamView(b.dataset.teamview));
   app.querySelectorAll('.tl.leaf').forEach(tl => {
@@ -940,6 +950,20 @@ function wire() {
   }));
   app.querySelectorAll('[data-unassign]').forEach(b => b.onclick = () => attempt(() => change('deleteAssignment', +b.dataset.unassign)));
   app.querySelectorAll('[data-delnl]').forEach(b => b.onclick = () => attempt(() => change('deleteNonlabor', +b.dataset.delnl)));
+  app.querySelectorAll('[data-restore]').forEach(b => b.onclick = () => attempt(async () => {
+    const s = S.snaps.find(x => x.id === +b.dataset.restore);
+    const ok = await ask('Restore this snapshot?', 'The whole proposal (plan, team, budget and settings) goes back to how it was on ' + when(s.at) +
+      ' ("' + s.name + '"). Anyone added to the team since then is taken off it. WorPT first saves a snapshot of how things are now, so you can undo this.',
+      [['Restore', true, 'primary']]);
+    if (!ok) return;
+    await change('restoreSnapshot', s.id);
+    S.snaps = null; S.open = null; toast('Restored the snapshot of ' + when(s.at) + '.', true); render();
+  }));
+  app.querySelectorAll('[data-delsnap]').forEach(b => b.onclick = () => attempt(async () => {
+    const s = S.snaps.find(x => x.id === +b.dataset.delsnap);
+    if (!(await ask('Delete this snapshot?', 'Delete the snapshot of ' + when(s.at) + ' ("' + s.name + '")? This cannot be undone.', [['Delete', true, 'danger']]))) return;
+    await api('deleteSnapshot', s.id); S.snaps = null; render();
+  }));
   app.querySelectorAll('[data-draft]').forEach(b => b.onclick = () => attempt(async () => {
     const m = memberById(+b.dataset.draft), text = draftSummary(m);
     if (!text) return toast(personName(m) + ' is not on any task yet, so there is nothing to draft from.');

@@ -1,6 +1,6 @@
 {
-  "worpt_core_library_version": 1,
-  "worpt_core_library_notes": "First version.",
+  "worpt_core_library_version": 2,
+  "worpt_core_library_notes": "Core 2 adds snapshots (save, restore and delete versions of a proposal).",
   "worpt_dashboard_webapp_version": 1,
   "worpt_dashboard_webapp_notes": "First version."
 }

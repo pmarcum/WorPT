@@ -243,8 +243,9 @@ exit
 sudo systemctl start worpt
 ```
 
-For undoing a single change, use the dashboard's history instead: every change is recorded with who,
-when, and the before and after.
+A backup restores every proposal at once. To put back just one proposal, use its **Snapshots** tab in the
+dashboard instead: WorPT saves a snapshot at the first change of each day and before anything drastic,
+and anyone can save a named one.
 
 ## Removing WorPT
 

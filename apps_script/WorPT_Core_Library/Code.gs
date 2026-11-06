@@ -14,7 +14,7 @@
  *   everyone else signs in with Google and types WORPT_ACCESS_CODE once (remembered until it changes)
  * Emails are compared ignoring capitals; separate them with commas.
  */
-const WORPT_CORE_LIBRARY_VERSION = 1;
+const WORPT_CORE_LIBRARY_VERSION = 2;
 const WORPT_REPO_RAW = 'https://raw.githubusercontent.com/pmarcum/WorPT/';
 
 function getCoreVersion() { return WORPT_CORE_LIBRARY_VERSION; }
@@ -164,6 +164,10 @@ const ROUTES = {
   updateProposal:   (pid, b)      => ['patch', '/api/proposals/' + _id_(pid), b],
   deleteProposal:   (pid, title)  => ['delete', '/api/proposals/' + _id_(pid) + '?' + _q_({ confirm_title: title })],
   history:          (pid)         => ['get', '/api/proposals/' + _id_(pid) + '/history?limit=300'],
+  snapshots:        (pid)         => ['get', '/api/proposals/' + _id_(pid) + '/snapshots'],
+  saveSnapshot:     (pid, name)   => ['post', '/api/proposals/' + _id_(pid) + '/snapshots', { name: name }],
+  restoreSnapshot:  (id)          => ['post', '/api/snapshots/' + _id_(id) + '/restore', {}],
+  deleteSnapshot:   (id)          => ['delete', '/api/snapshots/' + _id_(id)],
   people:           (q)           => ['get', '/api/people?' + _q_({ q: q || '' })],
   createPerson:     (b)           => ['post', '/api/people', b],
   updatePerson:     (id, b)       => ['patch', '/api/people/' + _id_(id), b],

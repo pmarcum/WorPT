@@ -126,6 +126,18 @@ def create_app(db_path=None, credential=None, read_credential=None):
     @app.get('/api/proposals/<pid>/changed')
     def changed(pid): return ok(last_change=store.changed(user(), pid))
 
+    @app.get('/api/proposals/<pid>/snapshots')
+    def snapshots(pid): return ok(snapshots=store.snapshots(user(), pid))
+
+    @app.post('/api/proposals/<pid>/snapshots')
+    def save_snapshot(pid): return ok(snapshot=store.save_snapshot(user(), pid, body().get('name')))
+
+    @app.post('/api/snapshots/<int:snapshot_id>/restore')
+    def restore_snapshot(snapshot_id): return ok(**store.restore_snapshot(user(), snapshot_id))
+
+    @app.delete('/api/snapshots/<int:snapshot_id>')
+    def delete_snapshot(snapshot_id): return ok(deleted=store.delete_snapshot(user(), snapshot_id))
+
     @app.get('/api/proposals/<pid>/history')
     def history(pid): return ok(history=store.history(user(), pid, request.args.get('limit', 200)))
 

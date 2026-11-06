@@ -72,6 +72,11 @@ Rules the server applies to every change:
 - Every row has a version: a change based on an outdated version is refused and the current row is
   returned, so nothing is overwritten silently. Every change is recorded in `history` (who, when,
   before and after). A refused request saves nothing.
+- Snapshots: the whole proposal (settings, team, plan, effort, budget) is saved at the first change of
+  each day (UTC) and just before deleting a task category or a task with subtasks, taking someone off
+  the team, changing the number of years, or restoring; anyone on the proposal can also save a named one.
+  Full editors restore or delete them. Automatic snapshots are kept for 60 days, named ones until deleted.
+  A restore never removes the person doing it, and can itself be undone.
 - Refusals are HTTP 200 with `{"status": "error", "code": ..., "message": ...}`.
 - `GET /api/proposals/<id>/changed` returns the number of the proposal's newest change; the dashboard asks
   every 10 seconds while it is visible and reloads only when the number grows.

@@ -470,3 +470,77 @@ def test_any_member_edits_trips_but_not_other_member_fields(team):
     assert bob.ok('patch', f"/api/members/{aa['id']}", dict(version=aa['version'], trips=[[1, 0], [0, 0], [0, 1]]))['member']['trips'][2] == [0, 1]
     bob.no('patch', f"/api/members/{aa['id']}", dict(version=aa['version'] + 1, trips=[[0, 0]], role='co-I'))
     bob.no('patch', f"/api/members/{m['id']}", dict(version=1, task_summary='x'))
+
+
+# ------------------------------------------------ snapshots
+def plan_of(api, pid):
+    """The parts of a proposal a restore brings back, without ids and versions."""
+    d = api.ok('get', f'/api/proposals/{pid}')
+    title = {i['id']: i['title'] for i in d['items']}
+    who = {m['id']: m['short_id'] for m in d['members']}
+    return dict(settings={k: d['proposal'][k] for k in ('title', 'program', 'n_years', 'rounding', 'travel')},
+                members=sorted((m['short_id'], m['role'], m['is_lead'], m['bio_summary']) for m in d['members']),
+                items=sorted((i['title'], title.get(i['parent_id']), i['position'], i['start_year'], i['end_q']) for i in d['items']),
+                work=sorted((title[a['item_id']], 'team' if a['is_team'] else who[a['member_id']], a['weeks'], a['is_lead']) for a in d['assignments']),
+                budget=sorted((r['item'], tuple(r['amounts'])) for r in d['nonlabor']))
+
+
+def test_first_change_of_the_day_saves_a_snapshot_once(team):
+    ann, pid = team['ann'], team['pid']
+    snaps = ann.ok('get', f'/api/proposals/{pid}/snapshots')['snapshots']
+    assert [s['kind'] for s in snaps].count('daily') == 1
+    ann.ok('patch', f"/api/items/{team['task']['id']}", dict(version=team['task']['version'], title='Again'))
+    assert [s['kind'] for s in ann.ok('get', f'/api/proposals/{pid}/snapshots')['snapshots']].count('daily') == 1
+
+
+def test_restore_brings_the_whole_proposal_back_and_can_be_undone(team):
+    ann, pid, task, m = team['ann'], team['pid'], timed(team['ann'], team['task']), team['bob_m']
+    ann.ok('post', f"/api/items/{task['id']}/assignments", dict(member_id=m['id'], weeks=6, is_lead=True))
+    ann.ok('post', f'/api/proposals/{pid}/nonlabor', dict(item='Publications', amounts=[1000, 0, 0]))
+    before = plan_of(ann, pid)
+    snap = ann.ok('post', f'/api/proposals/{pid}/snapshots', dict(name='before the review'))['snapshot']
+    ann.no('post', f'/api/proposals/{pid}/snapshots', dict(name='  '), code='missing')
+    # a big mistake: a task category deleted, a member added, settings changed
+    cat = ann.ok('post', f"/api/proposals/{pid}/members", dict(person_id=team['people']['cat']['id'], role='co-I(2)'))['member']
+    ann.ok('delete', f"/api/items/{team['goal']['id']}?confirm=1")
+    v = ann.ok('get', f'/api/proposals/{pid}')['proposal']['version']
+    ann.ok('patch', f'/api/proposals/{pid}', dict(version=v, n_years=5, title='Oops'))
+    kinds = [(s['kind'], s['name']) for s in ann.ok('get', f'/api/proposals/{pid}/snapshots')['snapshots']]
+    assert ('before', 'Before changing the number of years from 3 to 5') in kinds
+    assert any(k == 'before' and n.startswith('Before deleting "Goal A"') for k, n in kinds)
+    mistake = plan_of(ann, pid)
+    team['bob'].no('post', f"/api/snapshots/{snap['id']}/restore")                  # not a full editor
+    ann.ok('post', f"/api/snapshots/{snap['id']}/restore")
+    assert plan_of(ann, pid) == before                                           # Cat (added later) is off the team again
+    tables = ann.ok('get', f'/api/proposals/{pid}/tables/NOTANONschedule')['latex']
+    assert 'Goal A' in tables and 'co-I 1' in tables
+    undo = next(s for s in ann.ok('get', f'/api/proposals/{pid}/snapshots')['snapshots'] if s['name'].startswith('Before restoring'))
+    ann.ok('post', f"/api/snapshots/{undo['id']}/restore")
+    assert plan_of(ann, pid) == mistake                                          # the restore itself was undone
+
+
+def test_restore_refuses_to_lock_out_the_person_restoring(team):
+    ann, pid, p = team['ann'], team['pid'], team['people']
+    snap = ann.ok('post', f'/api/proposals/{pid}/snapshots', dict(name='early'))['snapshot']
+    ann.ok('post', f"/api/proposals/{pid}/members", dict(person_id=p['cat']['id'], role='co-I(2)', is_lead=True))
+    team['cat'].no('post', f"/api/snapshots/{snap['id']}/restore", code='refused')
+    team['eve'].ok('post', f"/api/snapshots/{snap['id']}/restore")                # an admin may
+
+
+def test_old_automatic_snapshots_are_removed_named_ones_kept(team, tmp_path):
+    import sqlite3
+    ann, pid = team['ann'], team['pid']
+    ann.ok('post', f'/api/proposals/{pid}/snapshots', dict(name='keep me'))
+    db = sqlite3.connect(tmp_path / 'worpt.db'); db.execute("UPDATE snapshots SET at = '2026-01-01T00:00:00+00:00'"); db.commit(); db.close()
+    ann.ok('post', f'/api/proposals/{pid}/snapshots', dict(name='new'))          # any new snapshot tidies up
+    names = [s['name'] for s in ann.ok('get', f'/api/proposals/{pid}/snapshots')['snapshots']]
+    assert names == ['new', 'keep me']
+
+
+def test_deleting_a_snapshot(team):
+    ann, pid = team['ann'], team['pid']
+    s = ann.ok('post', f'/api/proposals/{pid}/snapshots', dict(name='temp'))['snapshot']
+    team['bob'].no('delete', f"/api/snapshots/{s['id']}")
+    ann.ok('delete', f"/api/snapshots/{s['id']}")
+    assert 'temp' not in [x['name'] for x in ann.ok('get', f'/api/proposals/{pid}/snapshots')['snapshots']]
+    team['dan'].no('get', f'/api/proposals/{pid}/snapshots', code='not_found')
