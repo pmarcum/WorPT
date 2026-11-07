@@ -403,8 +403,14 @@ async function reloadProposal() {
 }
 
 /** A fresh copy of the proposal arrived: work out what changed in the ripple panel, then redraw. */
+// The dashboard lists the team as PI, Admin-PI, Sci-PI, then by last name (then first name).
+const ROLE_RANK = { pi: 0, 'admin-pi': 1, 'sci-pi': 2 };
+const teamOrder = (a, b) => (ROLE_RANK[(a.role || '').toLowerCase()] ?? 3) - (ROLE_RANK[(b.role || '').toLowerCase()] ?? 3) ||
+  (a.last || '').localeCompare(b.last || '', 'en', { sensitivity: 'base' }) || (a.first || '').localeCompare(b.first || '', 'en', { sensitivity: 'base' }) || a.id - b.id;
+
 function applyProposal(r) {
   const old = S.P && S.P.computed;
+  r.members.sort(teamOrder);
   S.P = r; S.lastChange = r.last_change || 0;
   S.lit = {};
   if (old) {
@@ -593,8 +599,10 @@ function setTeamView(v) { try { localStorage.setItem('worpt_team_view', v); } ca
 
 function viewPlan() {
   const P = S.P, nodes = tree(), ny = P.proposal.n_years, NQ = ny * 4, cols = teamView() === 'columns' && P.members.length > 0;
-  const tmpl = 'grid-template-columns:52px minmax(200px,300px) ' + (cols ? 'repeat(' + P.members.length + ',80px) ' : '') + 'minmax(' + (NQ * 30) + 'px,1fr)';
-  const minW = 52 + 240 + (cols ? P.members.length * 80 : 0) + NQ * 30;
+  const tagLen = m => isColl(m) ? 5 : Math.max(0, ...P.items.map(i => { const u = unfundedFor(i.id, m); return u > 0 ? (wk(u) + 'u').length : 0; }));
+  const colW = cols ? P.members.map(m => { const t = tagLen(m); return Math.max(54, Math.ceil(34 + 14 + (t ? 3 + t * 6.1 : 0) + 4)); }) : [];
+  const tmpl = 'grid-template-columns:52px minmax(200px,300px) ' + colW.map(w => w + 'px ').join('') + 'minmax(' + (NQ * 30) + 'px,1fr)';
+  const minW = 52 + 240 + colW.reduce((a, w) => a + w, 0) + NQ * 30;
   const qcells = cls => Array.from({ length: NQ }, (_, q) => '<span class="q' + (q % 4 === 0 ? ' y' : '') + '" ' + (cls || '') + '></span>').join('');
   const head = '<div class="sg-head" style="' + tmpl + '"><span></span><span class="sg-h">Task categories, tasks and subtasks</span>' +
     (cols ? P.members.map(m => '<span class="sg-h c" title="' + esc(personName(m) + ' · ' + m.short_id) + '"><span class="who"><i>' + esc(shortName(m)) + '</i></span><b>' + esc(m.short_id) + '</b><br>weeks</span>').join('') : '') +
