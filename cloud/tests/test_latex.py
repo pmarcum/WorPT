@@ -2,9 +2,10 @@
 
 Every table of every fixture is put in one document, each on its own page, the way a table's readme says to
 (\\usepackage{worpt} last in the preamble, then \\input and the table's environment). The document must compile
-with no LaTeX errors, in each class installed here. Skipped where pdflatex is not installed (the VM).
+with no LaTeX errors, in each class that works here (a class whose own empty document does not compile, such as
+aastex631 without the revtex4-1 class it is built on, is skipped). Skipped where pdflatex is not installed.
 """
-import pathlib, re, shutil, subprocess, sys
+import functools, pathlib, re, shutil, subprocess, sys, tempfile
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 import pytest
 from worpt.tables import build, TABLES, TEMPLATE_DIR
@@ -21,15 +22,25 @@ def paste_in(name):
     return re.sub(r'<[^>]+>', '', block).replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
 
 
-def installed(cls):
-    name = re.sub(r'.*\{|\}|\[.*\]', '', cls)
-    return subprocess.run(['kpsewhich', name + '.cls'], capture_output=True, text=True).stdout.strip() != ''
+def documentclass(cls):
+    return '\\documentclass' + (cls if cls[0] in '[{' else '{' + cls + '}')
+
+
+@functools.lru_cache(maxsize=None)
+def works(cls):
+    """Whether an empty document in this class compiles here, without WorPT."""
+    with tempfile.TemporaryDirectory() as d:
+        (pathlib.Path(d) / 'empty.tex').write_text(documentclass(cls) + '\n\\begin{document}\nx\n\\end{document}\n')
+        subprocess.run(['pdflatex', '-interaction=nonstopmode', 'empty.tex'], cwd=d, capture_output=True, timeout=120)
+        log = pathlib.Path(d) / 'empty.log'
+        return (pathlib.Path(d) / 'empty.pdf').exists() and log.exists() and not any(
+            l.startswith('!') for l in log.read_text(errors='replace').splitlines())
 
 
 @pytest.mark.parametrize('folder', CASES, ids=[c.name for c in CASES])
 @pytest.mark.parametrize('cls', CLASSES)
 def test_tables_compile_with_worpt_sty_alone(folder, cls, tmp_path):
-    if not installed(cls): pytest.skip(f'{cls} is not installed')
+    if not works(cls): pytest.skip(f'{cls} does not work on this machine, even without WorPT')
     out = build(load(folder))
     shutil.copy(TEMPLATE_DIR / 'worpt.sty', tmp_path)
     body = []
@@ -39,7 +50,7 @@ def test_tables_compile_with_worpt_sty_alone(folder, cls, tmp_path):
         assert f'\\input{{{name}}}' in block, f'{name}: the readme should bring the file in with \\input{{{name}}}'
         body.append('\\clearpage\n' + block)
     macros = r'\newcommand\Chandra{Chandra}\newcommand\Hubble{Hubble}\newcommand\Spitzer{Spitzer}\newcommand\RST{RST}'  # used in sample captions
-    doc = '\\documentclass' + (cls if cls[0] in '[{' else '{' + cls + '}') + '\n\\usepackage{worpt}\n' + macros + \
+    doc = documentclass(cls) + '\n\\usepackage{worpt}\n' + macros + \
           '\n\\begin{document}\n\\section{Tables}\\label{Subsec:tmeline}\\label{Sec:Baseline}\\label{Sec:Sample}\n' + '\n\n'.join(body) + '\n\\end{document}\n'
     (tmp_path / 'doc.tex').write_text(doc)
     for _ in range(2): subprocess.run(['pdflatex', '-interaction=nonstopmode', 'doc.tex'], cwd=tmp_path, capture_output=True, timeout=300)
