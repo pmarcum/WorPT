@@ -22,6 +22,11 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);fon
 a{color:var(--accent)} a:hover{color:#a0ccff}
 button,input,select,textarea{font:inherit;color:inherit}
 input,select,textarea{background:var(--bg);border:1px solid var(--border2);border-radius:5px;padding:6px 8px;color:var(--text)}
+/* Drop-down lists open in the computer's own colors on some systems (often white on Windows), which made light
+   option text invisible: tell the browser the page is dark, and give the options their own colors. */
+html{color-scheme:dark}
+option{background:#1b1b20;color:var(--text)}
+option:disabled{color:var(--muted)}
 input[data-num]{font-family:var(--mono);width:68px}
 input[type=checkbox],input[type=radio]{width:17px;height:17px;accent-color:var(--accent)}
 textarea{width:100%;min-height:54px;resize:vertical}
