@@ -41,7 +41,7 @@ input:disabled,select:disabled,textarea:disabled{opacity:.6}
 .btn.icon{width:32px;min-height:32px;padding:0;display:inline-flex;align-items:center;justify-content:center;color:var(--muted)}
 .btn:disabled{opacity:.45;cursor:default}
 .topbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:8px 18px;background:var(--surface);border-bottom:1px solid var(--border)}
-.logo{display:flex;flex-direction:column;gap:1px;margin-right:6px}
+.logo{display:flex;flex-direction:column;gap:1px;margin-right:6px;color:inherit;text-decoration:none}
 .logo b{font-family:var(--mono);font-size:15px;letter-spacing:.05em}
 .logo span{font-size:10px;color:var(--muted)}
 .nav{display:flex;gap:4px;flex-wrap:wrap}
@@ -151,13 +151,16 @@ pre.latex{background:var(--bg);border:1px solid var(--border);border-radius:6px;
 .compare div{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;white-space:pre-wrap;word-break:break-word}
 #toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);max-width:min(640px,92vw);background:#2a1618;border:1px solid #5a3030;color:#f7c0c0;padding:10px 14px;border-radius:8px;z-index:60;line-height:1.5}
 #toast[hidden]{display:none}
+.versions{padding:14px 18px 18px;font-family:var(--mono);font-size:10px;color:var(--muted);text-align:right}
+.backlink{font-family:var(--mono);font-size:11px;text-decoration:none;padding:6px 10px;border-radius:5px;border:1px solid var(--border2);background:transparent;color:var(--accent);cursor:pointer}
+.backlink:hover{background:rgba(126,184,247,.10)}
 #toast.ok{background:#14261e;border-color:#245a40;color:#bff0d8}
 @media (max-width:700px){.top-right{margin-left:0}.pgrid{grid-template-columns:minmax(0,1fr) 40px minmax(0,1.3fr) minmax(0,1.2fr) 34px}}
 </style>
 </head>
 <body>
 <header class="topbar">
-  <div class="logo"><b>WorPT</b><span>Work Plan Tool for proposals</span></div>
+  <a class="logo" href="https://github.com/pmarcum/WorPT" target="_blank" rel="noopener" title="WorPT on GitHub"><b>WorPT</b><span>Work Plan Tool for proposals</span></a>
   <nav class="nav" aria-label="Main">
     <button type="button" data-go="proposals">Proposals</button>
     <button type="button" data-go="people">People &amp; profiles</button>
@@ -168,6 +171,7 @@ pre.latex{background:var(--bg);border:1px solid var(--border);border-radius:6px;
 <main class="wrap" id="app"><p class="empty">Opening WorPT…</p></main>
 <div id="modal" hidden></div>
 <div id="toast" role="alert" hidden></div>
+<footer id="versions" class="versions"></footer>
 
 <script>
 'use strict';
@@ -313,6 +317,7 @@ async function start() {
   try {
     S.cfg = await gas('getClientConfig');
     $('#who').textContent = S.cfg.email + (S.cfg.access !== 'code' ? ' · ' + S.cfg.access : '');
+    $('#versions').textContent = 'WorPT Core ' + S.cfg.coreLibraryVersion + ' · Dashboard ' + S.cfg.webAppVersion;
     const notes = [];
     if (S.cfg.latestCoreLibrary > S.cfg.coreLibraryVersion) notes.push('WorPT Core ' + S.cfg.latestCoreLibrary + ' is available (this dashboard uses ' + S.cfg.coreLibraryVersion + '). ' + S.cfg.coreLibraryNotes);
     if (S.cfg.latestWebApp > S.cfg.webAppVersion) notes.push('A new WorPT Dashboard Code.gs (version ' + S.cfg.latestWebApp + ') is available. ' + S.cfg.webAppNotes);
@@ -504,7 +509,7 @@ function viewProposal() {
   const P = S.P, p = P.proposal;
   const leads = P.members.filter(m => m.is_lead).map(personName).join(', ');
   const body = { plan: viewPlan, team: viewTeam, budget: viewBudget, tables: viewTables, snapshots: viewSnapshots, settings: viewSettings }[S.tab]();
-  return '<div class="ptitle"><h1>' + esc(p.title) + '</h1><span class="meta">' + esc(p.program || 'no program set') + ' · ' + p.n_years + ' year' + (p.n_years === 1 ? '' : 's') +
+  return '<div class="row" style="margin-bottom:6px"><button type="button" class="backlink" data-backlist>← All proposals</button></div><div class="ptitle"><h1>' + esc(p.title) + '</h1><span class="meta">' + esc(p.program || 'no program set') + ' · ' + p.n_years + ' year' + (p.n_years === 1 ? '' : 's') +
     ' · full editors: ' + esc(leads || '—') + (P.you.member_id ? '' : ' · viewing as admin') + '</span></div>' +
     '<nav class="tabs" aria-label="Proposal sections">' + TABS.map(t => '<button type="button" data-tab="' + t[0] + '" aria-current="' + (S.tab === t[0] ? 'page' : 'false') + '">' + esc(t[1]) + '</button>').join('') + '</nav>' + body;
 }
@@ -920,6 +925,7 @@ function endDrag() {
 function wire() {
   const app = $('#app');
   app.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openProposal(b.dataset.open));
+  app.querySelectorAll('[data-backlist]').forEach(b => b.onclick = () => { try { history.replaceState(null, '', '#'); } catch (e) { /* fine */ } go('proposals'); });
   app.querySelectorAll('[data-act]').forEach(b => {
     if (b.tagName === 'SELECT') return;
     b.onclick = () => ACTIONS[b.dataset.act] && ACTIONS[b.dataset.act]();
