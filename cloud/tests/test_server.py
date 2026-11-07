@@ -97,6 +97,14 @@ def test_read_key_only_reads_tables(team, client):
     r.no('get', f"/api/proposals/{team['pid']}/tables/nosuch", code='unknown_table')
     sty = r.ok('get', f"/api/proposals/{team['pid']}/tables/worpt")                # worpt.sty, for gooTeX to bring in too
     assert r.ok('get', f"/api/proposals/{team['pid']}/tables")['style'] == 'worpt' and '\\ProvidesPackage{worpt}' in sty['latex']
+    every = r.ok('get', f"/api/proposals/{team['pid']}/tables?files=1")                # all of it in one request, for gooTeX
+    assert sorted(every['files']) == sorted([f'{n}.tex' for n in TABLES] + ['worpt.sty']) and every['work_plan']['id'] == team['pid']
+    assert every['files']['worpt.sty'] == sty['latex'] and every['files']['NOTANONtasks.tex'] == r.ok('get', f"/api/proposals/{team['pid']}/tables/NOTANONtasks")['latex']
+    assert r.ok('get', f"/api/proposals/{team['pid']}/tables?files=1")['digest'] == every['digest']                 # unchanged: same digest
+    ann = team['ann']; p = team['people']['bob']
+    ann.ok('patch', f"/api/people/{p['id']}", dict(version=p['version'], institution='Elsewhere'))                  # a profile edit
+    assert r.ok('get', f"/api/proposals/{team['pid']}/tables?files=1")['digest'] != every['digest']                 # changes the digest
+    r.no('get', '/api/proposals/nosuch/tables?files=1', code='not_found')
 
 
 def test_unknown_route(client):

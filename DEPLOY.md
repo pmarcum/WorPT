@@ -265,5 +265,5 @@ the backup line from `bibman`'s crontab, and, only if you no longer want the dat
   Script Properties and uses it only on Google's side.
 - gooTeX gets its own **read-only** key (`WORPT_READ_CREDENTIAL`), which can only read tables. It
   belongs in gooTeX's own systemd drop-in on the VM, never in a Doc's `Config.gs`. It is set up with
-  the gooTeX link.
+  the gooTeX link: see [cloud/GOOTEX_INTERFACE.md](cloud/GOOTEX_INTERFACE.md).
 - Never commit `worpt.db`, a backup, or a filled-in drop-in.

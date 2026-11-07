@@ -12,7 +12,7 @@ The dashboard also sends X-WorPT-User (the signed-in Google email) and X-WorPT-A
 from its ADMIN_EMAILS / CORE_MEMBERS Script Properties). Refusals are HTTP 200 with {"status": "error", ...}.
 Run: gunicorn --workers 1 --threads 2 --timeout 60 --bind 127.0.0.1:8083 'worpt_server:create_app()'
 """
-import hmac, logging, os, pathlib, sys
+import hashlib, hmac, logging, os, pathlib, sys
 from flask import Flask, jsonify, request
 from worpt.store import Store, User, WorptError
 from worpt.effort import compute, label_tree
@@ -188,25 +188,34 @@ def create_app(db_path=None, credential=None, read_credential=None):
     @app.delete('/api/nonlabor/<int:row_id>')
     def delete_nonlabor(row_id): return ok(deleted=store.delete_nonlabor(user(), row_id))
 
+    def work_plan(pid):
+        """The work plan's data: the dashboard's person must be on it; gooTeX's read-only key reads any (by its ID)."""
+        if key() == 'full': return store.read(user(), pid)
+        with store.connect() as db: data = store.export(db, pid)
+        if data['proposal'] is None: raise WorptError('That work plan does not exist.', 'not_found')
+        return data
+
+    checks_of = lambda out: [dict(level=c.level, item=c.item, message=c.message) for c in out['_checks']]
+
     @app.get('/api/proposals/<pid>/tables')
     def table_names(pid):
-        if key() == 'full': store.read(user(), pid)
-        else:
-            with store.connect() as db:
-                if store.export(db, pid)['proposal'] is None: return refuse('That work plan does not exist.', 'not_found')
-        return ok(tables=list(TABLES), style='worpt')            # /tables/worpt is worpt.sty
+        """The table names; with ?files=1, every file a document needs, ready to write: <table>.tex and worpt.sty."""
+        data = work_plan(pid)
+        if str(request.args.get('files', '')).lower() not in ('1', 'true', 'yes'):
+            return ok(tables=list(TABLES), style='worpt')        # /tables/worpt is worpt.sty
+        out = build(store.model(pid, data)[0])
+        files = {f'{n}.tex': out[n] for n in TABLES}
+        files['worpt.sty'] = style()
+        digest = hashlib.sha256('\0'.join(f'{k}\0{v}' for k, v in sorted(files.items())).encode()).hexdigest()
+        return ok(work_plan=dict(id=pid, title=data['proposal']['title']), files=files, digest=digest, checks=checks_of(out))
 
     @app.get('/api/proposals/<pid>/tables/<name>')
     def table(pid, name):
         if name not in TABLES + ('worpt',):
             return refuse(f'There is no table called "{name}". Tables: {", ".join(TABLES)}; and worpt (worpt.sty).', 'unknown_table')
-        if key() == 'full':
-            data = store.read(user(), pid)                     # the dashboard: the person must be on the proposal
-        else:
-            with store.connect() as db: data = store.export(db, pid)   # gooTeX's read-only key
-            if data['proposal'] is None: return refuse('That work plan does not exist.', 'not_found')
+        data = work_plan(pid)
         if name == 'worpt': return ok(name=name, latex=style(), checks=[])
         out = build(store.model(pid, data)[0], [name])
-        return ok(name=name, latex=out[name], checks=[dict(level=c.level, item=c.item, message=c.message) for c in out['_checks']])
+        return ok(name=name, latex=out[name], checks=checks_of(out))
 
     return app

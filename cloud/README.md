@@ -47,7 +47,7 @@ Corrections compared with the Google Sheet version (each is covered by a test):
 A Flask app (one gunicorn worker, localhost only) with one SQLite database. Browsers never reach it
 directly: the WorPT dashboard (Apps Script) calls it with a shared credential, the signed-in Google
 email and the person's access level (`admin` from ADMIN_EMAILS, `core` from CORE_MEMBERS, otherwise
-`code` for access-code users). gooTeX may use a separate read-only key that only reads tables.
+`code` for access-code users). gooTeX may use a separate read-only key that only reads tables; how gooTeX asks for them is in [GOOTEX_INTERFACE.md](GOOTEX_INTERFACE.md).
 
 | Setting (environment) | Meaning |
 |---|---|

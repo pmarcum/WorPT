@@ -868,7 +868,10 @@ function viewSettings() {
     '<div class="row"><label class="f">Years<input type="text" inputmode="decimal" data-num="dec" data-type="int" data-save="proposal:' + esc(p.id) + ':n_years"' + v + ' value="' + p.n_years + '"></label>' +
     '<label class="f">FTE rounding<select data-save="proposal:' + esc(p.id) + ':rounding"' + v + '><option value="nearest"' + (p.rounding === 'nearest' ? ' selected' : '') + '>to the nearest step</option>' +
     '<option value="up"' + (p.rounding === 'up' ? ' selected' : '') + '>up</option></select></label></div>' +
-    '<p class="hint">Created ' + esc(when(p.created_at)) + ' by ' + esc(p.created_by) + '.</p></div>' +
+    '<p class="hint">Created ' + esc(when(p.created_at)) + ' by ' + esc(p.created_by) + '.</p>' +
+    '<div class="row" style="align-items:center"><span>Work plan ID</span><code id="wp-id" style="font-family:var(--mono);padding:4px 8px;border:1px solid var(--border2);border-radius:5px">' + esc(p.id) + '</code>' +
+    '<button type="button" class="btn" data-act="copyId">Copy</button></div>' +
+    '<p class="hint" style="margin-top:0">gooTeX uses this ID to bring this work plan\'s tables into a document.</p></div>' +
     (can ? '<div class="card stack" style="flex:1 1 300px;border-color:#5a3030"><h2 class="h2">Delete this work plan</h2><p style="margin:0;line-height:1.5">Deletes the whole work plan for everyone (WorPT keeps a copy in its records). Type the title exactly to confirm.</p>' +
       '<input id="del-title" aria-label="Type the title to confirm" placeholder="' + esc(p.title) + '"><div><button type="button" class="btn danger" data-act="deleteProposal">Delete work plan</button></div></div>' : '') + '</div>';
 }
@@ -910,6 +913,10 @@ const ACTIONS = {
     toast('Added to the team.', true);
   }),
   addNonlabor: () => attempt(() => change('addNonlabor', S.pid, { item: 'New item', amounts: Array(S.P.proposal.n_years).fill(0) })),
+  copyId: async () => {
+    try { await navigator.clipboard.writeText(S.P.proposal.id); toast('Work plan ID copied.', true); }
+    catch (e) { const r = document.createRange(); r.selectNodeContents($('#wp-id')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast('Press Ctrl+C (or ⌘C) to copy the selected ID.', true); }
+  },
   copyTable: async () => {
     const text = S.tableOut ? S.tableOut.latex : '';
     try { await navigator.clipboard.writeText(text); toast('LaTeX copied.', true); }
