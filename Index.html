@@ -41,8 +41,12 @@ input:disabled,select:disabled,textarea:disabled{opacity:.6}
 .btn.icon{width:32px;min-height:32px;padding:0;display:inline-flex;align-items:center;justify-content:center;color:var(--muted)}
 .btn:disabled{opacity:.45;cursor:default}
 .topbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:8px 18px;background:var(--surface);border-bottom:1px solid var(--border)}
-.logo{display:block;margin-right:6px;line-height:0}
-.logo img{height:46px;width:auto;padding:2px 6px;border-radius:6px;background:#fff}
+.logo{display:flex;align-items:center;gap:8px;margin-right:6px;color:inherit;text-decoration:none}
+.logo img{height:46px;width:auto;display:block}
+.logo .words{display:flex;flex-direction:column;line-height:1.15}
+.logo b{font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:.02em;color:var(--text)}
+.logo b i{font-style:normal;color:var(--accent);font-weight:700}
+.logo .words span{font-size:11px;color:var(--muted)}
 .nav{display:flex;gap:4px;flex-wrap:wrap}
 .nav button,.tabs button{padding:7px 14px;min-height:34px;border-radius:5px;border:0;background:transparent;color:var(--muted);cursor:pointer;font-family:var(--mono);font-size:12px}
 .nav button[aria-current=page],.tabs button[aria-current=page]{background:rgba(126,184,247,.14);color:var(--accent)}
@@ -160,7 +164,7 @@ pre.latex{background:var(--bg);border:1px solid var(--border);border-radius:6px;
 </head>
 <body>
 <header class="topbar">
-  <a class="logo" href="https://github.com/pmarcum/WorPT" target="_blank" rel="noopener" title="WorPT on GitHub"><img src="https://raw.githubusercontent.com/pmarcum/WorPT/main/images/worpt-logo.png" alt="WorPT: Work Plan Tool for proposals" width="75" height="46"></a>
+  <a class="logo" href="https://github.com/pmarcum/WorPT" target="_blank" rel="noopener" title="WorPT on GitHub"><img src="https://raw.githubusercontent.com/pmarcum/WorPT/main/images/worpt-logo-dark.png" alt="WorPT" width="75" height="46"><span class="words"><b><i>Wor</i>k <i>P</i>lan <i>T</i>ool</b><span>for proposals</span></span></a>
   <nav class="nav" aria-label="Main">
     <button type="button" data-go="proposals">Proposal Work Plans</button>
     <button type="button" data-go="people">People &amp; profiles</button>
