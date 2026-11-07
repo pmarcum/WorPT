@@ -79,16 +79,16 @@ label.f input,label.f select,label.f textarea{font-size:13px}
 .sg-h{font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--muted);padding:4px;text-transform:uppercase}
 .sg-h.c{text-transform:none;text-align:center;line-height:1.3;letter-spacing:0}
 .sg-h.c b{color:var(--text)}
-.sg-row{height:34px;border-top:1px solid #1e1e23;user-select:none}
-.sg-row.cat{height:38px;border-top-color:var(--border)}
+.sg-row{height:24px;border-top:1px solid #1e1e23;user-select:none}
+.sg-row.cat{height:28px;border-top-color:var(--border)}
 .sg-row.open{background:rgba(126,184,247,.06)}
 .sg-lab{font-family:var(--mono);font-size:11px;color:var(--accent);padding:0 4px}
-.sg-title{text-align:left;border:0;background:transparent;cursor:pointer;padding:6px 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.sg-title{text-align:left;border:0;background:transparent;cursor:pointer;padding:2px 4px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .sg-title:hover{color:var(--accent)}
 .sg-row.cat .sg-title{font-weight:600}
 .sg-cell{display:flex;align-items:center;justify-content:center;gap:1px}
 .sg-sum{text-align:center;font-family:var(--mono);font-size:11px;color:var(--muted)}
-input.wk{width:48px;padding:4px 3px;text-align:right;font-size:12px;border-color:#2a2a30}
+input.wk{width:48px;padding:1px 3px;text-align:right;font-size:11px;line-height:1.2;border-color:#2a2a30}
 input.wk.on{border-color:#4a6a90}
 .star{border:0;background:transparent;cursor:pointer;padding:0 1px;font-size:12px;color:#4a4a55}
 .star.lead{color:var(--accent2)} .star.none{color:transparent;cursor:default}
@@ -102,7 +102,7 @@ input.wk.on{border-color:#4a6a90}
 .qh{text-align:center;font-family:var(--mono);font-size:10px;color:var(--muted);padding:2px 0 5px;border-left:1px solid #222228}
 .qh.y{border-left-color:var(--border2)}
 .bar{position:absolute;pointer-events:none;display:flex;align-items:center;padding:0 8px;font-family:var(--mono);font-size:11px;white-space:nowrap;overflow:visible}
-.bar.leaf{top:22%;bottom:22%;border-radius:5px;background:rgba(126,184,247,.55);box-shadow:inset 5px 0 0 rgba(255,255,255,.5),inset -5px 0 0 rgba(255,255,255,.5)}
+.bar.leaf{top:17%;bottom:17%;border-radius:5px;background:rgba(126,184,247,.55);box-shadow:inset 5px 0 0 rgba(255,255,255,.5),inset -5px 0 0 rgba(255,255,255,.5)}
 .bar.leaf.sub{background:rgba(126,184,247,.42)}
 .bar.parent{top:28%;bottom:28%;border-radius:4px;background:rgba(247,201,126,.14);border:1px dashed rgba(247,201,126,.55)}
 .bar.cat{top:40%;bottom:40%;border-radius:3px;background:rgba(247,201,126,.55);box-shadow:-2px 0 0 rgba(247,201,126,.9),2px 0 0 rgba(247,201,126,.9)}
@@ -153,8 +153,8 @@ pre.latex{background:var(--bg);border:1px solid var(--border);border-radius:6px;
 #toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);max-width:min(640px,92vw);background:#2a1618;border:1px solid #5a3030;color:#f7c0c0;padding:10px 14px;border-radius:8px;z-index:60;line-height:1.5}
 #toast[hidden]{display:none}
 .versions{padding:14px 18px 18px;font-family:var(--mono);font-size:10px;color:var(--muted);text-align:right}
-.backlink{font-family:var(--mono);font-size:11px;text-decoration:none;padding:6px 10px;border-radius:5px;border:1px solid var(--border2);background:transparent;color:var(--accent);cursor:pointer}
-.backlink:hover{background:rgba(126,184,247,.10)}
+.nav button.back{color:var(--accent);box-shadow:inset 0 0 0 1px var(--border2)}
+.nav button.back:hover{background:rgba(126,184,247,.10);color:var(--accent)}
 #toast.ok{background:#14261e;border-color:#245a40;color:#bff0d8}
 @media (max-width:700px){.top-right{margin-left:0}.pgrid{grid-template-columns:minmax(0,1fr) 40px minmax(0,1.3fr) minmax(0,1.2fr) 34px}}
 </style>
@@ -360,9 +360,17 @@ async function start() {
 async function loadMe() { const r = await api('me'); S.me = r; S.proposals = r.proposals || []; }
 async function loadPeople() { try { S.people = (await api('people', '')).people || []; } catch (e) { S.people = []; } }
 
+/** The top bar: "Proposal Work Plans" becomes "← All Proposal Work Plans" while a work plan is open. */
+function setNav(view) {
+  document.querySelectorAll('[data-go]').forEach(b => b.setAttribute('aria-current', b.dataset.go === view ? 'page' : 'false'));
+  const list = $('[data-go=proposals]'), inPlan = view === 'proposal';
+  list.textContent = inPlan ? '← All Proposal Work Plans' : 'Proposal Work Plans';
+  list.classList.toggle('back', inPlan);
+}
 function go(view) {
   S.view = view; S.pid = null; S.P = null;
-  document.querySelectorAll('[data-go]').forEach(b => b.setAttribute('aria-current', b.dataset.go === view ? 'page' : 'false'));
+  try { history.replaceState(null, '', '#'); } catch (e) { /* not allowed inside some frames */ }
+  setNav(view);
   if (view === 'proposals') loadMe().then(render, showError);
   if (view === 'people') loadPeople().then(render, showError);
   render();
@@ -371,7 +379,7 @@ document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.datas
 
 async function openProposal(pid) {
   S.view = 'proposal'; S.pid = pid; S.tab = 'plan'; S.sel = null; S.open = null; S.prev = null; S.table = null; S.tableOut = null; S.snaps = null;
-  document.querySelectorAll('[data-go]').forEach(b => b.setAttribute('aria-current', 'false'));
+  setNav('proposal');
   $('#app').innerHTML = '<p class="empty">Opening the work plan…</p>';
   try {
     const [r] = await Promise.all([api('getProposal', pid), loadPeople()]);
@@ -538,7 +546,7 @@ function viewProposal() {
   const P = S.P, p = P.proposal;
   const leads = P.members.filter(m => m.is_lead).map(personName).join(', ');
   const body = { plan: viewPlan, team: viewTeam, budget: viewBudget, tables: viewTables, snapshots: viewSnapshots, settings: viewSettings }[S.tab]();
-  return '<div class="row" style="margin-bottom:6px"><button type="button" class="backlink" data-backlist>← All Proposal Work Plans</button></div><div class="ptitle"><h1>' + esc(p.title) + '</h1><span class="meta">' + esc(p.program || 'no program set') + ' · ' + p.n_years + ' year' + (p.n_years === 1 ? '' : 's') +
+  return '<div class="ptitle"><h1>' + esc(p.title) + '</h1><span class="meta">' + esc(p.program || 'no program set') + ' · ' + p.n_years + ' year' + (p.n_years === 1 ? '' : 's') +
     ' · full editors: ' + esc(leads || '—') + (P.you.member_id ? '' : ' · viewing as admin') + '</span></div>' +
     '<nav class="tabs" aria-label="Work plan sections">' + TABS.map(t => '<button type="button" data-tab="' + t[0] + '" aria-current="' + (S.tab === t[0] ? 'page' : 'false') + '">' + esc(t[1]) + '</button>').join('') + '</nav>' + body;
 }
@@ -956,7 +964,6 @@ function endDrag() {
 function wire() {
   const app = $('#app');
   app.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openProposal(b.dataset.open));
-  app.querySelectorAll('[data-backlist]').forEach(b => b.onclick = () => { try { history.replaceState(null, '', '#'); } catch (e) { /* fine */ } go('proposals'); });
   app.querySelectorAll('[data-act]').forEach(b => {
     if (b.tagName === 'SELECT') return;
     b.onclick = () => ACTIONS[b.dataset.act] && ACTIONS[b.dataset.act]();
