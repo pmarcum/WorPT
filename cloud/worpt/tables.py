@@ -58,7 +58,7 @@ def fixed(x, n):
 
 
 def general(x):
-    """A number as a spreadsheet shows it in General format: 2 -> "2", 1.2 -> "1.2"."""
+    """A number with no trailing zeros: 2 -> "2", 1.2 -> "1.2"."""
     return f'{float(x):.10g}'
 
 
@@ -102,8 +102,8 @@ def full_role(role):
     return ''
 
 
-def sheet_order(members):
-    """The team in the Sheet version's order: PI, Science PI, Admin PI, then by last name (ties keep their order).
+def team_order(members):
+    """The team in the tables' order: PI, Science PI, Admin PI, then by last name (ties keep their order).
     members: objects or dicts with role and last."""
     get = lambda m, k: m[k] if isinstance(m, dict) else getattr(m, k)
     key = lambda m: ('AAAA' if get(m, 'role').lower().startswith('pi') else 'AAAB' if get(m, 'role').lower().startswith('sci')
@@ -111,12 +111,12 @@ def sheet_order(members):
     return sorted(members, key=key)
 
 
-def sheet_roles(members):
-    """Numbered roles (co-I(n), coll(n), gst(n), pd(n)...) numbered 1, 2, ... within each kind, in sheet_order, so the
-    numbers never leave gaps. Returns the new role for each member, in sheet_order."""
+def numbered_roles(members):
+    """Numbered roles (co-I(n), coll(n), gst(n), pd(n)...) numbered 1, 2, ... within each kind, in team_order, so the
+    numbers never leave gaps. Returns the new role for each member, in team_order."""
     get = lambda m, k: m[k] if isinstance(m, dict) else getattr(m, k)
     labels, out = {}, []
-    for m in sheet_order(members):
+    for m in team_order(members):
         new, hit = get(m, 'role'), re.search(r'\( *[0-9]+ *\)', get(m, 'role'))
         if hit:
             base = new.replace(hit.group(0), '', 1).strip()
@@ -131,7 +131,7 @@ def prepare(p):
     n, M = p.n_years, p.members
     mi = {m.id: i for i, m in enumerate(M)}
     people = {}
-    for m, new in sheet_roles(M):
+    for m, new in numbered_roles(M):
         i = mi[m.id]
         trips = np.zeros((n, 2))
         given = np.array(m.trips, float).reshape(-1, 2)[:n] if m.trips else np.zeros((0, 2))
@@ -165,7 +165,7 @@ def prepare(p):
                 if a.lead and row['lead'] is None: row['lead'] = e
                 else: row['experts'].append(e)
         rows.append(row)
-    return dict(p=p, r=r, n=n, order=[m.id for m in sheet_order(M)], people=people, rows=rows)
+    return dict(p=p, r=r, n=n, order=[m.id for m in team_order(M)], people=people, rows=rows)
 
 
 # ------------------------------------------------ the tables
@@ -204,7 +204,7 @@ def tasks_named(c):
 
 
 def _consolidate(roles):
-    """co-I(1), co-I(3) -> co-I(1,3), as the Sheet version did (numbers sorted as text)."""
+    """co-I(1), co-I(3) -> co-I(1,3) (numbers sorted as text)."""
     merged, prefixes = [], []
     for role in roles:
         pre = role.split('(')[0]

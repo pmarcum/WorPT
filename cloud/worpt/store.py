@@ -13,7 +13,7 @@ Who may do what (agreed 5 November 2026):
   * a profile may be edited by its owner, leads of any proposal the person is on, core members and admins.
 """
 import contextlib, datetime, json, re, secrets, sqlite3
-from .tables import sheet_roles
+from .tables import numbered_roles
 from .model import Person, Assignment, Item, Proposal, TravelCosts, NonlaborItem
 
 SCHEMA = """
@@ -342,14 +342,14 @@ class Store:
 
     # ------------------------------------------------ team members
     def renumber_roles(self, db, user, proposal_id, edit=None, write=None):
-        """Number the numbered roles 1, 2, ... within each kind, in the Sheet version's order (PI, Science PI, Admin PI,
-        then by last name), the same order the tables use, so the numbers never leave gaps; labels follow.
+        """Number the numbered roles 1, 2, ... within each kind, in the tables' order (PI, Science PI, Admin PI, then by
+        last name), so the numbers never leave gaps; labels follow.
         edit: a member being added (id None) or changed, as dict(id, role, last); write(role) then saves that member with
         its final role, between freeing the labels that change and giving the others theirs, so labels never clash."""
         rows = self.all(db, 'SELECT m.*, p.last FROM members m JOIN people p ON p.id = m.person_id WHERE m.proposal_id = ? ORDER BY m.id', proposal_id)
         if edit is not None:
             rows = [r for r in rows if r['id'] != edit['id']] + [dict(edit, short_id=None)]
-        final = sheet_roles([dict(r, role=canonical_role(r['role']), was=r['role']) for r in rows])
+        final = numbered_roles([dict(r, role=canonical_role(r['role']), was=r['role']) for r in rows])
         mine = next((new for r, new in final if edit is not None and r['id'] == edit['id']), None)
         others = [(r, new) for r, new in final if (edit is None or r['id'] != edit['id']) and (new != r['was'] or role_label(new) != r['short_id'])]
         for r, _ in others:                                             # free the labels that change, so two can swap
@@ -710,7 +710,7 @@ class Store:
                 person = self.one(db, 'SELECT * FROM people WHERE id = ?', m['person_id'])
                 if person is None: continue
                 back.append(dict(m, last=person['last'], role=canonical_role(m['role']) if person['us'] else 'coll(0)'))
-            for m, role in sheet_roles(back):
+            for m, role in numbered_roles(back):
                 cur = db.execute('INSERT INTO members (proposal_id, person_id, short_id, role, is_lead, fte_accuracy, bio_summary, task_summary, trips) '
                                  'VALUES (?,?,?,?,?,?,?,?,?)', (pid, m['person_id'], role_label(role), role, int(m['is_lead']), m['fte_accuracy'],
                                                                 m['bio_summary'], m['task_summary'], json.dumps(m['trips'])))

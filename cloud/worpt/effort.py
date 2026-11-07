@@ -55,7 +55,7 @@ class Check:
 
 
 def mround(x, step, mode='nearest'):
-    """Round to a multiple of `step`: 'nearest' (halves go up, like Google Sheets' MROUND) or 'up' (ceiling)."""
+    """Round to a multiple of `step`: 'nearest' (halves go up) or 'up' (ceiling)."""
     q = np.asarray(x) / step
     return np.round((np.ceil(q - 1e-9) if mode == 'up' else np.floor(q + 0.5 + 1e-9)) * step, 10)
 
@@ -136,7 +136,7 @@ def compute(members, goals, n_years, weeks_per_fte=52, rounding='nearest'):
     for m, t in zip(members, person_total[:, 0]):
         if t == 0: checks.append(Check('fix', m.id, 'is on no item, so no effort is counted for them'))
 
-    # Item FTE (unrounded, as in the Sheet's task columns) and roll-ups up the tree.
+    # Item FTE (unrounded) and roll-ups up the tree.
     leaf_fte = np.stack([W.sum(0), U.sum(0), W.sum(0) - U.sum(0)], 1) / weeks_per_fte
     items, by_label = {}, {}
     for (lab, it), f, s, e in zip(leaves, leaf_fte, qs, qe):

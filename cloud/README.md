@@ -22,8 +22,7 @@ Turns the weeks assigned on work-plan items into FTE:
   Each member is shown by a label made from the role (co-I 1, collab 1…), never their name.
 - Tasks and goals roll up from their children. Nothing is dropped silently; problems are returned as `checks`.
 
-Rounding is to the nearest step by default (`rounding='nearest'`); `rounding='up'` reproduces the
-Google Sheet version of January 2025, which rounded up.
+Rounding is to the nearest step by default (`rounding='nearest'`); `rounding='up'` always rounds up.
 
 ## Tables — `worpt/tables.py`
 

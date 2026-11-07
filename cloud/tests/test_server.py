@@ -9,7 +9,7 @@ import json, pathlib, sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 import pytest
 from worpt_server import create_app
-from worpt.tables import build, TABLES, sheet_roles
+from worpt.tables import build, TABLES, numbered_roles
 from worpt.store import role_label
 from test_parity_tables import load, CASES
 
@@ -450,7 +450,7 @@ def relabeled(p):
     """The fixture as the server stores it: numbered roles renumbered in the Sheet's order, and each person's ID replaced
     by their role's label."""
     new = {}
-    for m, role in sheet_roles(p.members): new[m.id], m.role = role_label(role), role
+    for m, role in numbered_roles(p.members): new[m.id], m.role = role_label(role), role
     for m in p.members: m.id = new[m.id]
     def walk(items):
         for it in items:

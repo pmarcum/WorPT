@@ -863,7 +863,7 @@ function viewSettings() {
     '<label class="f">Program (contains "HST": team summaries use full role names)<input data-save="proposal:' + esc(p.id) + ':program"' + v + ' value="' + esc(p.program) + '"></label>' +
     '<div class="row"><label class="f">Years<input type="text" inputmode="decimal" data-num="dec" data-type="int" data-save="proposal:' + esc(p.id) + ':n_years"' + v + ' value="' + p.n_years + '"></label>' +
     '<label class="f">FTE rounding<select data-save="proposal:' + esc(p.id) + ':rounding"' + v + '><option value="nearest"' + (p.rounding === 'nearest' ? ' selected' : '') + '>to the nearest step</option>' +
-    '<option value="up"' + (p.rounding === 'up' ? ' selected' : '') + '>up (as the old Sheet did)</option></select></label></div>' +
+    '<option value="up"' + (p.rounding === 'up' ? ' selected' : '') + '>up</option></select></label></div>' +
     '<p class="hint">Created ' + esc(when(p.created_at)) + ' by ' + esc(p.created_by) + '.</p></div>' +
     (can ? '<div class="card stack" style="flex:1 1 300px;border-color:#5a3030"><h2 class="h2">Delete this work plan</h2><p style="margin:0;line-height:1.5">Deletes the whole work plan for everyone (WorPT keeps a copy in its records). Type the title exactly to confirm.</p>' +
       '<input id="del-title" aria-label="Type the title to confirm" placeholder="' + esc(p.title) + '"><div><button type="button" class="btn danger" data-act="deleteProposal">Delete work plan</button></div></div>' : '') + '</div>';
@@ -1018,7 +1018,7 @@ function wire() {
   app.querySelectorAll('[data-draft]').forEach(b => b.onclick = () => attempt(async () => {
     const m = memberById(+b.dataset.draft), text = draftSummary(m);
     if (!text) return toast(personName(m) + ' is not on any task yet, so there is nothing to draft from.');
-    if ((m.bio_summary || '').trim() && !(await ask('Replace the team summary?', 'This replaces what is written for ' + personName(m) + ' now with a new draft. (The history keeps the old text.)', [['Replace it', true, 'primary']]))) return;
+    if ((m.bio_summary || '').trim() && !(await ask('Replace the team summary?', 'This replaces what is written for ' + personName(m) + ' now with a new draft. Save a snapshot first if you may want the current text back.', [['Replace it', true, 'primary']]))) return;
     await change('updateMember', m.id, { version: m.version, bio_summary: text });
   }));
   app.querySelectorAll('[data-removemember]').forEach(b => b.onclick = () => attempt(async () => {

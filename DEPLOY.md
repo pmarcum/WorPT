@@ -67,8 +67,8 @@ git clone https://github.com/pmarcum/WorPT.git ~/worpt
 cd ~/worpt && python3 -m venv venv && venv/bin/pip install -r cloud/requirements.txt
 ```
 
-**3. Run the tests on the VM.** They check the effort rules, every table against the old Sheet
-version's output, and the whole server, using a throw-away database (your real data is never touched):
+**3. Run the tests on the VM.** They check the effort rules, every table against saved reference
+output, and the whole server, using a throw-away database (your real data is never touched):
 
 ```bash
 cd ~/worpt/cloud && ../venv/bin/python -m pytest -q tests     # → "… passed", none failed
