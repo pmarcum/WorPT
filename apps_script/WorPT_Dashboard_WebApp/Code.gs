@@ -29,14 +29,17 @@ function _cfg() {
   };
 }
 
+// The browser-tab icon (kept on GitHub, so a new picture needs no new version of this file).
+const ICON = 'https://raw.githubusercontent.com/pmarcum/WorPT/main/images/worpt-favicon.png';
+
 function doGet(e) {
   const params = (e && e.parameter) || {}, config = _cfg();
   const gate = WorPTCore.dashboardGate(config, params);
-  if (gate) return HtmlService.createHtmlOutput(gate).setTitle('WorPT — access code');
+  if (gate) return HtmlService.createHtmlOutput(gate).setTitle('WorPT — access code').setFaviconUrl(ICON);
   const branch = WorPTCore.dashboardBranchName(params.branch || '');
   return HtmlService.createHtmlOutput(WorPTCore.fetchDashboardHtml(branch))
     .setTitle(branch === 'main' ? 'WorPT' : 'WorPT (test page: ' + branch + ')')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1').setFaviconUrl(ICON);
 }
 
 // The page calls google.script.run.gas('functionName', ...args); the library checks access on every call.
