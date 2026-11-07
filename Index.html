@@ -311,7 +311,7 @@ async function start() {
     const notes = [];
     if (S.cfg.latestCoreLibrary > S.cfg.coreLibraryVersion) notes.push('WorPT Core ' + S.cfg.latestCoreLibrary + ' is available (this dashboard uses ' + S.cfg.coreLibraryVersion + '). ' + S.cfg.coreLibraryNotes);
     if (S.cfg.latestWebApp > S.cfg.webAppVersion) notes.push('A new WorPT Dashboard Code.gs (version ' + S.cfg.latestWebApp + ') is available. ' + S.cfg.webAppNotes);
-    $('#banner').innerHTML = notes.map(n => '<div class="banner">' + esc(n) + ' For whoever looks after this WorPT: see MAINTENANCE.md, "Updating".</div>').join('');
+    $('#banner').innerHTML = notes.map(n => '<div class="banner">' + esc(n) + ' For whoever looks after this WorPT: see DEPLOY.md, "Updating the dashboard".</div>').join('');
     const hash = location.hash || '';
     await loadMe();
     const m = hash.match(/^#p=([A-Za-z0-9_-]+)/);
@@ -637,8 +637,10 @@ function viewItem(n, nodes) {
   const addable = P.members.filter(m => !named.has(m.id)).map(m => '<option value="m' + m.id + '">' + esc(personName(m) + ' (' + idRole(m) + ')') + '</option>').join('') +
     (work.some(a => a.is_team) ? '' : '<option value="team">Everyone not named (team)</option>');
   return html + '<div><div class="pgrid head"><span>Person</span><span>Task lead</span><span>Weeks</span><span>Unfunded weeks</span><span></span></div>' + rows +
-    '<label class="row prow" style="gap:8px"><span class="muted">Add a person</span><select data-act="assign" style="flex:1;max-width:340px"><option value="">Choose…</option>' + addable + '</select></label>' +
-    (P.members.length ? '' : '<p class="hint">The team is empty: add people on the Team tab first.</p>') +
+    (!P.members.length ? '<p class="hint prow">The team is empty. Add people on the Team tab first; then they can be put on tasks here. <button type="button" class="btn" data-tab="team">Go to the Team tab</button></p>'
+      : addable ? '<label class="row prow" style="gap:8px"><span class="muted">Add a person</span><select data-act="assign" style="flex:1;max-width:340px"><option value="">Choose a team member…</option>' + addable + '</select></label>'
+      : '<p class="hint prow">Everyone on the team is already on this ' + (d === 2 ? 'subtask' : 'task') + '. To put someone else on it, first add them to the team. <button type="button" class="btn" data-tab="team">Go to the Team tab</button></p>') +
+    (work.some(a => a.is_team) && unnamed.length === 0 ? '<p class="hint">"Everyone not named (team)" covers nobody here, because everyone on the team is named on this ' + (d === 2 ? 'subtask' : 'task') + '.</p>' : '') +
     '<p class="hint">The green figure is that person\'s effort on this item in FTE, counted over the whole item (weeks ÷ ' + (P.proposal.weeks_per_fte || 52) + '), updated as you type. The panel below the calendar shows how it lands in each year once saved.</p></div>';
 }
 const span = (s, e) => s && e ? 'Year ' + s[0] + ' Q' + s[1] + ' – Year ' + e[0] + ' Q' + e[1] : 'none yet';
