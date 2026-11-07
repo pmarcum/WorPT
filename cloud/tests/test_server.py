@@ -9,7 +9,7 @@ import json, pathlib, sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 import pytest
 from worpt_server import create_app
-from worpt.tables import build, TABLES
+from worpt.tables import build, TABLES, sheet_roles
 from worpt.store import role_label
 from test_parity_tables import load, CASES
 
@@ -173,7 +173,7 @@ def test_member_fields(team):
     ann, pid, p = team['ann'], team['pid'], team['people']
     url = f'/api/proposals/{pid}/members'
     ann.no('post', url, dict(person_id=p['bob']['id'], role='co-I(3)'), code='duplicate')            # already on the proposal
-    ann.no('post', url, dict(person_id=p['cat']['id'], role='co-I(1)'), code='duplicate')            # Bob's role
+    ann.no('post', url, dict(person_id=p['cat']['id'], role='pi'), code='duplicate')                 # Ann is the PI
     ann.no('post', url, dict(person_id=p['cat']['id'], role='Team'), code='invalid')
     ann.no('post', url, dict(person_id=p['cat']['id'], role=''), code='missing')
     ann.no('post', url, dict(person_id=9999, role='co-I(2)'), code='not_found')
@@ -183,10 +183,52 @@ def test_labels_come_from_roles_never_from_names(team):
     ann, pid, p = team['ann'], team['pid'], team['people']
     labels = {m['role']: m['short_id'] for m in ann.ok('get', f'/api/proposals/{pid}')['members']}
     assert labels == {'PI': 'PI', 'co-I(1)': 'co-I 1'}                    # what the client sent as short_id is ignored
-    for role, label in [('coll(2)', 'collab 2'), ('gst(1)', 'grad 1'), ('pd(3)', 'postdoc 3'), ('Sci-PI', 'Sci-PI')]:
+    for role, label in [('coll(2)', 'collab 1'), ('Grad student', 'grad 1'), ('pd(3)', 'postdoc 1'), ('sci-pi', 'Sci-PI')]:
         m = ann.ok('patch', f"/api/members/{team['bob_m']['id']}", dict(version=ann.ok('get', f'/api/proposals/{pid}')['members'][1]['version'], role=role))['member']
         assert m['short_id'] == label, (role, m)
     assert 'Sci-PI' in ann.ok('get', f'/api/proposals/{pid}/tables/NOTANONschedule')['latex']
+
+
+def roles(api, pid):
+    return {m['person_id']: (m['role'], m['short_id']) for m in api.ok('get', f'/api/proposals/{pid}')['members']}
+
+
+def test_roles_are_numbered_by_worpt_in_last_name_order(team, client):
+    ann, pid, p = team['ann'], team['pid'], team['people']
+    url = f'/api/proposals/{pid}/members'
+    assert team['bob_m']['version'] == 1                                  # a new member starts at version 1
+    cat = ann.ok('post', url, dict(person_id=p['cat']['id'], role='co-I'))['member']            # just "co-I"
+    assert (cat['role'], cat['short_id']) == ('co-I(2)', 'co-I 2')        # Bobson, then Catson
+    aal = ann.ok('post', '/api/people', dict(first='Al', last='Aalto'))['person']
+    al = ann.ok('post', url, dict(person_id=aal['id'], role='Co-I(7)'))['member']               # a typed number is not kept
+    assert roles(ann, pid) == {p['ann']['id']: ('PI', 'PI'), aal['id']: ('co-I(1)', 'co-I 1'),
+                               p['bob']['id']: ('co-I(2)', 'co-I 2'), p['cat']['id']: ('co-I(3)', 'co-I 3')}
+    bob = next(m for m in ann.ok('get', f'/api/proposals/{pid}')['members'] if m['person_id'] == p['bob']['id'])
+    assert bob['version'] == 2                                            # renumbering is a change others see
+    ann.ok('delete', f"/api/members/{al['id']}", dict(confirm=True))      # close the gap
+    assert roles(ann, pid)[p['bob']['id']] == ('co-I(1)', 'co-I 1') and roles(ann, pid)[p['cat']['id']] == ('co-I(2)', 'co-I 2')
+    cat = next(m for m in ann.ok('get', f'/api/proposals/{pid}')['members'] if m['person_id'] == p['cat']['id'])
+    cat = ann.ok('patch', f"/api/members/{cat['id']}", dict(version=cat['version'], role='Collaborator'))['member']
+    assert (cat['role'], cat['short_id']) == ('coll(1)', 'collab 1') and roles(ann, pid)[p['bob']['id']] == ('co-I(1)', 'co-I 1')
+    ann.ok('patch', f"/api/members/{cat['id']}", dict(version=cat['version'], role='co-I'))
+    assert roles(ann, pid)[p['cat']['id']] == ('co-I(2)', 'co-I 2')
+    ann.ok('patch', f"/api/people/{p['cat']['id']}", dict(version=p['cat']['version'], last='Abbot'))   # a new last name reorders
+    assert roles(ann, pid)[p['cat']['id']] == ('co-I(1)', 'co-I 1') and roles(ann, pid)[p['bob']['id']] == ('co-I(2)', 'co-I 2')
+    ann.ok('patch', f"/api/people/{p['cat']['id']}", dict(version=p['cat']['version'] + 1, us=False))  # non-US: a collaborator
+    assert roles(ann, pid)[p['cat']['id']] == ('coll(1)', 'collab 1') and roles(ann, pid)[p['bob']['id']] == ('co-I(1)', 'co-I 1')
+    dan = ann.ok('post', url, dict(person_id=p['dan']['id'], role='sci-pi(2)'))['member']   # one Science PI, so no number
+    assert (dan['role'], dan['short_id']) == ('Sci-PI', 'Sci-PI')
+    ann.no('patch', f"/api/members/{team['bob_m']['id']}", dict(version=2, role='SCI-pi'), code='duplicate')
+
+
+def test_restoring_a_snapshot_renumbers_the_team(team):
+    ann, pid, p = team['ann'], team['pid'], team['people']
+    ann.ok('post', f'/api/proposals/{pid}/members', dict(person_id=p['cat']['id'], role='co-I'))
+    snap = ann.ok('post', f'/api/proposals/{pid}/snapshots', dict(name='three of us'))['snapshot']
+    ann.ok('patch', f"/api/people/{p['bob']['id']}", dict(version=p['bob']['version'], last='Zed'))   # Catson is now first
+    assert roles(ann, pid)[p['cat']['id']] == ('co-I(1)', 'co-I 1')
+    ann.ok('post', f"/api/snapshots/{snap['id']}/restore")
+    assert roles(ann, pid)[p['cat']['id']] == ('co-I(1)', 'co-I 1') and roles(ann, pid)[p['bob']['id']] == ('co-I(2)', 'co-I 2')
 
 
 def test_profiles_have_expertise_and_pronoun(team):
@@ -211,11 +253,11 @@ def test_an_older_database_is_brought_up_to_date(tmp_path):
       trips TEXT NOT NULL DEFAULT '[]', version INTEGER NOT NULL DEFAULT 1, UNIQUE (proposal_id, short_id), UNIQUE (proposal_id, person_id));
       INSERT INTO people (id, last) VALUES (1, 'Marcum'), (2, 'Bobson');
       INSERT INTO proposals (id, title, created_at, created_by) VALUES ('p1', 'Old', '2026-11-06', 'x');
-      INSERT INTO members (proposal_id, person_id, short_id, role, is_lead) VALUES ('p1', 1, 'PM', 'PI', 1), ('p1', 2, 'BB', 'co-I(1)', 0);''')
+      INSERT INTO members (proposal_id, person_id, short_id, role, is_lead) VALUES ('p1', 1, 'PM', 'PI', 1), ('p1', 2, 'BB', 'Co-I(3)', 0);''')
     c.commit(); c.close()
     app = create_app(str(db), KEY, READ)
     out = Api(app.test_client(), 'eve@x.org', 'admin').ok('get', '/api/proposals/p1')
-    assert {m['short_id'] for m in out['members']} == {'PI', 'co-I 1'} and out['members'][0]['expertise'] == ''
+    assert {(m['role'], m['short_id']) for m in out['members']} == {('PI', 'PI'), ('co-I(1)', 'co-I 1')} and out['members'][0]['expertise'] == ''
 
 
 def test_a_proposal_always_keeps_a_lead(team):
@@ -405,8 +447,10 @@ def store_fixture(api, folder):
 
 
 def relabeled(p):
-    """The fixture with each person's ID replaced by their role's label, as the server stores them."""
-    new = {m.id: role_label(m.role) for m in p.members}
+    """The fixture as the server stores it: numbered roles renumbered in the Sheet's order, and each person's ID replaced
+    by their role's label."""
+    new = {}
+    for m, role in sheet_roles(p.members): new[m.id], m.role = role_label(role), role
     for m in p.members: m.id = new[m.id]
     def walk(items):
         for it in items:

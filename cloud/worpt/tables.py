@@ -102,22 +102,36 @@ def full_role(role):
     return ''
 
 
+def sheet_order(members):
+    """The team in the Sheet version's order: PI, Science PI, Admin PI, then by last name (ties keep their order).
+    members: objects or dicts with role and last."""
+    get = lambda m, k: m[k] if isinstance(m, dict) else getattr(m, k)
+    key = lambda m: ('AAAA' if get(m, 'role').lower().startswith('pi') else 'AAAB' if get(m, 'role').lower().startswith('sci')
+                     else 'AAAC' if get(m, 'role').lower().startswith('admin') else '') + get(m, 'last')
+    return sorted(members, key=key)
+
+
+def sheet_roles(members):
+    """Numbered roles (co-I(n), coll(n), gst(n), pd(n)...) numbered 1, 2, ... within each kind, in sheet_order, so the
+    numbers never leave gaps. Returns the new role for each member, in sheet_order."""
+    get = lambda m, k: m[k] if isinstance(m, dict) else getattr(m, k)
+    labels, out = {}, []
+    for m in sheet_order(members):
+        new, hit = get(m, 'role'), re.search(r'\( *[0-9]+ *\)', get(m, 'role'))
+        if hit:
+            base = new.replace(hit.group(0), '', 1).strip()
+            labels[base] = labels.get(base, 0) + 1
+            new = f'{base}({labels[base]})'
+        out.append((m, new))
+    return out
+
+
 def prepare(p):
     r = compute(p.members, p.goals, p.n_years, p.weeks_per_fte, p.rounding)
     n, M = p.n_years, p.members
     mi = {m.id: i for i, m in enumerate(M)}
-    # Order: PI, Science PI, Admin PI, then by last name (as in the Sheet version).
-    key = lambda m: ('AAAA' if m.role.lower().startswith('pi') else 'AAAB' if m.role.lower().startswith('sci')
-                     else 'AAAC' if m.role.lower().startswith('admin') else '') + m.last
-    order = sorted(M, key=key)
-    labels, people = {}, {}
-    for m in order:
-        new = m.role
-        hit = re.search(r'\( *[0-9]+ *\)', m.role)
-        if hit:
-            base = m.role.replace(hit.group(0), '', 1).strip()
-            labels[base] = labels.get(base, 0) + 1
-            new = f'{base}({labels[base]})'
+    people = {}
+    for m, new in sheet_roles(M):
         i = mi[m.id]
         trips = np.zeros((n, 2))
         given = np.array(m.trips, float).reshape(-1, 2)[:n] if m.trips else np.zeros((0, 2))
@@ -151,7 +165,7 @@ def prepare(p):
                 if a.lead and row['lead'] is None: row['lead'] = e
                 else: row['experts'].append(e)
         rows.append(row)
-    return dict(p=p, r=r, n=n, order=[m.id for m in order], people=people, rows=rows)
+    return dict(p=p, r=r, n=n, order=[m.id for m in sheet_order(M)], people=people, rows=rows)
 
 
 # ------------------------------------------------ the tables

@@ -108,6 +108,7 @@ input.wk.on{border-color:#4a6a90}
 .bar.cat{top:40%;bottom:40%;border-radius:3px;background:rgba(247,201,126,.55);box-shadow:-2px 0 0 rgba(247,201,126,.9),2px 0 0 rgba(247,201,126,.9)}
 .tsum{display:flex;gap:10px;align-items:flex-start}
 .tsum textarea{flex:1 1 240px}
+.rolepick{display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center}.rolepick select{width:150px}.rolepick input{width:120px}
 .tsum .roles{flex:1 1 200px;min-width:180px;display:flex;flex-direction:column;gap:3px;font-size:12px;line-height:1.4}
 .tsum .roles ul{margin:0 0 4px;padding-left:16px}
 .tsum .roles .btn{align-self:flex-start;margin-top:4px}
@@ -207,6 +208,23 @@ const personName = p => p ? [p.first, p.last].filter(Boolean).join(' ') || '(no 
 const isColl = m => /^coll/i.test(m.role || '') || m.us === false;
 // a member's label comes from their role (PI, co-I 1, collab 1…), never their name, so proposals can stay anonymous
 const idRole = m => m.short_id;
+// Roles are chosen from a list; WorPT numbers co-Is, collaborators, grad students and postdocs by itself (co-I 1, co-I 2…).
+const ROLES = [['PI', 'PI'], ['Sci-PI', 'Sci-PI (science PI)'], ['Admin-PI', 'Admin-PI (administrative PI)'], ['co-I', 'co-I'],
+  ['coll', 'Collaborator'], ['gst', 'Grad student'], ['pd', 'Postdoc'], ['other', 'Other…']];
+const roleKind = role => {
+  const b = String(role || '').replace(/\(\s*\d+\s*\)\s*$/, '').trim().toLowerCase();
+  return { pi: 'PI', 'sci-pi': 'Sci-PI', 'admin-pi': 'Admin-PI', 'co-i': 'co-I', coi: 'co-I', 'co-investigator': 'co-I', coll: 'coll', collab: 'coll',
+    collaborator: 'coll', gst: 'gst', grad: 'gst', 'grad student': 'gst', 'graduate student': 'gst', pd: 'pd', postdoc: 'pd' }[b] || (b ? 'other' : '');
+};
+/** A role list with an "Other…" box. key: "member:<id>" (saves itself) or a form's name (read with pickedRole). */
+function rolePicker(key, role, attrs, blank) {
+  const kind = roleKind(role), saves = key.startsWith('member:') ? ' data-save="' + key + ':role"' : '';
+  return '<span class="rolepick"><select data-rolekind="' + key + '" aria-label="Role"' + attrs + '>' + (blank ? '<option value="">Choose…</option>' : '') +
+    ROLES.map(([v, t]) => '<option value="' + v + '"' + (v === kind ? ' selected' : '') + '>' + esc(t) + '</option>').join('') + '</select>' +
+    '<input data-roleother="' + key + '"' + saves + ' value="' + (kind === 'other' ? esc(role) : '') + '" placeholder="e.g. consultant" aria-label="Role, in your own words"' +
+    (kind === 'other' ? '' : ' hidden') + attrs + '></span>';
+}
+const pickedRole = key => { const k = $('[data-rolekind="' + key + '"]').value; return k === 'other' ? $('[data-roleother="' + key + '"]').value.trim() : k; };
 
 function gas(fn, ...args) {
   return new Promise((resolve, reject) => google.script.run
@@ -298,6 +316,15 @@ async function conflict(kind, id, fields, current) {
   if (S.pid) reloadProposal(); else render();
 }
 document.addEventListener('change', e => {
+  const pick = e.target.closest('select[data-rolekind]');
+  if (pick) {                                     // a role from the list; "Other…" opens a box for the role in your own words
+    const other = document.querySelector('[data-roleother="' + pick.dataset.rolekind + '"]');
+    other.hidden = pick.value !== 'other';
+    if (pick.value === 'other') { other.focus(); return; }
+    const [kind, id] = pick.dataset.rolekind.split(':');
+    if (kind === 'member') saveFields('member', +id, +pick.dataset.version, { role: pick.value });
+    return;
+  }
   const el = e.target.closest('[data-save]');
   if (!el) return;
   const [kind, id, field] = el.dataset.save.split(':');
@@ -432,7 +459,7 @@ async function newProposal() {
     '<label class="f">Years<input id="np-years" type="text" inputmode="decimal" data-num="dec" value="3"></label></div>' +
     '<fieldset><legend>First full editor (more can be added on the Team tab)</legend><div class="row">' +
     '<label class="f" style="flex:1">Person<select id="np-lead">' + (opts || '<option value="">No profiles yet</option>') + '</select></label>' +
-    '<label class="f">Role<input id="np-role" value="PI" style="width:100px"></label></div>' +
+    '<label class="f">Role' + rolePicker('np', 'PI', '') + '</label></div>' +
     '<p class="hint">Not in the list? <button type="button" class="btn" id="np-newperson">New person…</button></p></fieldset>' +
     '<div class="actions"><button type="button" class="btn" data-x>Cancel</button><button type="button" class="btn primary" id="np-go">Create</button></div>', m => {
     m.querySelector('[data-x]').onclick = closeModal;
@@ -442,7 +469,7 @@ async function newProposal() {
       if (!lead) return toast('Choose the first full editor (make a profile with New person… if needed).');
       try {
         const r = await api('createProposal', { title: $('#np-title').value, program: $('#np-program').value, n_years: num($('#np-years').value),
-          leads: [{ person_id: lead, role: $('#np-role').value }] });
+          leads: [{ person_id: lead, role: pickedRole('np') }] });
         closeModal(); await loadMe(); openProposal(r.proposal.id);
       } catch (e) { showError(e); }
     };
@@ -691,7 +718,7 @@ function viewTeam() {
     const v = ' data-version="' + m.version + '"' + dis;
     return '<tr><td><b>' + esc(personName(m)) + '</b><div class="sub">' + esc(m.institution || 'no institution') + ' · ' + (m.us ? 'US' : 'non-US') + '</div>' +
       '<button type="button" class="btn" style="margin-top:6px" data-editperson="' + m.person_id + '">Profile…</button></td>' +
-      '<td><input data-save="member:' + m.id + ':role" value="' + esc(m.role) + '" style="width:90px" aria-label="Role"' + v + '>' +
+      '<td>' + (m.us ? rolePicker('member:' + m.id, m.role, v) : '<select aria-label="Role" disabled><option>Collaborator</option></select><div class="sub">non-US institution</div>') +
       '<div class="sub" style="margin-top:4px">shown as <b style="color:var(--text)">' + esc(m.short_id) + '</b></div></td>' +
       '<td><input type="checkbox" data-save="member:' + m.id + ':is_lead" aria-label="Full editor"' + (m.is_lead ? ' checked' : '') + v + '></td>' +
       '<td><input type="text" inputmode="decimal" data-num="dec" data-save="member:' + m.id + ':fte_accuracy" value="' + esc(m.fte_accuracy == null ? '' : m.fte_accuracy) + '" placeholder="0.05" aria-label="FTE accuracy"' + v + '></td>' +
@@ -704,11 +731,11 @@ function viewTeam() {
   const options = S.people.filter(p => !onTeam.has(p.id)).map(p => '<option value="' + p.id + '">' + esc(personName(p)) + (p.email ? ' (' + esc(p.email) + ')' : '') + '</option>').join('');
   const add = can ? '<fieldset style="margin-top:14px"><legend>Add someone to the team</legend><div class="row">' +
     '<label class="f" style="flex:1;min-width:220px">Person<select id="am-person"><option value="">Choose…</option>' + options + '</select></label>' +
-    '<label class="f">Role<input id="am-role" style="width:110px" placeholder="e.g. co-I(1)"></label>' +
+    '<label class="f">Role' + rolePicker('am', '', '', true) + '</label>' +
     '<label class="row" style="gap:6px;align-self:flex-end;padding-bottom:8px"><input type="checkbox" id="am-lead"> full editor</label>' +
     '<button type="button" class="btn primary" style="align-self:flex-end" data-act="addMember">Add</button>' +
     '<button type="button" class="btn" style="align-self:flex-end" data-act="newPerson">New person…</button></div>' +
-    '<p class="hint">Roles: PI, Sci-PI, Admin-PI, co-I(1), co-I(2)…, coll(1)…, gst(1) (graduate student), pd(1) (postdoc)… Each person is shown by their role, never their name (co-I(1) as "co-I 1", coll(1) as "collab 1"), so the plan and tables can stay anonymous. Each person needs a role of their own.</p></fieldset>' : '';
+    '<p class="hint">WorPT numbers co-Is, collaborators, grad students and postdocs by itself (co-I 1, co-I 2…), in order of last name, as in the tables, and closes the gap when someone leaves. The PI, Sci-PI and Admin-PI are one person each. People at non-US institutions are always collaborators. Each person is shown by their role, never their name, so the plan and tables can stay anonymous.</p></fieldset>' : '';
   return '<div class="card"><h2 class="h2">Team</h2>' + (can ? '' : '<p class="hint" style="margin:0 0 8px">Only this work plan\'s full editors (and admins) change the team; you can see it here.</p>') +
     '<div class="scroll"><table class="t"><thead><tr><th>Person</th><th>Role</th><th>Full editor</th><th>FTE accuracy</th><th>Team summary, and their part in the plan</th>' + (hst ? '<th>HST role text</th>' : '') + '<th></th></tr></thead><tbody>' +
     (rows || '<tr><td colspan="7" class="muted">No one yet.</td></tr>') + '</tbody></table></div>' + add + '</div>';
@@ -865,7 +892,9 @@ const ACTIONS = {
   addMember: () => attempt(async () => {
     const person = num($('#am-person').value);
     if (!person) return toast('Choose a person (or make one with New person…).');
-    await change('addMember', S.pid, { person_id: person, role: $('#am-role').value, is_lead: $('#am-lead').checked });
+    const role = pickedRole('am');
+    if (!role) return toast('Choose a role for them.');
+    await change('addMember', S.pid, { person_id: person, role, is_lead: $('#am-lead').checked });
     toast('Added to the team.', true);
   }),
   addNonlabor: () => attempt(() => change('addNonlabor', S.pid, { item: 'New item', amounts: Array(S.P.proposal.n_years).fill(0) })),

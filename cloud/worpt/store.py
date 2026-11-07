@@ -13,6 +13,7 @@ Who may do what (agreed 5 November 2026):
   * a profile may be edited by its owner, leads of any proposal the person is on, core members and admins.
 """
 import contextlib, datetime, json, re, secrets, sqlite3
+from .tables import sheet_roles
 from .model import Person, Assignment, Item, Proposal, TravelCosts, NonlaborItem
 
 SCHEMA = """
@@ -69,6 +70,20 @@ AUTO_SNAPSHOT_DAYS = 60          # automatic snapshots are kept this long; named
 # Columns added after the first release, so an existing database gains them when the server starts.
 ADDED_COLUMNS = [('people', 'expertise', "TEXT NOT NULL DEFAULT ''"), ('people', 'pronoun', "TEXT NOT NULL DEFAULT ''")]
 ROLE_WORDS = {'co-i': 'co-I', 'coi': 'co-I', 'coll': 'collab', 'gst': 'grad', 'pd': 'postdoc'}
+# Roles WorPT numbers by itself (co-I(1), co-I(2)...): what may be typed or chosen, and the code it is stored as.
+NUMBERED_ROLES = {'co-i': 'co-I', 'coi': 'co-I', 'co-investigator': 'co-I', 'coll': 'coll', 'collab': 'coll', 'collaborator': 'coll',
+                  'gst': 'gst', 'grad': 'gst', 'grad student': 'gst', 'graduate student': 'gst', 'pd': 'pd', 'postdoc': 'pd'}
+SINGLE_ROLES = {'pi': 'PI', 'sci-pi': 'Sci-PI', 'admin-pi': 'Admin-PI'}          # one person each, no number
+
+
+def canonical_role(text):
+    """'co-I', 'Co-I(3)', 'collaborator' -> 'co-I(0)', 'coll(0)' (the number is set by Store.renumber_roles); 'pi' -> 'PI';
+    any other role as typed."""
+    t = (text or '').strip()
+    m = re.fullmatch(r'(.+?)\s*\(\s*\d+\s*\)', t)
+    base = (m.group(1) if m else t).strip()
+    if base.lower() in NUMBERED_ROLES: return NUMBERED_ROLES[base.lower()] + '(0)'
+    return SINGLE_ROLES.get(base.lower(), t)
 
 
 def role_label(role):
@@ -103,12 +118,9 @@ class Store:
             for table, column, kind in ADDED_COLUMNS:
                 if column not in {r['name'] for r in db.execute(f'PRAGMA table_info({table})')}:
                     db.execute(f'ALTER TABLE {table} ADD COLUMN {column} {kind}')
-            # labels come from roles (from 6 November 2026): relabel members made before that, where the label is free
-            for m in db.execute('SELECT id, proposal_id, short_id, role FROM members').fetchall():
-                want = role_label(m['role'])
-                if want and want != m['short_id'] and not db.execute('SELECT 1 FROM members WHERE proposal_id = ? AND short_id = ?',
-                                                                      (m['proposal_id'], want)).fetchone():
-                    db.execute('UPDATE members SET short_id = ? WHERE id = ?', (want, m['id']))
+            # roles are numbered by WorPT, and labels come from roles (from November 2026): bring older members in line
+            for (pid,) in db.execute('SELECT DISTINCT proposal_id FROM members').fetchall():
+                self.renumber_roles(db, User('worpt-server', 'admin'), pid)
 
     @contextlib.contextmanager
     def connect(self):
@@ -243,12 +255,12 @@ class Store:
             f = self.clean_person({k: v for k, v in fields.items() if k in EDITABLE['people']})
             if 'email' in f: self.check_email_free(db, f['email'], person_id)
             p = self.update_row(db, user, 'people', person_id, version, f, None, 'profile')
-            if not p['us']:                                        # non-US means collaborator, on every proposal
-                for m in self.all(db, 'SELECT * FROM members WHERE person_id = ?', person_id):
-                    if not m['role'].lower().startswith('coll'):
-                        role = self.free_coll_role(db, m['proposal_id'])
-                        self.update_row(db, user, 'members', m['id'], m['version'], {'role': role, 'short_id': role_label(role)},
-                                        m['proposal_id'], 'team member')
+            for m in self.all(db, 'SELECT * FROM members WHERE person_id = ?', person_id):
+                if not p['us'] and canonical_role(m['role']) != 'coll(0)':     # non-US means collaborator, on every work plan
+                    save = lambda role, m=m: self.update_row(db, user, 'members', m['id'], m['version'], dict(role=role, short_id=role_label(role)),
+                                                             m['proposal_id'], 'team member')
+                    self.renumber_roles(db, user, m['proposal_id'], dict(id=m['id'], role='coll(0)', last=p['last']), save)
+                else: self.renumber_roles(db, user, m['proposal_id'])            # numbers follow last names, which may have changed
             return p
 
     def my_profile(self, user):
@@ -329,24 +341,39 @@ class Store:
             return {'deleted': p['title']}
 
     # ------------------------------------------------ team members
-    def free_coll_role(self, db, proposal_id):
-        used = {m['role'] for m in self.all(db, 'SELECT role FROM members WHERE proposal_id = ?', proposal_id)}
-        k = 1
-        while f'coll({k})' in used: k += 1
-        return f'coll({k})'
+    def renumber_roles(self, db, user, proposal_id, edit=None, write=None):
+        """Number the numbered roles 1, 2, ... within each kind, in the Sheet version's order (PI, Science PI, Admin PI,
+        then by last name), the same order the tables use, so the numbers never leave gaps; labels follow.
+        edit: a member being added (id None) or changed, as dict(id, role, last); write(role) then saves that member with
+        its final role, between freeing the labels that change and giving the others theirs, so labels never clash."""
+        rows = self.all(db, 'SELECT m.*, p.last FROM members m JOIN people p ON p.id = m.person_id WHERE m.proposal_id = ? ORDER BY m.id', proposal_id)
+        if edit is not None:
+            rows = [r for r in rows if r['id'] != edit['id']] + [dict(edit, short_id=None)]
+        final = sheet_roles([dict(r, role=canonical_role(r['role']), was=r['role']) for r in rows])
+        mine = next((new for r, new in final if edit is not None and r['id'] == edit['id']), None)
+        others = [(r, new) for r, new in final if (edit is None or r['id'] != edit['id']) and (new != r['was'] or role_label(new) != r['short_id'])]
+        for r, _ in others:                                             # free the labels that change, so two can swap
+            db.execute('UPDATE members SET short_id = ? WHERE id = ?', (f'~{r["id"]}', r['id']))
+        out = write(mine) if write else None
+        for r, new in others:
+            before = self.get(db, 'members', r['id'], 'team member')
+            db.execute('UPDATE members SET role = ?, short_id = ?, version = version + 1 WHERE id = ?', (new, role_label(new), r['id']))
+            self.log(db, user, proposal_id, 'members', r['id'], 'update', dict(before, short_id=r['short_id']),
+                     self.get(db, 'members', r['id'], 'team member'))
+        return out
 
     def check_member_fields(self, db, proposal_id, f, member_id=None, person=None):
         f.pop('short_id', None)                                         # the label always comes from the role
         if 'role' in f:
-            f['role'] = (f['role'] or '').strip()
-            if not f['role']: raise WorptError('Each team member needs a role (e.g. PI, co-I(1), coll(1)).', 'missing')
-            if person is not None and not person['us'] and not f['role'].lower().startswith('coll'):
-                f['role'] = self.free_coll_role(db, proposal_id)          # non-US institution: always a collaborator
-            f['short_id'] = role_label(f['role'])
-            if f['short_id'].lower() == 'team': raise WorptError('"team" stands for "everyone not named"; choose another role.', 'invalid')
-            other = self.one(db, 'SELECT id, role FROM members WHERE proposal_id = ? AND short_id = ? AND id != ?', proposal_id, f['short_id'], member_id or -1)
-            if other: raise WorptError(f'Someone on this work plan already has the role {other["role"]} ({f["short_id"]}); '
-                                       'each person needs a role of their own, e.g. co-I(1), co-I(2).', 'duplicate')
+            if not (f['role'] or '').strip(): raise WorptError('Each team member needs a role (e.g. PI, co-I, Collaborator).', 'missing')
+            f['role'] = canonical_role(f['role'])
+            if person is not None and not person['us']: f['role'] = 'coll(0)'   # non-US institution: always a collaborator
+            if not f['role'].endswith('(0)'):                            # numbered roles get their number from renumber_roles()
+                f['short_id'] = role_label(f['role'])
+                if f['short_id'].lower() == 'team': raise WorptError('"team" stands for "everyone not named"; choose another role.', 'invalid')
+                other = self.one(db, 'SELECT id, role FROM members WHERE proposal_id = ? AND lower(short_id) = lower(?) AND id != ?',
+                                 proposal_id, f['short_id'], member_id or -1)
+                if other: raise WorptError(f'Someone on this work plan is already {other["role"]}; only one person can have that role.', 'duplicate')
         if 'is_lead' in f: f['is_lead'] = 1 if f['is_lead'] else 0
         return f
 
@@ -357,7 +384,10 @@ class Store:
         f = {k: v for k, v in fields.items() if k in EDITABLE['members']}
         f.setdefault('role', '')
         f = self.check_member_fields(db, proposal_id, f, person=person)
-        return self.insert_row(db, user, 'members', dict(f, proposal_id=proposal_id, person_id=person['id']), proposal_id)
+        add = lambda role: self.insert_row(db, user, 'members', dict(f, role=role, short_id=role_label(role), proposal_id=proposal_id,
+                                                                     person_id=person['id']), proposal_id)
+        m = self.renumber_roles(db, user, proposal_id, dict(id=None, role=f['role'], last=person['last']), add)
+        return self.get(db, 'members', m['id'], 'team member')
 
     def add_member(self, user, proposal_id, fields):
         with self.connect() as db:
@@ -369,9 +399,13 @@ class Store:
             m = self.get(db, 'members', member_id, 'team member')
             # trips are part of the budget, which anyone on the proposal may edit; everything else about a member is the team's
             self.proposal(db, user, m['proposal_id'], need='view' if set(fields) <= {'trips'} else 'team')
-            f = self.check_member_fields(db, m['proposal_id'], dict(fields), member_id, self.get(db, 'people', m['person_id'], 'profile'))
+            person = self.get(db, 'people', m['person_id'], 'profile')
+            f = self.check_member_fields(db, m['proposal_id'], dict(fields), member_id, person)
             if m['is_lead'] and 'is_lead' in f and not f['is_lead']: self.keep_a_lead(db, m)
-            return self.update_row(db, user, 'members', member_id, version, f, m['proposal_id'], 'team member')
+            save = lambda role: self.update_row(db, user, 'members', member_id, version,
+                                                dict(f, **({} if role is None else dict(role=role, short_id=role_label(role)))), m['proposal_id'], 'team member')
+            if 'role' not in f: return save(None)
+            return self.renumber_roles(db, user, m['proposal_id'], dict(id=member_id, role=f['role'], last=person['last']), save)
 
     def keep_a_lead(self, db, m):
         n = db.execute('SELECT count(*) FROM members WHERE proposal_id = ? AND is_lead = 1', (m['proposal_id'],)).fetchone()[0]
@@ -389,7 +423,9 @@ class Store:
             person = self.get(db, 'people', m['person_id'], 'profile')
             self.snapshot(db, user, m['proposal_id'], 'before', f'Before taking {person["first"]} {person["last"]} ({m["short_id"]}) off the team')
             for a in work: self.delete_row(db, user, 'assignments', a['id'], m['proposal_id'], 'assignment')
-            return self.delete_row(db, user, 'members', member_id, m['proposal_id'], 'team member')
+            gone = self.delete_row(db, user, 'members', member_id, m['proposal_id'], 'team member')
+            self.renumber_roles(db, user, m['proposal_id'])                      # close the gap (co-I(2) becomes co-I(1)...)
+            return gone
 
     # ------------------------------------------------ goals, tasks, subtasks
     def depth(self, db, item_id):
@@ -669,11 +705,12 @@ class Store:
                        (p['title'], p['program'], p['n_years'], p['rounding'], json.dumps(p['travel']), pid))
             for tbl in ('items', 'members', 'nonlabor'):                  # assignments go with their items and members
                 db.execute(f'DELETE FROM {tbl} WHERE proposal_id = ?', (pid,))
-            member_id = {}
-            for m in data['members']:
+            member_id, back = {}, []
+            for m in data['members']:                                       # people still on file, numbered as they are today
                 person = self.one(db, 'SELECT * FROM people WHERE id = ?', m['person_id'])
                 if person is None: continue
-                role = m['role'] if person['us'] or m['role'].lower().startswith('coll') else self.free_coll_role(db, pid)
+                back.append(dict(m, last=person['last'], role=canonical_role(m['role']) if person['us'] else 'coll(0)'))
+            for m, role in sheet_roles(back):
                 cur = db.execute('INSERT INTO members (proposal_id, person_id, short_id, role, is_lead, fte_accuracy, bio_summary, task_summary, trips) '
                                  'VALUES (?,?,?,?,?,?,?,?,?)', (pid, m['person_id'], role_label(role), role, int(m['is_lead']), m['fte_accuracy'],
                                                                 m['bio_summary'], m['task_summary'], json.dumps(m['trips'])))
