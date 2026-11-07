@@ -1,0 +1,105 @@
+%______________________________________
+% Instructions and LaTeX code to copy/paste into your document, to incorporate this file into your proposal, now located at:
+%
+% https://github.com/pmarcum/WorPT-Work-Plan-Tool-4-proposals/blob/main/latexTableTemplates/[INSERTFILENAME]/readme.md
+%______________________________________
+
+\def\WorPTfolder{[INSERTFILENAME]} % set the folder name where WorPT files are contained
+
+% ___________________________________________
+%       Default formatting preferences
+% ___________________________________________
+
+%---- table compactness controls
+\def\SpaceBetweenRows{1.0}        % vertical compactness of rows
+\def\SpaceBetweenColumns{5pt}     % spacing between columns
+
+%--- aesthetic preferences
+\def\BannerColor{Blue}            % "Equipment, Travel, Supplies, Page Charges" banner color
+\def\BannerFontColor{White}       % "Equipment, Travel, Supplies, Page Charges" banner font color
+\def\BannerFontstyle#1{\textbf{#1}}% boldface "Equipment, Travel, Supplies, Page Charges" banner
+\def\CostLabelColor{Blue}         % "Cost Category" column label color
+\def\YearLabelColor{Blue}         % "Y1", "Y2", etc  column label color
+\def\TotalLabelColor{Blue}        % "Total" column label color
+\def\ColumnFontstyle#1{\textbf{#1}}% boldface "Cost Category", "Y1, Y2, ..." column labels 
+\def\TotalFontstyle#1{\textbf{#1}} % boldface "Total ..." column label 
+\def\MajorCatFontstyle#1{\textbf{#1}}          % boldface listed budget items (except "domestic" and "international" Travel lines) 
+\def\MajorAmountFontstyle#1{\textbf{#1}}       % boldface budget amounts except "Total" and "domestic" and "international" Travel lines 
+\def\MajorCatTotalFontstyle#1{\textbf{#1}}     % boldface Total budget values except those in "Domestic" and "International" Travel lines 
+\def\TravelSubcatFontstyle#1{\textit{#1}}      % italicize "domestic" and "international" lines 
+\def\TravelSubcatAmountFontstyle#1{\textit{#1}}% italicize "domestic" and "international" Travel budget values 
+\def\TravelSubcatTotalFontstyle#1{\textit{#1}} % italicize budget amounts under Total, and "Domestic" / "International" Travel lines 
+
+%---- definitions used by the script in the caption and should not be altered by user
+\def\LastYearPlusOne{[INSERTLASTYEARPLUSONE]}
+
+%--- table preamble definition bundled into the "T" variable
+\newcolumntype{T}{
+  |l|*{\LastYearPlusOne}{l|}
+}
+
+\newenvironment{[INSERTFILENAME]}{%
+\begin{table*}[h!]
+% ---- adjust to control vertical row separation/spacing, comment-out if not needed
+\renewcommand{\arraystretch}{\SpaceBetweenRows} % controls vertical row separation/spacing
+% ---- adjust to control horizontal column separation/spacing, comment-out if not needed
+\setlength{\tabcolsep}{\SpaceBetweenColumns}    % controls horizontal column separation/spacing
+\begin{tabular}{T}
+\hline
+
+%---- top header line
+\multicolumn{[INSERTLASTYEARPLUSTWO]}{|@{}c@{}|}{\cellcolor{\BannerColor}\color{\BannerFontColor}\BannerFontstyle{Equipment, Travel, Supplies, Page Charges}}\\ 
+
+%---- second header line 
+{\color{\CostLabelColor}\ColumnFontstyle{Cost Category}} [INSERTYEARLABELLIST] & {\color{\TotalLabelColor}\TotalFontstyle{Total}}\\
+\hline
+
+% COMMENT: the template below is a single item for the year label list. The script glues together all the needed items into a single 
+% COMMENT: string and replaces INSERTYEARLABELLIST above
+[STARTYEARLABELTEMPLATE]
+ & {\color{\YearLabelColor}\ColumnFontstyle{Year[INSERTYEARNUMBER]}}
+[ENDYEARLABELTEMPLATE]
+
+%---- table data inserted below
+[INSERTNONLABORCOSTSLIST]
+
+%---- insert the rolled-up travel costs at bottom of table
+%---- first, insert the domestic and international rolled-up totals
+\MajorCatFontstyle{Travel} [INSERTTRAVELSUMMARYLIST] & \MajorCatTotalFontstyle{\$[TRAVELSUMALLYEARS]}\\
+
+%---------- then insert only the domestic travel rolled-up totals
+\TravelSubcatFontstyle{~~~Domestic} [INSERTTRAVELDOMESTICLIST] & \TravelSubcatTotalFontstyle{\$[DOMSUMALLYEARS]}\\
+
+%---------- then insert only the international travel rolled-up totals
+\TravelSubcatFontstyle{~~~Intern'l} [INSERTTRAVELINTERNATIONALLIST] & \TravelSubcatTotalFontstyle{\$[INTSUMALLYEARS]}\\
+\hline
+
+% COMMENT: the below template generates a row of nonlabor costs. The script generates several rows using template,
+% COMMENT: and glues them together with end of line character, and replaces INSERTNONLABORCOSTSLIST
+[STARTNONLABORITEMTEMPLATE]
+\MajorCatFontstyle{[ITEMDESC]} [INSERTANNUALCOSTLIST] & \MajorCatTotalFontstyle{\$[SUMOVERYEARS]}\\
+[ENDNONLABORITEMTEMPLATE]
+
+% COMMENT: the below template generates a single nonlabor cost as part of the annual cost list. The script will 
+% COMMENT: glue together the items into a single string that replaces INSERTANNUALCOSTLIST in the above NONLABORITEM template
+[STARTPERYEARCOSTTEMPLATE]
+ & \MajorAmountFontstyle{\$[INSERTPERYEARCOST]}
+[ENDPERYEARCOSTTEMPLATE]
+
+% COMMENT: below template generates a single item for the travel summary list. The script glues together 
+% COMMENT: all the items into a single string that replaces INSERTTRAVELSUMMARYLIST
+[STARTPERYEARTRAVELSUMTEMPLATE]
+ & \MajorAmountFontstyle{\$[INSERTTRAVELSUMFORTHISYEAR]}
+[ENDPERYEARTRAVELSUMTEMPLATE]
+
+% COMMENT: below template generates a single item for the list of domestic travel costs. The script glues together
+% COMMENT: to make a string that replaces INSERTTRAVELSOMESTICLIST above
+[STARTPERYEARDOMINTTEMPLATE]
+ & \TravelSubcatAmountFontstyle{\$[INSERTTRAVELFORTHISYEAR]}
+[ENDPERYEARDOMINTTEMPLATE]
+
+\end{tabular}
+}
+{%
+\end{table*}
+}

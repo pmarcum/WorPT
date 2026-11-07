@@ -1,11 +1,10 @@
 %______________________________________
-% Instructions and LaTeX code to copy/paste into your document, to incorporate this file into your proposal, now located at:
-%
-% https://github.com/pmarcum/WorPT-Work-Plan-Tool-4-proposals/blob/main/latexTableTemplates/[INSERTFILENAME]/readme.md
+% WorPT table "[INSERTFILENAME]". It needs \usepackage{worpt} in your preamble (worpt.sty comes with the tables).
+% How to put it in your document:
+% https://github.com/pmarcum/WorPT/blob/main/latexTableTemplates/[INSERTFILENAME]/readme.md
 %______________________________________
 
 \newif\ifLandScape                 % establish a boolean variable
-\def\WorPTfolder{[INSERTFILENAME]} % set the folder name where WorPT files are contained
 
 % ___________________________________________
 %       Default formatting preferences
@@ -25,8 +24,6 @@
 %--- control to nudge table to the left or right
 \def\NudgeTable{1.2\textwidth} % adjust to help center table
 
-%---- fix the Table Number in the caption
-\def\TaskAddCounter{-1}        % corrects table number messed up by table,longtable combination)
 
 %--- aesthetic preferences
 \def\SectionColor{Blue}        % task grouping banner color
@@ -36,8 +33,8 @@
 \def\SectionFontstyle#1{\textbf{#1}} % boldface task grouping title
 \def\ColumnLabelFontstyle#1{\textbf{#1}} % boldface all the column headers
 
-%--- table preamble definition bundled into the "T" variable
-\newcolumntype{T}{
+%--- the table's columns
+\def\[INSERTFILENAME]Columns{
   |p{\TaskWidth}||       % title column
   p{\StartFinishWidth}!{\color{\YearQuarterLineColor}\vrule} % Start/year
   p{\StartFinishWidth}!{\color{\YearQuarterLineColor}\vrule}!{\color{\YearQuarterLineColor}\vrule} % Start/quarter
@@ -53,12 +50,11 @@
 \else
   \begin{table*}[h!]  % \begin{table} needed to make bottom table caption have same width as table
 \fi
-\addtocounter{table}{\TaskAddCounter}           % corrects double-counting of longtable and table combination
 \renewcommand{\arraystretch}{\SpaceBetweenRows} % controls vertical row separation/spacing
 \setlength{\tabcolsep}{\SpaceBetweenColumns}    % controls horizontal column separation/spacing
 \centerline{
 \begin{minipage}{\NudgeTable}                   % increase to allow a wide table to spill into margin
-\begin{longtable}{T}
+\begin{WorPTtabular}{\[INSERTFILENAME]Columns}
 
 %--- make colorized top banner labels, the column headers
 \hline
@@ -79,7 +75,7 @@
 [INSERTSUMMARIES]
 
 \hline
-\end{longtable}
+\end{WorPTtabular}
 \end{minipage}
 }}
 {%

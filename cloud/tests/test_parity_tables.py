@@ -4,14 +4,19 @@ Each folder in fixtures/ with a proposal.json holds a real proposal (names, IDs,
 text replaced by placeholders) and, in expected/, the tables the Sheet version made from it. The new
 generators must reproduce those tables line for line, except for the differences listed in
 known_differences.json, each with its reason. Run `python3 tests/test_parity_tables.py` for a report.
+
+The comparison fills the Sheet version's own templates, kept in fixtures/sheet_templates/, so it checks
+every number and word the generators put in; the templates WorPT uses now are checked by tests/test_latex.py.
 """
 import difflib, json, pathlib, sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 import pytest
 from worpt.model import Person, Assignment, Item, Proposal, TravelCosts, NonlaborItem
+from worpt import tables
 from worpt.tables import build, TABLES
 
 FIXTURES = pathlib.Path(__file__).parent / 'fixtures'
+SHEET_TEMPLATES = FIXTURES / 'sheet_templates'
 CASES = sorted(f.parent for f in FIXTURES.glob('*/proposal.json'))
 
 
@@ -34,7 +39,9 @@ def differences(old, new):
 
 
 def compare(folder):
-    out = build(load(folder))
+    now, tables.TEMPLATE_DIR = tables.TEMPLATE_DIR, SHEET_TEMPLATES
+    try: out = build(load(folder))
+    finally: tables.TEMPLATE_DIR = now
     known = json.loads((folder / 'known_differences.json').read_text()) if (folder / 'known_differences.json').exists() else {}
     report = {}
     for f in sorted((folder / 'expected').glob('*.txt')):

@@ -1,17 +1,14 @@
 %______________________________________
-% Instructions and LaTeX code to copy/paste into your document, to incorporate this file into your proposal, now located at:
-%
-% https://github.com/pmarcum/WorPT-Work-Plan-Tool-4-proposals/blob/main/latexTableTemplates/[INSERTFILENAME]/readme.md
+% WorPT table "[INSERTFILENAME]". It needs \usepackage{worpt} in your preamble (worpt.sty comes with the tables).
+% How to put it in your document:
+% https://github.com/pmarcum/WorPT/blob/main/latexTableTemplates/[INSERTFILENAME]/readme.md
 %______________________________________
 
-\def\WorPTfolder{[INSERTFILENAME]} % set the folder name where WorPT files are contained
 
 % ___________________________________________
 %       Default formatting preferences
 % ___________________________________________
 
-%---- fix the Table Number in the caption
-\def\TaskAddCounter{-1}          % corrects table number messed up by table,longtable combination)
 
 %---- table compactness controls
 \def\SpaceBetweenRows{1}         % vertical compactness of rows
@@ -47,17 +44,16 @@
 %--- internal parameters used by script but not for user
 \def\LastYearPlusOne{[INSERTLASTYEARPLUSONE]}
 
-%--- table preamble definition bundled into the "T" variable
-\newcolumntype{T}{
+%--- the table's columns
+\def\[INSERTFILENAME]Columns{
 |l|l|*{\LastYearPlusOne}{c|}
 }
 
 \newenvironment{[INSERTFILENAME]}{%
 \begin{table*}[h!]                              % \begin{table} makes caption have same width as table
-\addtocounter{table}{\TaskAddCounter}           % corrects double-counting of longtable and table combination
 \renewcommand{\arraystretch}{\SpaceBetweenRows} % controls vertical row separation/spacing
 \setlength{\tabcolsep}{\SpaceBetweenColumns}    % controls horizontal column separation/spacing
-\begin{longtable}{T}
+\begin{WorPTtabular}{\[INSERTFILENAME]Columns}
 %--- generate the top column headers
 \hline
 \multirow{2}{*}{\NameLabelFontstyle{Name}} & \multirow{2}{*}{\RoleLabelFontstyle{Role}} & \multicolumn{[INSERTLASTYEARPLUSONE]}{c|}{\CommitmentLabelFontstyle{Commitment (FTE)}}\\
@@ -120,7 +116,7 @@
 [ENDANNUALTOTALFTETEMPLATE]
 
 \hline
-\end{longtable}}
+\end{WorPTtabular}}
 {%
 \end{table*}
 }

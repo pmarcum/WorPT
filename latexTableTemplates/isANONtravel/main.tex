@@ -1,10 +1,9 @@
 %______________________________________
-% Instructions and LaTeX code to copy/paste into your document, to incorporate this file into your proposal, now located at:
-%
-% https://github.com/pmarcum/WorPT-Work-Plan-Tool-4-proposals/blob/main/latexTableTemplates/[INSERTFILENAME]/readme.md
+% WorPT table "[INSERTFILENAME]". It needs \usepackage{worpt} in your preamble (worpt.sty comes with the tables).
+% How to put it in your document:
+% https://github.com/pmarcum/WorPT/blob/main/latexTableTemplates/[INSERTFILENAME]/readme.md
 %______________________________________
 
-\def\WorPTfolder{[INSERTFILENAME]} % set the folder name where WorPT files are contained
 
 % ___________________________________________
 %       Default formatting preferences
@@ -24,7 +23,7 @@
 \def\TotalLabelFontstyle#1{\textbf{#1}}   % Bold-face column label "Total"
 \def\PerTripLabelFontColor{Blue}          % Font color of column labels for "per trip" section
 \def\PerTripLabelFontstyle#1{\textbf{#1}} % Bold-face column labels for "per trip" section
-\def\YearTripsDestFontstyle#1{\textbf{#1}}% Bold-face "Year", "#Trips", "Dest." labels
+\def\YearTripsDestLabelFontstyle#1{\textbf{#1}}% Bold-face "Year", "#Trips", "Dest." labels
 \def\YearFontstyle#1{\textbf{#1}}         % Bold-face "Yr1", "YR2", etc labels
 
 %---- definitions used by the script in the caption and should not be altered by user
@@ -39,8 +38,8 @@
 \def\PerTripShadingMargin{\SpaceBetweenColumns} 
 % above margin width to right of each shaded "per trip" column (prevents white vertical line)
 
-%--- table preamble definition bundled into the "T" variable
-\newcolumntype{T}{
+%--- the table's columns
+\def\[INSERTFILENAME]Columns{
  |lcl >{\columncolor{\PerTripShadingColor}[\tabcolsep][\PerTripShadingMargin]}
  l>{\columncolor{\PerTripShadingColor}[\tabcolsep][\PerTripShadingMargin]}
  l>{\columncolor{\PerTripShadingColor}[\tabcolsep][\PerTripShadingMargin]}
@@ -55,7 +54,7 @@
 \renewcommand{\arraystretch}{\SpaceBetweenRows} % controls vertical row separation/spacing
 % ---- adjust to control horizontal column separation/spacing, comment-out if not needed
 \setlength{\tabcolsep}{\SpaceBetweenColumns}    % controls horizontal column separation/spacing
-\begin{tabular}{T}
+\begin{WorPTinlineTabular}{\[INSERTFILENAME]Columns}
 %---- top header line
 \multicolumn{9}{|@{}c@{}|}{\cellcolor{\BannerColor}\color{\BannerFontColor}\BannerFontstyle{Travel Cost Details}}\\
 \multicolumn{3}{|c}{} & \multicolumn{5}{>{\columncolor{\PerTripShadingColor}[\tabcolsep][\PerTripShadingMargin]}c}{\color{\PerTripLabelFontColor}\emph{\textbf{per trip}}} & \\
@@ -75,7 +74,7 @@
                    & [NUMBERINTTRIPS] & intern'l & \$[INTAIRFARE] & \$[INTPERDIEM] & \$[INTCONFERENCE] & \$[INTGROUND] & \$[INTPERTRIP] & \$[INTALLTRIPS]\\ \hline
 [ENDTRAVELYEARTEMPLATE]
 
-\end{tabular}
+\end{WorPTinlineTabular}
 }
 {%
 \end{table*}

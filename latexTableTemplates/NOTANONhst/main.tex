@@ -1,7 +1,7 @@
 %______________________________________
-% Instructions and LaTeX code to copy/paste into your document, to incorporate this file into your proposal, now located at:
-%
-% https://github.com/pmarcum/WorPT-Work-Plan-Tool-4-proposals/blob/main/latexTableTemplates/[INSERTFILENAME]/readme.md
+% WorPT table "[INSERTFILENAME]". It needs \usepackage{worpt} in your preamble (worpt.sty comes with the tables).
+% How to put it in your document:
+% https://github.com/pmarcum/WorPT/blob/main/latexTableTemplates/[INSERTFILENAME]/readme.md
 %______________________________________
 
 %
@@ -9,7 +9,6 @@
 % (not for general user unless you are planning to alter the WorPT script!)
 %
 
-\def\WorPTfolder{[INSERTFILENAME]} % set the folder name where WorPT files are contained
 
 % ___________________________________________
 %       Default formatting preferences
@@ -28,8 +27,6 @@
 %--- control to nudge table to the left or right
 \def\NudgeTable{1.2\textwidth}   % adjust to help center table
 
-%---- fix the Table Number in the caption
-\def\TaskAddCounter{-1}          % corrects table number messed up by table,longtable combination)
 
 %---- table compactness controls
 \def\SpaceBetweenRows{1}         % vertical compactness of rows
@@ -46,23 +43,21 @@
 \def\SciencePIname{[INSERTSCIENCEPINAME]}
 
 %--- table preamble definition bundled into the "T" variable
-\newcolumntype{L}[1]{>{\raggedright\let\newline\\\arraybackslash\hspace{0pt}}p{#1}}
-\newcolumntype{T}{
-  |L{\ContributorWidth}!{\color{\VerticalLineColor}\vrule} % Contributor column
-  L{\PositionWidth}!{\color{\VerticalLineColor}\vrule}     % Position column
-  L{\RoleWidth}!{\color{\VerticalLineColor}\vrule}         % Role column
+\def\[INSERTFILENAME]Columns{
+  |>{\raggedright\let\newline\\\arraybackslash\hspace{0pt}}p{\ContributorWidth}!{\color{\VerticalLineColor}\vrule} % Contributor column
+  >{\raggedright\let\newline\\\arraybackslash\hspace{0pt}}p{\PositionWidth}!{\color{\VerticalLineColor}\vrule}     % Position column
+  >{\raggedright\let\newline\\\arraybackslash\hspace{0pt}}p{\RoleWidth}!{\color{\VerticalLineColor}\vrule}         % Role column
   p{\FundedMemberWidth}!{\color{\VerticalLineColor}\vrule} % Funded(?) column
   p{\FteWidth}|                                            % FTE column
 }
 
 \newenvironment{[INSERTFILENAME]}{%
 \begin{table}
-\addtocounter{table}{\TaskAddCounter}
 \centerline{
 \renewcommand{\arraystretch}{\SpaceBetweenRows}  % changes vertical space bet/ rows
 \setlength{\tabcolsep}{\SpaceBetweenColumns}     % changes horizontal spacing bet/ columns
 \begin{minipage}{\NudgeTable}     % increase to nudge table to left
-\begin{longtable}{T}
+\begin{WorPTtabular}{\[INSERTFILENAME]Columns}
 
 %--- put the required program number and PI(s) at the top
 \multicolumn{5}{l}{\textbf{Program \#:} \ProgramID}\\
@@ -82,10 +77,10 @@
 
 % COMMENT: The below template defines the layout of the rows
 [STARTROWTEMPLATE]
-[INSERTNAME] & [INSERTJOB] & [INSERTDESC] & [INSERTFUNDING] & [INSERTFTE]\hline
+[INSERTNAME] & [INSERTJOB] & [INSERTDESC] & [INSERTFUNDING] & [INSERTFTE]\\ \hline
 [ENDROWTEMPLATE]
 
-\end{longtable}
+\end{WorPTtabular}
 \end{minipage}}}
 {%
 \end{table}

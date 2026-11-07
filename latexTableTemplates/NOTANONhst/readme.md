@@ -27,8 +27,11 @@
              Special Packages
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - -->
 <details>
-<summary><b>Special WorPT Packages</b> [<i>one-time-only task</i> for inclusion of any/all WorPT files]</summary>
-Copy/paste the special packages in preamble of your document, if you haven't done so previously. (see https://github.com/pmarcum/WorPT-Work-Plan-Tool-4-proposals/blob/main/WorPTpackages for more info).
+<summary><b>Load worpt.sty</b> [<i>one-time-only task</i> for inclusion of any/all WorPT files]</summary>
+Add this line to the preamble of your document, as the last package loaded (after aastex, xcolor, hyperref and the rest). It loads only the few packages the WorPT tables need, and skips any your document has already loaded. The file <code>worpt.sty</code> comes with the tables (see https://github.com/pmarcum/WorPT/blob/main/latexTableTemplates/WorPTpackages for more info).
+<pre><code>
+\usepackage{worpt}
+</code></pre>
 </details>
 
 <!-- - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -40,12 +43,12 @@ Copy/paste the special packages in preamble of your document, if you haven't don
 <li>COPY the lines in the code block below, then</li>
 <li>PASTE into your document WHERE you want the content to appear, then</li>
 <li>MODIFY the editable lines you just pasted in your document as needed. The lines that may be edited (or even deleted altogether if not wanted) are indicated by highlight below. </li><br>
-Refer to <b>Customizations</b> section below to add personal preferences in the gap between \expinput and \begin{NOTANONhst} lines below.
+Refer to <b>Customizations</b> section below to add personal preferences in the gap between \input and \begin{NOTANONhst} lines below.
 </ol>
    
 <pre><code>
 %:::::::::::::::::::: start NOTANONhst ::::::::::::::::::::::
-\expinput{<mark>do_NOT_manually_edit</mark>/NOTANONhst} % reset file parameters
+\input{NOTANONhst} % reset file parameters
 \def\ProgramID{<mark>HST-xx-xxxxx (Cycle XX)</mark>} % <mark><b>fill in details</b></mark>
 
 \begin{NOTANONhst}
@@ -114,20 +117,6 @@ You can just comment out your added lines and recompile the document, if you wan
 <details>
 <summary>reference image</summary>
 <img src="https://lh3.googleusercontent.com/d/16KK8AuYbxc5C0dy9qPh2Pazoq_XdEWD2" width=50%>
-</details>
-</td>
-</tr>
-
-<tr>
-<td><b>Table number additive correction</b></td>
-<td>
-The default typically works well (an overcount is caused by table + longtable combination). But if counter gets screwed up and needs manual intervention, use below to apply a correction:
-<pre><code>
-\def\TaskAddCounter{<mark>-1</mark>}    % additive correction to table number
-</code></pre>
-<details>
-<summary>reference image</summary>
-<img src="https://lh3.googleusercontent.com/d/1Vc29554V1Sny5-E8O-nm3IiZ1-NnGEQf" width=50%>
 </details>
 </td>
 </tr>

@@ -185,6 +185,7 @@ const TABLE_NAMES = {
   NOTANONschedule: ['Schedule', 'named'], NOTANONtasks: ['Task list', 'named'], NOTANONfte: ['FTE by person', 'named'],
   NOTANONteamSummaries: ['Team summaries', 'named'], NOTANONhst: ['HST roles', 'named'], isANONtasks: ['Task list', 'anonymous'],
   isANONfte: ['FTE by role', 'anonymous'], isANONtravel: ['Travel', 'anonymous'], isANONnonlabor: ['Non-labor budget', 'anonymous'],
+  worpt: ['worpt.sty', 'load once with \\usepackage{worpt}'],
 };
 const POLL_MS = 10000;
 
@@ -811,13 +812,13 @@ function viewBudget() {
 
 // ── tables ───────────────────────────────────────────────────────────────────────────────────────────────────
 function viewTables() {
-  const list = Object.keys(TABLE_NAMES).map(k => '<button type="button" data-table="' + k + '" aria-current="' + (S.table === k) + '"><span>' + esc(TABLE_NAMES[k][0]) + '</span><span class="sub">' + esc(TABLE_NAMES[k][1]) + ' · ' + k + '</span></button>').join('');
+  const list = Object.keys(TABLE_NAMES).map(k => '<button type="button" data-table="' + k + '" aria-current="' + (S.table === k) + '"><span>' + esc(TABLE_NAMES[k][0]) + '</span><span class="sub">' + esc(TABLE_NAMES[k][1]) + (k === 'worpt' ? '' : ' · ' + k) + '</span></button>').join('');
   const out = S.tableOut;
   const right = !S.table ? '<p class="muted">Choose a table to see its LaTeX.</p>' : !out ? '<p class="muted">Making the table…</p>' :
-    '<div class="row" style="margin-bottom:8px"><b>' + esc(TABLE_NAMES[S.table][0]) + '</b><span class="sub">' + esc(S.table) + '.tex</span><button type="button" class="btn primary" style="margin-left:auto" data-act="copyTable">Copy LaTeX</button></div>' +
+    '<div class="row" style="margin-bottom:8px"><b>' + esc(TABLE_NAMES[S.table][0]) + '</b><span class="sub">' + esc(S.table) + (S.table === 'worpt' ? '.sty' : '.tex') + '</span><button type="button" class="btn primary" style="margin-left:auto" data-act="copyTable">Copy LaTeX</button></div>' +
     (out.checks && out.checks.length ? '<ul class="checks" style="margin-bottom:8px">' + out.checks.map(k => '<li><span class="where ' + esc(k.level) + '">' + esc(k.item) + '</span><span>' + esc(k.message) + '</span></li>').join('') + '</ul>' : '') +
     '<pre class="latex" id="latex">' + esc(out.latex) + '</pre>';
-  return '<div class="cols"><div class="card tlist" style="flex:1 1 240px;max-width:320px">' + list + '<p class="hint">These are the tables gooTeX will pull in. A rendered preview comes later.</p></div>' +
+  return '<div class="cols"><div class="card tlist" style="flex:1 1 240px;max-width:320px">' + list + '<p class="hint">These are the tables gooTeX will pull in, and worpt.sty, which each document loads once (last in its preamble). A rendered preview comes later.</p></div>' +
     '<div class="card" style="flex:3 1 520px;min-width:0">' + right + '</div></div>';
 }
 async function loadTable(name, quiet) {

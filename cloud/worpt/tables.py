@@ -93,6 +93,11 @@ def template(name):
     return clean_up((TEMPLATE_DIR / name / 'main.tex').read_text())
 
 
+def style():
+    """worpt.sty, the package every table needs (loaded once with \\usepackage{worpt})."""
+    return (TEMPLATE_DIR / 'worpt.sty').read_text()
+
+
 # ------------------------------------------------ everything the tables need, computed once
 def full_role(role):
     for pat, full in ((r'admin', 'Administrative PI'), (r'sci', 'Science PI'), (r'pi', 'Principal Investigator'),

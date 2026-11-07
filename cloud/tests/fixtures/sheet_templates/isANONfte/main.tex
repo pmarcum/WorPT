@@ -1,0 +1,125 @@
+%______________________________________
+% Instructions and LaTeX code to copy/paste into your document, to incorporate this file into your proposal, now located at:
+%
+% https://github.com/pmarcum/WorPT-Work-Plan-Tool-4-proposals/blob/main/latexTableTemplates/[INSERTFILENAME]/readme.md
+%______________________________________
+
+\def\WorPTfolder{[INSERTFILENAME]} % set the folder name where WorPT files are contained
+
+% ___________________________________________
+%       Default formatting preferences
+% ___________________________________________
+
+%---- fix the Table Number in the caption
+\def\TaskAddCounter{-1} % corrects table number messed up by table,longtable combination)
+
+%---- table compactness controls
+\def\SpaceBetweenRows{1}      % vertical compactness of rows
+\def\SpaceBetweenColumns{5pt} % spacing between columns
+
+%--- column headers preferences
+\def\RoleLabelFontstyle#1{\textbf{#1}}       % boldface "Role" column label
+\def\CommitmentLabelFontstyle#1{\textbf{#1}} % boldface "Commitment (FTE)" column label
+\def\YearLabelFontstyle#1{\textbf{#1}}       % boldface "Y1", "Y2", ...  column labels
+\def\TotalLabelFontstyle#1{\textbf{#1}}      % boldface "Total" column label
+
+%--- colorized banners separating the categories preferences
+\def\SectionBannerColor{Blue}               % color of banners separating the 3 sections 
+\def\SectionBannerFontColor{White}          % font color of banners separating the 3 sections 
+\def\SectionBannerFontstyle#1{\textbf{#1}}  % boldface text in banners separating the 3
+\def\FteFundedBannerText{Work Efforts Funded By This Proposal}                    % funded banner title
+\def\FteUnfundedBannerText{Work Efforts Proposed but NOT Funded By This Proposal} % unfunded banner title
+\def\FteBothBannerText{Total Work Efforts Proposed (Funded $+$ Unfunded)}         % total banner title
+
+%--- totals at bottom of each section preferences
+\def\TotalWorkEffortFontstyle#1{\textbf{#1}} % boldface text in "Total .... Work Effort" line at section end
+\def\TotalWorkEffortFontColor{Blue}          % font color of "Total ... Work Effort" line at section end
+\def\FaintHorizontalLine{\arrayrulecolor{lightgray!40}\hline}  % faint line above summary line
+\def\FteFundedSummaryText{Total Funded Work Effort}            % funded summary text
+\def\FteUnfundedSummaryText{Total Unfunded Work Effort}        % unfunded summary text
+\def\FteBothSummaryText{Total Funded $+$ Unfunded Work Effort} % total summary text
+
+%--- making zeros appear fainter
+%    this definition is hard-coded into the WorPT script
+\def\FaintZeros#1{{\color{gray!40}{#1}}}
+
+%--- internal parameters used by script but not for user
+\def\LastYearPlusOne{[INSERTLASTYEARPLUSONE]}
+
+%--- table preamble definition bundled into the "T" variable
+\newcolumntype{T}{
+|l|*{\LastYearPlusOne}{c|}
+}
+
+\newenvironment{[INSERTFILENAME]}{%
+\begin{table*}[h!]                              % \begin{table} makes caption have same width as table
+\addtocounter{table}{\TaskAddCounter}           % corrects double-counting of longtable and table combination
+\renewcommand{\arraystretch}{\SpaceBetweenRows} % controls vertical row separation/spacing
+\setlength{\tabcolsep}{\SpaceBetweenColumns}    % controls horizontal column separation/spacing
+\begin{longtable}{T}
+%--- generate the top column headers
+\hline
+\multirow{2}{*}{\RoleLabelFontstyle{Role}} & \multicolumn{[INSERTLASTYEARPLUSONE]}{c|}{\CommitmentLabelFontstyle{Commitment (FTE)}}\\
+
+%--- generate the lower column headers
+\cline{2-[INSERTLASTYEARPLUSTWO]}
+{} [INSERTLISTOFYEARLABELS] & \TotalLabelFontstyle{Total}\\
+
+% COMMENT: below template is a single item in the year label list. The script will glue all these items together and replace INSERTYEARLABELLIST
+[STARTYEARLABELTEMPLATE]
+ & \YearLabelFontstyle{Y[INSERTYEARNUMBER]}
+[ENDYEARLABELTEMPLATE]
+
+% ==============================================   FUNDED FTEs
+%--- banner for the Work Efforts Funded By This Proposal
+\multicolumn{[INSERTLASTYEARPLUSTWO]}{|c|}{\cellcolor{\SectionBannerColor}\color{\SectionBannerFontColor}\SectionBannerFontstyle{\FteFundedBannerText}}\\
+[INSERTFUNDEDWORKEFFORTLIST]
+% COMMENT: the below is the colorized last line of the section providing sums per year for the funded category
+\FaintHorizontalLine\arrayrulecolor{black}
+\multicolumn{1}{|l}{\TotalWorkEffortFontstyle{\color{\TotalWorkEffortFontColor}\FteFundedSummaryText}} [INSERTLISTOFANNUALFUNDEDTOTALS] & \multicolumn{1}{c|}{\color{\TotalWorkEffortFontColor}[INSERTFUNDEDTOTALOVERYEAR]}\\
+
+% ==============================================   UNFUNDED FTEs
+%---- banner for the Work Effort NOT Funded By This Proposal section 
+\multicolumn{[INSERTLASTYEARPLUSTWO]}{|c|}{\cellcolor{\SectionBannerColor}\color{\SectionBannerFontColor}\SectionBannerFontstyle{\FteUnfundedBannerText}}\\
+[INSERTUNFUNDEDWORKEFFORTLIST]
+% COMMENT: the below is the colorized last line of the section providing sums per year for the TOTAL WORK UNFUNDED EFFORT category
+\FaintHorizontalLine\arrayrulecolor{black}
+\multicolumn{1}{|l}{\TotalWorkEffortFontstyle{\color{\TotalWorkEffortFontColor}\FteUnfundedSummaryText}} [INSERTLISTOFANNUALUNFUNDEDTOTALS] & \multicolumn{1}{c|}{\color{\TotalWorkEffortFontColor}[INSERTUNFUNDEDTOTALOVERYEAR]}\\
+
+% ==============================================   FUNDED + UNFUNDED FTEs 
+%--- both FUNDED and UNFUNDED work efforts
+\multicolumn{[INSERTLASTYEARPLUSTWO]}{|c|}{\cellcolor{\SectionBannerColor}\color{\SectionBannerFontColor}\SectionBannerFontstyle{\FteBothBannerText}}\\
+[INSERTBOTHWORKEFFORTLIST]
+% COMMENT: the below is the colorized last line of the section providing sums per year for the TOTAL WORK EFFORT category
+\FaintHorizontalLine\arrayrulecolor{black}
+\multicolumn{1}{|l}{\TotalWorkEffortFontstyle{\color{\TotalWorkEffortFontColor}\FteBothSummaryText}} [INSERTLISTOFANNUALBOTHTOTALS] & \multicolumn{1}{c|}{\color{\TotalWorkEffortFontColor}[INSERTBOTHTOTALOVERYEAR]}\\
+
+% COMMENT: the 2 below templates generate a row for each team member under the this (funded, unfunded, or both) category
+% COMMENT: these are glued together with end of line characters into single string which replaces INSERTWORKEFFORTLIST above
+% COMMENT: use this template if the sum effort exceeds 0.01 FTE or if for the funded category
+[STARTABOVETHRESHOLDTEMPLATE]
+[INSERTROLE] [INSERTLISTOFFTES] & [INSERTTOTAL]\\
+[ENDABOVETHRESHOLDTEMPLATE]
+
+% COMMENT: or use this template if work effort is less than 0.01 FTE
+% COMMENT: is alternative to the above item for a row for team member
+[STARTBELOWTHRESHOLDTEMPLATE]
+[INSERTROLE] & \multicolumn{[INSERTLASTYEAR]}{c|}{minor} & {$\leq$0.01}\\
+[ENDBELOWTHRESHOLDTEMPLATE]
+
+% COMMENT: template for each entry in the list of annual FTES is below. Will be created for each year, then converted to a
+% COMMENT: a single string list, then put into INSERTLISTOFFTES
+[STARTANNUALFTETEMPLATE]
+ & [INSERTFTEVALUEFORTHISYEAR]
+[ENDANNUALFTETEMPLATE]
+
+% COMMENT: template for each entry in the list of annual total FTEs is below. THese get glued together into single string and replace the INSERTLISTOFANNUALTOTALS above
+[STARTANNUALTOTALFTETEMPLATE]
+ & \multicolumn{1}{c}{\color{\TotalWorkEffortFontColor}[INSERTTOTALFTEPERYEAR]} 
+[ENDANNUALTOTALFTETEMPLATE]
+
+\hline
+\end{longtable}}
+{%
+\end{table*}
+}

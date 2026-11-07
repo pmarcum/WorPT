@@ -1,7 +1,7 @@
 %______________________________________
-% Instructions and LaTeX code to copy/paste into your document, to incorporate this file into your proposal, now located at:
-%
-% https://github.com/pmarcum/WorPT-Work-Plan-Tool-4-proposals/blob/main/latexTableTemplates/[INSERTFILENAME]/readme.md
+% WorPT table "[INSERTFILENAME]". It needs \usepackage{worpt} in your preamble (worpt.sty comes with the tables).
+% How to put it in your document:
+% https://github.com/pmarcum/WorPT/blob/main/latexTableTemplates/[INSERTFILENAME]/readme.md
 %______________________________________
 
 %
@@ -10,7 +10,6 @@
 %
 
 \newif\ifLandScape                 % establish a boolean variable
-\def\WorPTfolder{[INSERTFILENAME]} % set the folder name where WorPT files are contained
 
 % ___________________________________________
 %       Default formatting preferences
@@ -25,8 +24,6 @@
 \def\UnfundedFteWidth{5ex}  % Total FTE/Unfunded column width
 \def\FundedFteWidth{5ex}    % Total FTE/Funded column width
 
-%---- fix the Table Number in the caption
-\def\TaskAddCounter{-1}   % corrects table number messed up by table,longtable combination)
 
 %---- table compactness controls
 \def\SpaceBetweenRows{0.8}    % vertical compactness of rows
@@ -50,8 +47,8 @@
 
 %---- symbol preferences for FTE types (sum, funded, unfunded)
 \def\TotalFteSumHeaderIcon{\textbf{\large{$\Sigma$}}} % sigma symbol label size
-\def\TotalFteUnfundedHeaderIcon{\noDollarIcon{-0.4}{0.4mm}{0.2}{0.15}} % "no dollar" symbol label size
-\def\TotalFteFundedHeaderIcon{\dollarIcon{-0.4}{0.2}{0.015}}% green "dollar" symbol label size
+\def\TotalFteUnfundedHeaderIcon{\WorPTnoDollarIcon{-0.4}{0.4mm}{0.2}{0.15}} % "no dollar" symbol label size
+\def\TotalFteFundedHeaderIcon{\WorPTdollarIcon{-0.4}{0.2}{0.015}}% green "dollar" symbol label size
 
 %--- preferences of task CATEGORY label
 \def\TaskCategoryLabel#1#2{{\normalsize\textbf\scshape{#1}}~{\normalsize\textbf{#2}}} % Task Category label format for row item
@@ -85,17 +82,14 @@
 \def\TimelineSize{\tiny}                        % width control of TASK TIMELINE cells
 \def\RevealIdentities{[INSERTIDTONAMELIST]}
 
-%--- table preamble definition bundled into the "T" variable
-\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}      % title, assignment columns
-\newcolumntype{V}{!{\color{\TimelineVerticalLineColor}\vrule}} % vertical lines in timeline
-\newcolumntype{W}{!{\color{\TotalFteVerticalLineColor}\vrule}} % vertical lines in FTE
-\newcolumntype{T}{
-|L{\TitleWidth}         % title column
-*{\NumberYears}{        % timeline columns
-|p{\TimelineWidth}V*{\SlicesPerYearMinusTwo}{p{\TimelineWidth}V}p{\TimelineWidth}} 
-|L{\AssignmentsWidth}   % task assignment column
-|p{\SumFteWidth}W       % total fte, sum column
-p{\UnfundedFteWidth}W   % total fte, unfunded column
+%--- the table's columns
+\def\[INSERTFILENAME]Columns{
+|>{\raggedright\arraybackslash}p{\TitleWidth}        % title column
+*{\NumberYears}{                                     % timeline columns, with light lines between quarters
+|p{\TimelineWidth}!{\color{\TimelineVerticalLineColor}\vrule}*{\SlicesPerYearMinusTwo}{p{\TimelineWidth}!{\color{\TimelineVerticalLineColor}\vrule}}p{\TimelineWidth}}
+|>{\raggedright\arraybackslash}p{\AssignmentsWidth}  % task assignment column
+|p{\SumFteWidth}!{\color{\TotalFteVerticalLineColor}\vrule}       % total fte, sum column
+p{\UnfundedFteWidth}!{\color{\TotalFteVerticalLineColor}\vrule}   % total fte, unfunded column
 p{\FundedFteWidth}|     % total fte, funded column
 }
 
@@ -105,12 +99,11 @@ p{\FundedFteWidth}|     % total fte, funded column
 \else
   \begin{table*}[h!]     % \begin{table} needed to make bottom table caption have same width as table
 \fi
-\addtocounter{table}{\TaskAddCounter}           % corrects double-counting of longtable and table combination
 \renewcommand{\arraystretch}{\SpaceBetweenRows} % controls vertical row separation/spacing
 \setlength{\tabcolsep}{\SpaceBetweenColumns}    % controls horizontal column separation/spacing
 \centerline{
 \begin{minipage}{\NudgeTable}                   % increase to allow a wide table to spill into margin
-\begin{longtable}{T}
+\begin{WorPTtabular}{\[INSERTFILENAME]Columns}
 
 % ------------------------- First line of headers
 \cline{2-[INSERTNUMBERYEARSLICESPLUSONE]}                               
@@ -146,7 +139,7 @@ p{\FundedFteWidth}|     % total fte, funded column
 \multicolumn{1}{c|}{\IdWksHeaderFontsize{id~\#wks}} &       % task assignments (ID,\#weeks)
 {\TotalFteSumHeaderIcon} &                                  % Col1 Total funded+unfunded FTE
 {\TotalFteUnfundedHeaderIcon} &                             % Col2 Total unfunded FTE
-{\TotalFteFundedHeaderIcon}                                 % Col3 Total funded FTE
+{\TotalFteFundedHeaderIcon}\\                               % Col3 Total funded FTE
 \hline
 
 % COMMENT: below template generates a single year-slice label (for example, a quarter year label ranging from 1 through 4).
@@ -215,7 +208,7 @@ p{\FundedFteWidth}|     % total fte, funded column
 \InternationalTeam{[TEAMID]}\,\InternationalTeam{[NUMBERWEEKS]} 
 [ENDINTERNATIONALTEAMASSIGNMENTTEMPLATE]
 
-\end{longtable}
+\end{WorPTtabular}
 \end{minipage}}}
 {%
 \ifLandScape

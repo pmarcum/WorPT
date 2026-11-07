@@ -27,8 +27,11 @@
              Special Packages
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - -->
 <details>
-<summary><b>Special WorPT Packages</b> [<i>one-time-only task</i> for inclusion of any/all WorPT files]</summary>
-Copy/paste the special packages in preamble of your document, if you haven't done so previously. (see https://github.com/pmarcum/WorPT-Work-Plan-Tool-4-proposals/blob/main/WorPTpackages for more info).
+<summary><b>Load worpt.sty</b> [<i>one-time-only task</i> for inclusion of any/all WorPT files]</summary>
+Add this line to the preamble of your document, as the last package loaded (after aastex, xcolor, hyperref and the rest). It loads only the few packages the WorPT tables need, and skips any your document has already loaded. The file <code>worpt.sty</code> comes with the tables (see https://github.com/pmarcum/WorPT/blob/main/latexTableTemplates/WorPTpackages for more info).
+<pre><code>
+\usepackage{worpt}
+</code></pre>
 </details>
 
 <!-- - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -40,13 +43,13 @@ Copy/paste the special packages in preamble of your document, if you haven't don
 <li>COPY the lines in the code block below, then</li>
 <li>PASTE into your document WHERE you want the content to appear, then</li>
 <li>MODIFY the editable lines you just pasted in your document as needed. The lines that may be edited (or even deleted altogether if not wanted) are indicated by highlight below. </li><br>
-Refer to <b>Customizations</b> section below to add personal preferences in the gap between \expinput and \begin{isANONfte} lines below.
+Refer to <b>Customizations</b> section below to add personal preferences in the gap between \input and \begin{isANONfte} lines below.
 
 </ol>
    
 <pre><code>
 %:::::::::::::::::::: start isANONfte ::::::::::::::::::::::
-\expinput{<mark>do_NOT_manually_edit</mark>/isANONfte}   % reset file parameters
+\input{isANONfte}   % reset file parameters
 
 \begin{isANONfte}
 <mark>\caption{Details of work efforts per member to be funded for the present proposal; {\color{red}Detailed responsibilities, tied to tasks and science goals, are provided in Sec.\,\ref{Subsec:tmeline}.}}</mark>
@@ -64,7 +67,7 @@ Refer to <b>Customizations</b> section below to add personal preferences in the 
 The default table appearance is already optimized, minimizing the need to change table properties such as column widths. However, if you do find the need to make such changes, as well as changes to other properties such as column alignment, colors, font styles, you will need to copy/paste and then edit some additional formatting lines into your document. Specifically:
 <ol>
 <li>COPY any or all lines in the code block below that are related to the formatting parameter that you want to edit. The lines below show default values. You will edit those values to make desired changes.</li>
-<li>PASTE the copied lines into your document into the gap <b>between</b> the \expinput and \begin{isANONfte} lines. </li>
+<li>PASTE the copied lines into your document into the gap <b>between</b> the \input and \begin{isANONfte} lines. </li>
 <li>EDIT the pasted lines in your document, as desired.</li>
 NOTE: THe lines are grouped into categories to help you locate what you need. You can PICK AND CHOOSE the lines you want to paste into your document; you do not have to copy/paste all of the lines below (unless noted) and do not have to copy all lines within a group.<br>
 <i>Highlights indicate what parts of the commands can be edited without breaking your LaTeX code.</i><br>
@@ -76,21 +79,6 @@ You can just comment out your added lines and recompile the document, if you wan
 <!-- . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . -->
 <table>
  
-<tr>
-<td><b>Table number additive correction</b></td>
-<td>
-The default typically works well (an overcount is caused by table + longtable combination).<br>
-But if counter gets screwed up and needs manual intervention, use below to apply a correction:
-<pre><code>
-\def\TaskAddCounter{<mark>-1</mark>}    % additive correction to table number
-</code></pre>
-<details>
-<summary>reference image</summary>
-<img src="https://lh3.googleusercontent.com/d/1iwFp24onzfQsG_goNJ1ytCKsUOT91Cc7" width=50%>
-</details>
-</td>
-</tr>
-
 <tr>
 <td><b>Table compactness</b></td>
 <td><pre><code>

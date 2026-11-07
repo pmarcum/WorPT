@@ -1,11 +1,10 @@
 %______________________________________
-% Instructions and LaTeX code to copy/paste into your document, to incorporate this file into your proposal, now located at:
-%
-% https://github.com/pmarcum/WorPT-Work-Plan-Tool-4-proposals/blob/main/latexTableTemplates/[INSERTFILENAME]/readme.md
+% WorPT table "[INSERTFILENAME]". It needs \usepackage{worpt} in your preamble (worpt.sty comes with the tables).
+% How to put it in your document:
+% https://github.com/pmarcum/WorPT/blob/main/latexTableTemplates/[INSERTFILENAME]/readme.md
 %______________________________________
 
 \newif\ifLandScape                 % establish a boolean variable
-\def\WorPTfolder{[INSERTFILENAME]} % set the folder name where WorPT files are contained
 
 % ___________________________________________
 %       Default formatting preferences
@@ -17,8 +16,6 @@
 \def\LeadWidth{1.1in}            % width of middle ("Lead") column
 \def\ExpertiseWidth{1.7in}       % width of rightmost ("Expertise") column
 
-%---- fix the Table Number in the caption
-\def\TaskAddCounter{-1}          % corrects table number messed up by table,longtable combination)
 
 %---- table compactness controls
 \def\SpaceBetweenRows{1}         % vertical compactness of rows
@@ -36,8 +33,8 @@
 \def\SectionFontstyle#1{\textbf{#1}} % boldface category labels
 \def\VerticalLineColor{gray!40}  % color of line between "Lead" and "Expertise"
 
-%--- table preamble definition bundled into the "T" variable
-\newcolumntype{T}{
+%--- the table's columns
+\def\[INSERTFILENAME]Columns{
   |p{\TaskWidth}||                                % title column
   p{\LeadWidth}!{\color{\VerticalLineColor}\vrule}% line bet Lead/Expertise
   p{\ExpertiseWidth}|                             % Expertise column
@@ -50,11 +47,10 @@
   \begin{table}[h]
 \fi
 \centerline{
-\addtocounter{table}{\TaskAddCounter}
 \renewcommand{\arraystretch}{\SpaceBetweenRows}  % changes vertical space bet/ rows
 \setlength{\tabcolsep}{\SpaceBetweenColumns}     % changes horizontal spacing bet/ columns
 \begin{minipage}{\NudgeTable}     % increase to allow wide table spill into margin
-\begin{longtable}{T}
+\begin{WorPTtabular}{\[INSERTFILENAME]Columns}
 %--- make colorized top banner labels, the column headers
 \hline
 \HeaderFontstyle{\cellcolor{\HeaderColor}\color{\HeaderFontColor}Tasks} & 
@@ -77,7 +73,7 @@
 [INSERTID]: {[INSERTTITLE]} & [INSERTLEAD] & [INSERTEXPERTS]\\ \hline
 [ENDTASKENTRYTEMPLATE]
 
-\end{longtable}
+\end{WorPTtabular}
 \end{minipage}
 }
 }

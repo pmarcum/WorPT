@@ -1,0 +1,69 @@
+% worpt.sty: everything the WorPT tables need, and nothing else.
+%
+% Load it once, as the LAST package in your preamble (after aastex, xcolor, hyperref and the rest):
+%     \usepackage{worpt}
+% Then, where a table goes, \input its file and use its environment, as each table's readme shows:
+%     https://github.com/pmarcum/WorPT/tree/main/latexTableTemplates
+%
+% Packages that your document has already loaded are not loaded again, and nothing here changes how the
+% rest of your document looks.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{worpt}[2026/11/07 WorPT tables]
+
+\RequirePackage{array}      % column types
+\RequirePackage{multirow}   % header cells two rows tall
+\RequirePackage{xcolor}     % colors
+\RequirePackage{colortbl}   % colored cells and rules
+\PassOptionsToPackage{figuresright}{rotating}   % every landscape table turned the same way
+\RequirePackage{rotating}   % sidewaystable, for tables in landscape mode
+\RequirePackage{tikz}       % the funded / not-funded icons of the schedule table
+\@ifpackageloaded{fontawesome5}%
+  {\newcommand\WorPTdollar{\faDollarSign}}%
+  {\RequirePackage{fontawesome}\newcommand\WorPTdollar{\faDollar}}
+
+% Named colors the tables use, with the values xcolor's [dvipsnames] option gives them; a color your document
+% already defines keeps its own value. To use other dvipsnames colors in your table settings, load xcolor
+% with [dvipsnames] before this package.
+\providecolor{Blue}{cmyk}{1,1,0,0}
+\providecolor{NavyBlue}{cmyk}{0.94,0.54,0,0}
+\providecolor{Red}{cmyk}{0,1,1,0}
+\providecolor{Black}{cmyk}{0,0,0,1}
+\providecolor{White}{cmyk}{0,0,0,0}
+\providecolor{mediumelectricblue}{rgb}{0.01,0.31,0.59}
+
+% A table centered in the space it is given, spaced as LaTeX spaces a long table: a big skip above it, and a big
+% skip below it unless it opens its float or minipage (where LaTeX leaves the space below out).
+% #1 is a command holding the column specification.
+\newif\ifWorPT@opens
+\newenvironment{WorPTtabular}[1]{%
+  \par\penalty\z@\vskip\bigskipamount
+  \if@minipage\WorPT@openstrue\else\WorPT@opensfalse\fi
+  \noindent\hb@xt@\linewidth\bgroup\hfil\expandafter\tabular\expandafter{#1}}%
+  {\endtabular\hfil\egroup\par
+   \ifWorPT@opens\@setminipage\fi                  % the table did not start a paragraph, as far as LaTeX is concerned
+   \addvspace\bigskipamount}
+
+% A table set where it stands, at the left margin (the travel and non-labor tables).
+\newenvironment{WorPTinlineTabular}[1]{\noindent\expandafter\tabular\expandafter{#1}}{\endtabular}
+
+% The schedule table's column-header icons: not funded (a red-circled, struck-through dollar sign) and
+% funded (a dollar sign on green). #1 raises the icon by that many lines; it takes no room in the line.
+\DeclareRobustCommand\WorPTnoDollarIcon[4]{% raise, line width, circle radius, half the strike's length (cm)
+  \raisebox{#1\normalbaselineskip}[0pt][0pt]{\begin{tikzpicture}%
+    \draw[fill=white,draw=red,line width=#2] (0,0) circle[radius=#3];%
+    \node[black] at (0,0) {\WorPTdollar};%
+    \draw[line width=#2,red] (#4,#4) -- (-#4,-#4);%
+  \end{tikzpicture}}}
+\DeclareRobustCommand\WorPTdollarIcon[3]{% raise, circle radius, (unused, kept for older settings)
+  \raisebox{#1\normalbaselineskip}[0pt][0pt]{\begin{tikzpicture}%
+    \draw[fill=green,draw=black] (0,0) circle[radius=#2];%
+    \node at (0,0) {\WorPTdollar};%
+  \end{tikzpicture}}}
+
+% Used by the travel table's caption; your document's own definition wins.
+\providecommand\smallIndent{\textcolor{white}{$--$}}
+
+% Older documents bring the table files in with \expinput; it works the same as \input.
+\providecommand\expinput[1]{\input{#1}}
+
+\endinput

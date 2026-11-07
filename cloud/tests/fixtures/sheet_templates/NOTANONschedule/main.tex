@@ -1,0 +1,235 @@
+%______________________________________
+% Instructions and LaTeX code to copy/paste into your document, to incorporate this file into your proposal, now located at:
+%
+% https://github.com/pmarcum/WorPT-Work-Plan-Tool-4-proposals/blob/main/latexTableTemplates/[INSERTFILENAME]/readme.md
+%______________________________________
+
+%
+% Template for WorPT script begins below
+% (not for general user unless you are planning to alter the WorPT script!)
+%
+
+\newif\ifLandScape                 % establish a boolean variable
+\def\WorPTfolder{[INSERTFILENAME]} % set the folder name where WorPT files are contained
+
+% ___________________________________________
+%       Default formatting preferences
+% ___________________________________________
+\LandScapefalse             % default is that the landscape mode is OFF
+
+%--- table column widths
+\def\TitleWidth{4.1in}      % Title column width
+\def\TimelineWidth{1ex}     % skinny timeline columns width
+\def\AssignmentsWidth{24ex} % Task assignments column width
+\def\SumFteWidth{5ex}       % Total FTE/Sum column width
+\def\UnfundedFteWidth{5ex}  % Total FTE/Unfunded column width
+\def\FundedFteWidth{5ex}    % Total FTE/Funded column width
+
+%---- fix the Table Number in the caption
+\def\TaskAddCounter{-1}   % corrects table number messed up by table,longtable combination)
+
+%---- table compactness controls
+\def\SpaceBetweenRows{0.8}    % vertical compactness of rows
+\def\SpaceBetweenColumns{1pt} % spacing between columns
+
+%--- control to nudge table to the left or right
+\def\NudgeTable{1.5\textwidth}   % adjust to help center table
+
+%---- vertical line colors
+\def\TimelineVerticalLineColor{lightgray}
+\def\TotalFteVerticalLineColor{lightgray}
+
+%---- preferences of column headers
+\def\TaskTimelineHeaderFontsize{\scriptsize}   % Task Timeline label text size
+\def\TaskAssignmentsHeaderFontsize{\scriptsize}% Task Assignments label text size
+\def\TotalFteHeaderFontsize{\scriptsize}       % Totaled FTEs label text size
+\def\YearHeaderFontsize{\scriptsize}           % "YEAR1", "YEAR2"... label text size
+\def\TaskTitleHeaderFontsize{\normalsize}      % "TASK TITLES" column label text size
+\def\YearSliceHeaderFontsize{\scriptsize}      % "1", "2"... year-quarter label text size
+\def\IdWksHeaderFontsize{\normalsize}          % "id wks" text size
+
+%---- symbol preferences for FTE types (sum, funded, unfunded)
+\def\TotalFteSumHeaderIcon{\textbf{\large{$\Sigma$}}} % sigma symbol label size
+\def\TotalFteUnfundedHeaderIcon{\noDollarIcon{-0.4}{0.4mm}{0.2}{0.15}} % "no dollar" symbol label size
+\def\TotalFteFundedHeaderIcon{\dollarIcon{-0.4}{0.2}{0.015}}% green "dollar" symbol label size
+
+%--- preferences of task CATEGORY label
+\def\TaskCategoryLabel#1#2{{\normalsize\textbf\scshape{#1}}~{\normalsize\textbf{#2}}} % Task Category label format for row item
+
+%--- preferences of TASK label
+\def\TaskTitleLabel#1#2{~{\scriptsize{\textbf{\scshape{#1}}}}~{\color{mediumelectricblue}{\footnotesize\textbf{#2}}}} % Task title format for row item
+
+%--- preferences of timeline color
+\def\TimelineColor{mediumelectricblue}          % Task Timeline cell color
+
+%--- preferences for indicating US vs non-US instutional affiliations and funded vs unfunded team members
+\def\FundedUsTeam#1{\small \color{blue}{#1}}    % funded US team members ID, \#weeks format
+\def\UnfundedUsTeam#1{\small \color{black}{#1}} % UNfunded US team members ID, \#weeks fomat
+\def\InternationalTeam#1{\small \color{red}{#1}}% international team members ID, \#weeks format
+
+%--- preferences for formatting the FTE values in far right columns
+\def\FteTotalFormat#1{\small{#1}}               % Total FTE/sum value format
+\def\FteUnfundedFormat#1{\small{#1}}            % Total FTE/unfunded value format
+\def\FteFundedFormat#1{\small \color{blue}{#1}} % Total FTE/funded value format
+
+%--- Delimiter of the task assignments
+\def\TaskAssignmentDelimiter{;\hspace{3pt}} % delimiter used in TASK ASSIGNMENTS
+
+%--- Format the identity reveals in the table caption
+\def\RevealIdentityFormat#1#2{\textbf{#1}: #2}
+
+%--- internal parameters used by script but not for user
+\def\LastYearPlusTwo{[INSERTLASTYEARPLUSTWO]}
+\def\NumberYears{[INSERTLASTYEAR]}
+\def\SlicesPerYearMinusTwo{[INSERTNUMBERSLICESPERYEARMINUSTWO]} % Num slices/year - first,last slices
+\def\TimelineSize{\tiny}                        % width control of TASK TIMELINE cells
+\def\RevealIdentities{[INSERTIDTONAMELIST]}
+
+%--- table preamble definition bundled into the "T" variable
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}      % title, assignment columns
+\newcolumntype{V}{!{\color{\TimelineVerticalLineColor}\vrule}} % vertical lines in timeline
+\newcolumntype{W}{!{\color{\TotalFteVerticalLineColor}\vrule}} % vertical lines in FTE
+\newcolumntype{T}{
+|L{\TitleWidth}         % title column
+*{\NumberYears}{        % timeline columns
+|p{\TimelineWidth}V*{\SlicesPerYearMinusTwo}{p{\TimelineWidth}V}p{\TimelineWidth}} 
+|L{\AssignmentsWidth}   % task assignment column
+|p{\SumFteWidth}W       % total fte, sum column
+p{\UnfundedFteWidth}W   % total fte, unfunded column
+p{\FundedFteWidth}|     % total fte, funded column
+}
+
+\newenvironment{[INSERTFILENAME]}{%
+\ifLandScape
+  \begin{sidewaystable*}
+\else
+  \begin{table*}[h!]     % \begin{table} needed to make bottom table caption have same width as table
+\fi
+\addtocounter{table}{\TaskAddCounter}           % corrects double-counting of longtable and table combination
+\renewcommand{\arraystretch}{\SpaceBetweenRows} % controls vertical row separation/spacing
+\setlength{\tabcolsep}{\SpaceBetweenColumns}    % controls horizontal column separation/spacing
+\centerline{
+\begin{minipage}{\NudgeTable}                   % increase to allow a wide table to spill into margin
+\begin{longtable}{T}
+
+% ------------------------- First line of headers
+\cline{2-[INSERTNUMBERYEARSLICESPLUSONE]}                               
+\multicolumn{1}{c|}{} &                                                  % title column
+\multicolumn{[INSERTNUMBERYEARSLICES]}{c|}{\TaskTimelineHeaderFontsize{TASK}} & % schedule columns
+\multicolumn{1}{c}{} &                                                   % task assignment column
+\multicolumn{[INSERTNUMBERFTETYPES]}{c}{}\\                              % 3-column total fte
+\cline{[INSERTNUMBERYEARSLICESPLUSTWO]-[INSERTNUMBERYEARSLICESPLUSFIVE]}
+
+% ------------------------- Second line of headers
+\multicolumn{1}{c|}{} &                                                    % title column
+\multicolumn{[INSERTNUMBERYEARSLICES]}{c|}{\TaskTimelineHeaderFontsize{TIMELINE}} & % schedule columns
+\multicolumn{1}{c|}{\TaskAssignmentsHeaderFontsize{TASK}} &                % task assignments column
+\multicolumn{[INSERTNUMBERFTETYPES]}{c|}{\TotalFteHeaderFontsize{TOTAL}}\\ % 3-column total fte
+\cline{2-[INSERTNUMBERYEARSLICESPLUSONE]}
+
+% -------------------------  Third line of headers
+\multicolumn{1}{c|}{}                                                 % title column
+[INSERTYEARLABELLIST] &                                               % year label list (YR1, YR2, ...)
+\multicolumn{1}{c|}{\TaskAssignmentsHeaderFontsize{ASSIGNMENTS}} &    % task assignments (ID, \#week)
+\multicolumn{[INSERTNUMBERFTETYPES]}{c|}{\TotalFteHeaderFontsize{FTE}}\\% 3-column total fte
+\cline{1-1}
+
+% COMMENT: below template generates a single year label.  The script glues them together in a single string
+% COMMENT: and replaces the INSERTYEARLABELLIST above. 
+[STARTYEARLABELTEMPLATE]
+ & \multicolumn{[INSERTNUMBERSLICESPERYEAR]}{c|}{\YearHeaderFontsize{YR[INSERTYEARNUMBER]}}
+[ENDYEARLABELTEMPLATE]
+
+% -------------------------  Forth line of headers
+\multicolumn{1}{|l|}{\TaskTitleHeaderFontsize{TASK TITLES}} % title column
+[INSERTYEARSLICELABELLIST] &                                % year slice list (1,2,3,4 1,2,3,4...)
+\multicolumn{1}{c|}{\IdWksHeaderFontsize{id~\#wks}} &       % task assignments (ID,\#weeks)
+{\TotalFteSumHeaderIcon} &                                  % Col1 Total funded+unfunded FTE
+{\TotalFteUnfundedHeaderIcon} &                             % Col2 Total unfunded FTE
+{\TotalFteFundedHeaderIcon}                                 % Col3 Total funded FTE
+\hline
+
+% COMMENT: below template generates a single year-slice label (for example, a quarter year label ranging from 1 through 4).
+% COMMENT: The script glues them together into single string and replaces the above INSERTYEARSLICELABELLIST
+[STARTYEARSLICELABELTEMPLATE]
+ & \YearSliceHeaderFontsize{[INSERTSLICENUMBER]}
+[ENDYEARSLICELABELTEMPLATE]
+
+% begin main contents of table
+[INSERTLISTOFCATEGORYSECTIONS]
+
+% COMMENT ****************************** CATEGORY TEMPLATE ***************************************
+% COMMENT: the below produces the row for a task category label
+% COMMENT: The category sections are put together as a single string delimited by end of line character and then 
+% COMMENT: replace the INSERTLISTOFCATEGORYSECTIONS above, constructing the full table
+[STARTCATEGORYSECTIONTEMPLATE]
+\TaskCategoryLabel{[INSERTCATEGORYLABEL]}{[INSERTCATEGORYTITLE]} % category identification
+[INSERTEMPTYYEARSLICESLIST] &  % empty year slices
+{} &                           % empty assignments
+{} & {} & {}\\                 % empty total fte
+[INSERTTASKSUNDERTHISCATEGORY] % tasks under this category
+\hline
+[ENDCATEGORYSECTIONTEMPLATE]
+
+% COMMENT: the below template makes a single empty year slice. The script figures out how many to make and
+% COMMENT: then glues them together into a single string and replaces the INSERTEMPTYYEARSLICESLIST above
+[STARTUNCOLOREDTIMELINETEMPLATE]
+ & \TimelineSize{}
+[ENDUNCOLOREDTIMELINETEMPLATE]
+
+% COMMENT ****************************** ROW TEMPLATE ***************************************
+% COMMENT: the below produces a single row for a task under a category. The script then makes several such rows 
+% COMMENT: and glues them toegether, delimited by a end of line character, and this single string replaces the 
+% COMMENT: INSERTTASKSUNDERTHISCATEGORY above in the CATEGORYSECTIONTEMPLATE above.
+[STARTTASKROWTEMPLATE]
+% begin task
+\TaskTitleLabel{[INSERTTASKLABEL]}{[INSERTTASKTITLE]} % title of this task
+[INSERTYEARSLICESLIST] &  % timeline for this task
+{[INSERTASSIGNMENTLISTFORTHISTASK]} &  % assignments for this task
+\FteTotalFormat{[INSERTFTETOTAL]} & \FteUnfundedFormat{[INSERTFTEUNFUNDED]} & \FteFundedFormat{[INSERTFTEFUNDED]}\\
+[ENDTASKROWTEMPLATE] 
+
+% COMMENT: the below template makes a single year slice that falls within the task timeline, helping to construct
+% COMMENT: a colored task timeline. The script picks this or the UNCOLORED template above the ROW TEMPLATE written above,
+% COMMENT: and puts them together into a single string that replaces INSERTYEARSLICESLIST above
+[STARTCOLOREDTIMELINETEMPLATE]
+ & \TimelineSize\cellcolor{\TimelineColor}
+[ENDCOLOREDTIMELINETEMPLATE]
+
+% COMMENT: the assignment list consists of the team member ids followed by number of work weeks, with delimiter specified in the 
+% COMMENT: list of \defs at the top of this file. 
+% COMMENT: There are 3 templates, depending on if the team member institutional affiliation is US/funded, US/unfunded, or non-US
+% COMMENT: The assignment list is constructed as a single string and then replaces INSERTASSIGNMENTLISTFORTHISTASK in the TASKROWTEMPLATE
+% COMMENT: below is format for a team member who is funded and from U.S. institution
+[STARTFUNDEDUSTEAMASSIGNMENTTEMPLATE]
+\FundedUsTeam{[TEAMID]}\,\FundedUsTeam{[NUMBERWEEKS]}
+[ENDFUNDEDUSTEAMASSIGNMENTTEMPLATE]
+ 
+% COMMENT: below is format for a team member who is UNfunded and from U.S. institution
+[STARTUNFUNDEDUSTEAMASSIGNMENTTEMPLATE]
+\UnfundedUsTeam{[TEAMID]}\,\UnfundedUsTeam{[NUMBERWEEKS]} 
+[ENDUNFUNDEDUSTEAMASSIGNMENTTEMPLATE]
+
+% COMMENT: below is format for a team member who is from NON U.S. institution (and by definition, unfunded)
+[STARTINTERNATIONALTEAMASSIGNMENTTEMPLATE]
+\InternationalTeam{[TEAMID]}\,\InternationalTeam{[NUMBERWEEKS]} 
+[ENDINTERNATIONALTEAMASSIGNMENTTEMPLATE]
+
+\end{longtable}
+\end{minipage}}}
+{%
+\ifLandScape
+  \end{sidewaystable*}
+\else
+  \end{table*}
+\fi
+}
+
+% COMMENT: The caption for this table requires variables (just as the isANONtravel did). The below template defines
+% COMMENT: the variables used in the caption formulation that is given in the github help page. Specifically, 
+% COMMENT: the below defines the names that go with the abbreviations used in the table.  IF YOU LEAVE OUT 
+% COMMENT: THIS INFORMATION FROM THE CAPTIOn, this table could be used as an anonymous one. 
+% COMMENT: the below is the template used for each item in the list. The items are delimited by a comma
+[STARTIDTONAMETEMPLATE]
+\RevealIdentityFormat{[INSERTTEAMID]}{[INSERTTEAMNAME]}
+[ENDIDTONAMETEMPLATE]

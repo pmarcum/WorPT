@@ -1,10 +1,9 @@
 %______________________________________
-% Instructions and LaTeX code to copy/paste into your document, to incorporate this file into your proposal, now located at:
-%
-% https://github.com/pmarcum/WorPT-Work-Plan-Tool-4-proposals/blob/main/latexTableTemplates/[INSERTFILENAME]/readme.md
+% WorPT table "[INSERTFILENAME]". It needs \usepackage{worpt} in your preamble (worpt.sty comes with the tables).
+% How to put it in your document:
+% https://github.com/pmarcum/WorPT/blob/main/latexTableTemplates/[INSERTFILENAME]/readme.md
 %______________________________________
 
-\def\WorPTfolder{[INSERTFILENAME]} % set the folder name where WorPT files are contained
 
 % ___________________________________________
 %       Default formatting preferences
@@ -33,8 +32,8 @@
 %---- definitions used by the script in the caption and should not be altered by user
 \def\LastYearPlusOne{[INSERTLASTYEARPLUSONE]}
 
-%--- table preamble definition bundled into the "T" variable
-\newcolumntype{T}{
+%--- the table's columns
+\def\[INSERTFILENAME]Columns{
   |l|*{\LastYearPlusOne}{l|}
 }
 
@@ -44,7 +43,7 @@
 \renewcommand{\arraystretch}{\SpaceBetweenRows} % controls vertical row separation/spacing
 % ---- adjust to control horizontal column separation/spacing, comment-out if not needed
 \setlength{\tabcolsep}{\SpaceBetweenColumns}    % controls horizontal column separation/spacing
-\begin{tabular}{T}
+\begin{WorPTinlineTabular}{\[INSERTFILENAME]Columns}
 \hline
 
 %---- top header line
@@ -98,7 +97,7 @@
  & \TravelSubcatAmountFontstyle{\$[INSERTTRAVELFORTHISYEAR]}
 [ENDPERYEARDOMINTTEMPLATE]
 
-\end{tabular}
+\end{WorPTinlineTabular}
 }
 {%
 \end{table*}

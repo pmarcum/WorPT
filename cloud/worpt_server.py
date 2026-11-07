@@ -16,7 +16,7 @@ import hmac, logging, os, pathlib, sys
 from flask import Flask, jsonify, request
 from worpt.store import Store, User, WorptError
 from worpt.effort import compute, label_tree
-from worpt.tables import build, travel_summary, TABLES
+from worpt.tables import build, style, travel_summary, TABLES
 
 log = logging.getLogger('worpt')
 
@@ -194,16 +194,18 @@ def create_app(db_path=None, credential=None, read_credential=None):
         else:
             with store.connect() as db:
                 if store.export(db, pid)['proposal'] is None: return refuse('That work plan does not exist.', 'not_found')
-        return ok(tables=list(TABLES))
+        return ok(tables=list(TABLES), style='worpt')            # /tables/worpt is worpt.sty
 
     @app.get('/api/proposals/<pid>/tables/<name>')
     def table(pid, name):
-        if name not in TABLES: return refuse(f'There is no table called "{name}". Tables: {", ".join(TABLES)}.', 'unknown_table')
+        if name not in TABLES + ('worpt',):
+            return refuse(f'There is no table called "{name}". Tables: {", ".join(TABLES)}; and worpt (worpt.sty).', 'unknown_table')
         if key() == 'full':
             data = store.read(user(), pid)                     # the dashboard: the person must be on the proposal
         else:
             with store.connect() as db: data = store.export(db, pid)   # gooTeX's read-only key
             if data['proposal'] is None: return refuse('That work plan does not exist.', 'not_found')
+        if name == 'worpt': return ok(name=name, latex=style(), checks=[])
         out = build(store.model(pid, data)[0], [name])
         return ok(name=name, latex=out[name], checks=[dict(level=c.level, item=c.item, message=c.message) for c in out['_checks']])
 

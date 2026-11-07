@@ -1,47 +1,28 @@
 <b>NOTE:<i> You only need to do this ONCE in your LaTeX document!</i></b>
-<p><b>WorPT Packages</b> need to be installed in your LaTeX document's preamble in order to use a WorPT file in your LaTeX document.</p> 
+<p>The WorPT tables need one small package file, <b>worpt.sty</b>, loaded in your document's preamble. It comes with the tables, and it is also here: https://github.com/pmarcum/WorPT/blob/main/latexTableTemplates/worpt.sty</p>
 <hr>
 
-<mark><b>How To Install WorPT Package Files In Your Document</b></mark>
-<p>
-You only need to install the WorPT Package files <b>ONCE</b>. After you have installed the WorPT Package files, you can incorporate as many of the WorPT files as you want, into your LaTeX document. 
-</p>
-
-<p>Choose one of the 2 below options, depending on if you are using the AAS document class file (which already incorporates some of the packages bundled in the WorPT Package files) or a non-AAS class file. </p>
-
-<details>
-<summary><b>if using aastex.cls</b></summary>
-COPY contents of the following 3 files into your own 3 files.
+<mark><b>How To Load worpt.sty In Your Document</b></mark>
 <ol>
- <li>https://github.com/pmarcum/LaTex-Formatting/blob/main/aas-style/FUformatting.sty</li>
- <li>https://github.com/pmarcum/LaTex-Formatting/blob/main/aas-style/FUpackages.sty</li>
-</ol>
-You might also find the following helpful, although it is not necessary for the WorPT tables:
-<ol>
- <li>https://github.com/pmarcum/LaTex-Formatting/blob/main/aas-style/FUnewCommands.sty</li>
-</ol>
-</details>
-
-<details>
-<summary><b>if using a different document class file</b></summary>
-COPY contents of the following 3 files into your own 3 files. 
-<ol>
- <li>https://github.com/pmarcum/LaTex-Formatting/blob/main/general/FUformatting.sty</li>
- <li>https://github.com/pmarcum/LaTex-Formatting/blob/main/general/FUpackages.sty</li>
-</ol>
-You might also find the following helpful, although it is not necessary for the WorPT tables:
-<ol>
- <li>https://github.com/pmarcum/LaTex-Formatting/blob/main/general/FUnewCommands.sty</li>
-</ol>
-</details>
-
-Incorporate the files you just copied, into your LaTeX document, by putting the following into your LaTeX document's preamble.<br>
-These lines should be inserted somewhere <b>between the \documentclass[]{} and \begin{document} lines</b> in your document. <i>Assumes you named the copied files the same filenames as the original github ones.</i><br>
-Highlights indicate where edits might be needed.
+<li>Put <code>worpt.sty</code> in the same folder as your document (gooTeX does this for you).</li>
+<li>Add this line to your preamble, <b>as the last package loaded</b> (after aastex, xcolor, hyperref and the rest):
 <pre><code>
-\usepackage{<mark>FUpackages</mark>}  % applying Frequently-Used packages
-\usepackage{<mark>FUformatting</mark>} % apply Frequently-used formatting definitions/setups
-\usepackage{<mark>FUnewCommands</mark>} % <b>[OPTIONAL]</b> apply Frequently-used usercommands  
-</code></pre>
+\usepackage{worpt}
+</code></pre></li>
+</ol>
+<p>After that, you can put in as many of the WorPT tables as you want.</p>
 
-<p>If you have conflicts between the packages in the WorPT Package files and your LaTeX class file, then comment out the conflicting lines in the local copies of the WorPT Package file(s) and determine if the WorPT tables will compile correctly with those lines commented out.</p>
+<details>
+<summary><b>What worpt.sty does</b></summary>
+<ul>
+<li>It loads only the packages the tables need: array, multirow, xcolor, colortbl, rotating (for tables in landscape mode), and tikz with fontawesome (for the schedule table's icons). A package your document has already loaded is not loaded again.</li>
+<li>It defines the named colors the tables use (Blue, NavyBlue, Red, Black, White and mediumelectricblue), with the values xcolor's <code>[dvipsnames]</code> option gives them. A color your document already defines keeps its own value. To use other dvipsnames colors in your table settings, load xcolor with <code>[dvipsnames]</code> before worpt.</li>
+<li>It works with aastex631, revtex, article and report, in one or two columns.</li>
+<li>It changes nothing else about how your document looks.</li>
+</ul>
+</details>
+
+<details>
+<summary><b>Documents set up before worpt.sty</b></summary>
+Documents that load the FUpackages, FUformatting and FUnewCommands files from https://github.com/pmarcum/LaTex-Formatting can keep them: add <code>\usepackage{worpt}</code> after them. The tables no longer need those files, so a document that loaded them only for WorPT can drop them. Older paste-in blocks that use <code>\expinput{...}</code> keep working; <code>\expinput</code> now works the same as <code>\input</code>. A line such as <code>\def\TaskAddCounter{-1}</code> is no longer needed, and does nothing.
+</details>

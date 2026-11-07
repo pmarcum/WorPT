@@ -95,6 +95,8 @@ def test_read_key_only_reads_tables(team, client):
     r.no('get', '/api/proposals/nosuch/tables/isANONfte', code='not_found')
     r.no('get', '/api/proposals/nosuch/tables', code='not_found')
     r.no('get', f"/api/proposals/{team['pid']}/tables/nosuch", code='unknown_table')
+    sty = r.ok('get', f"/api/proposals/{team['pid']}/tables/worpt")                # worpt.sty, for gooTeX to bring in too
+    assert r.ok('get', f"/api/proposals/{team['pid']}/tables")['style'] == 'worpt' and '\\ProvidesPackage{worpt}' in sty['latex']
 
 
 def test_unknown_route(client):
