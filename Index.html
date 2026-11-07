@@ -93,8 +93,9 @@ label.f input,label.f select,label.f textarea{font-size:13px}
 .sg-sum{text-align:center;font-family:var(--mono);font-size:11px;color:var(--muted)}
 .unf{font-family:var(--mono);font-size:10px;color:var(--accent2);padding-left:3px;white-space:nowrap}
 .sub.unf{padding-left:0;color:var(--accent2)}
-.sg-h.c .who{display:block;color:var(--text);font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:88px;margin:0 auto 1px}
-input.wk{width:44px;padding:1px 3px;text-align:right;font-size:11px;line-height:1.2;border-color:#2a2a30}
+.sg-h.c .who{display:block;position:relative;height:42px}
+.sg-h.c .who i{position:absolute;left:calc(50% - 8px);bottom:3px;transform-origin:0 100%;transform:rotate(-45deg);font-style:normal;white-space:nowrap;max-width:58px;overflow:hidden;text-overflow:ellipsis;color:var(--text);font-size:11px;font-weight:600}
+input.wk{width:34px;padding:1px 3px;text-align:right;font-size:11px;line-height:1.2;border-color:#2a2a30}
 input.wk.on{border-color:#4a6a90}
 .star{border:0;background:transparent;cursor:pointer;padding:0 1px;font-size:12px;color:#4a4a55}
 .star.lead{color:var(--accent2)} .star.none{color:transparent;cursor:default}
@@ -592,11 +593,11 @@ function setTeamView(v) { try { localStorage.setItem('worpt_team_view', v); } ca
 
 function viewPlan() {
   const P = S.P, nodes = tree(), ny = P.proposal.n_years, NQ = ny * 4, cols = teamView() === 'columns' && P.members.length > 0;
-  const tmpl = 'grid-template-columns:52px minmax(200px,300px) ' + (cols ? 'repeat(' + P.members.length + ',92px) ' : '') + 'minmax(' + (NQ * 30) + 'px,1fr)';
-  const minW = 52 + 240 + (cols ? P.members.length * 92 : 0) + NQ * 30;
+  const tmpl = 'grid-template-columns:52px minmax(200px,300px) ' + (cols ? 'repeat(' + P.members.length + ',80px) ' : '') + 'minmax(' + (NQ * 30) + 'px,1fr)';
+  const minW = 52 + 240 + (cols ? P.members.length * 80 : 0) + NQ * 30;
   const qcells = cls => Array.from({ length: NQ }, (_, q) => '<span class="q' + (q % 4 === 0 ? ' y' : '') + '" ' + (cls || '') + '></span>').join('');
   const head = '<div class="sg-head" style="' + tmpl + '"><span></span><span class="sg-h">Task categories, tasks and subtasks</span>' +
-    (cols ? P.members.map(m => '<span class="sg-h c" title="' + esc(personName(m) + ' · ' + m.short_id) + '"><span class="who">' + esc(shortName(m)) + '</span><b>' + esc(m.short_id) + '</b><br>weeks</span>').join('') : '') +
+    (cols ? P.members.map(m => '<span class="sg-h c" title="' + esc(personName(m) + ' · ' + m.short_id) + '"><span class="who"><i>' + esc(shortName(m)) + '</i></span><b>' + esc(m.short_id) + '</b><br>weeks</span>').join('') : '') +
     '<div class="tl" style="grid-template-columns:repeat(' + NQ + ',minmax(0,1fr))">' +
     Array.from({ length: ny }, (_, y) => '<span class="yh">Year ' + (y + 1) + '</span>').join('') +
     Array.from({ length: NQ }, (_, q) => '<span class="qh' + (q % 4 === 0 ? ' y' : '') + '">Q' + (q % 4 + 1) + '</span>').join('') + '</div></div>';
