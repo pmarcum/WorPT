@@ -317,7 +317,9 @@ async function start() {
   try {
     S.cfg = await gas('getClientConfig');
     $('#who').textContent = S.cfg.email + (S.cfg.access !== 'code' ? ' · ' + S.cfg.access : '');
-    $('#versions').textContent = 'WorPT Core ' + S.cfg.coreLibraryVersion + ' · Dashboard ' + S.cfg.webAppVersion;
+    // vCORE.DASHBOARD: the Core library version, then the Dashboard web app version (e.g. v2.1)
+    $('#versions').textContent = 'WorPT v' + S.cfg.coreLibraryVersion + '.' + S.cfg.webAppVersion;
+    $('#versions').title = 'WorPT Core library ' + S.cfg.coreLibraryVersion + ', Dashboard ' + S.cfg.webAppVersion;
     const notes = [];
     if (S.cfg.latestCoreLibrary > S.cfg.coreLibraryVersion) notes.push('WorPT Core ' + S.cfg.latestCoreLibrary + ' is available (this dashboard uses ' + S.cfg.coreLibraryVersion + '). ' + S.cfg.coreLibraryNotes);
     if (S.cfg.latestWebApp > S.cfg.webAppVersion) notes.push('A new WorPT Dashboard Code.gs (version ' + S.cfg.latestWebApp + ') is available. ' + S.cfg.webAppNotes);
