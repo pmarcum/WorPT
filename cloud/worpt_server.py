@@ -193,7 +193,7 @@ def create_app(db_path=None, credential=None, read_credential=None):
         if key() == 'full': store.read(user(), pid)
         else:
             with store.connect() as db:
-                if store.export(db, pid)['proposal'] is None: return refuse('That proposal does not exist.', 'not_found')
+                if store.export(db, pid)['proposal'] is None: return refuse('That work plan does not exist.', 'not_found')
         return ok(tables=list(TABLES))
 
     @app.get('/api/proposals/<pid>/tables/<name>')
@@ -203,7 +203,7 @@ def create_app(db_path=None, credential=None, read_credential=None):
             data = store.read(user(), pid)                     # the dashboard: the person must be on the proposal
         else:
             with store.connect() as db: data = store.export(db, pid)   # gooTeX's read-only key
-            if data['proposal'] is None: return refuse('That proposal does not exist.', 'not_found')
+            if data['proposal'] is None: return refuse('That work plan does not exist.', 'not_found')
         out = build(store.model(pid, data)[0], [name])
         return ok(name=name, latex=out[name], checks=[dict(level=c.level, item=c.item, message=c.message) for c in out['_checks']])
 

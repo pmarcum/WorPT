@@ -162,7 +162,7 @@ pre.latex{background:var(--bg);border:1px solid var(--border);border-radius:6px;
 <header class="topbar">
   <a class="logo" href="https://github.com/pmarcum/WorPT" target="_blank" rel="noopener" title="WorPT on GitHub"><b>WorPT</b><span>Work Plan Tool for proposals</span></a>
   <nav class="nav" aria-label="Main">
-    <button type="button" data-go="proposals">Proposals</button>
+    <button type="button" data-go="proposals">Proposal Work Plans</button>
     <button type="button" data-go="people">People &amp; profiles</button>
   </nav>
   <div class="top-right"><span id="save" aria-live="polite"></span><span id="who"></span></div>
@@ -265,7 +265,7 @@ function ask(title, text, buttons) {          // buttons: [[label, value, cls]] 
 // ── saving a field ───────────────────────────────────────────────────────────────────────────────────────────
 // Inputs carry data-save="kind:id:field" (and data-version). They save when you leave them or press Enter.
 const UPDATE = { proposal: 'updateProposal', item: 'updateItem', member: 'updateMember', assignment: 'updateAssignment', nonlabor: 'updateNonlabor', person: 'updatePerson' };
-const WHAT = { proposal: 'proposal', item: 'item', member: 'team member', assignment: 'assignment', nonlabor: 'budget line', person: 'profile' };
+const WHAT = { proposal: 'work plan', item: 'item', member: 'team member', assignment: 'assignment', nonlabor: 'budget line', person: 'profile' };
 
 function readInput(el) {
   if (el.type === 'checkbox' || el.type === 'radio') return el.checked;
@@ -343,7 +343,7 @@ document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.datas
 async function openProposal(pid) {
   S.view = 'proposal'; S.pid = pid; S.tab = 'plan'; S.sel = null; S.open = null; S.prev = null; S.table = null; S.tableOut = null; S.snaps = null;
   document.querySelectorAll('[data-go]').forEach(b => b.setAttribute('aria-current', 'false'));
-  $('#app').innerHTML = '<p class="empty">Opening the proposal…</p>';
+  $('#app').innerHTML = '<p class="empty">Opening the work plan…</p>';
   try {
     const [r] = await Promise.all([api('getProposal', pid), loadPeople()]);
     try { history.replaceState(null, '', '#p=' + pid); } catch (e) { /* not allowed inside some frames */ }
@@ -412,10 +412,10 @@ function viewProposals() {
     '<span class="mono muted" style="font-size:11px">' + esc(p.program || 'no program set') + ' · ' + p.n_years + ' year' + (p.n_years === 1 ? '' : 's') + '</span>' +
     '<span class="muted">Full editors: ' + esc(p.leads || '—') + '</span>' +
     '<span class="muted" style="font-size:11px;margin-top:auto">Last changed ' + esc(when(p.last_changed_at)) + '</span></button>').join('');
-  const empty = S.cfg && S.cfg.access === 'admin' ? 'There are no proposals yet.' :
-    'You are not on any proposal yet. Ask one of a proposal\'s full editors to add you; they need the Google email you sign in with, ' + (S.cfg ? S.cfg.email : '') + '.';
-  return '<div class="row" style="margin-bottom:12px"><h1 style="margin:0;font-size:17px">Proposals</h1>' +
-    (S.cfg && S.cfg.access === 'admin' ? '<span class="muted">(as an admin you see every proposal)</span>' : '') +
+  const empty = S.cfg && S.cfg.access === 'admin' ? 'There are no work plans yet.' :
+    'You are not on any work plan yet. Ask one of a work plan\'s full editors to add you; they need the Google email you sign in with, ' + (S.cfg ? S.cfg.email : '') + '.';
+  return '<div class="row" style="margin-bottom:12px"><h1 style="margin:0;font-size:17px">Proposal Work Plans</h1>' +
+    (S.cfg && S.cfg.access === 'admin' ? '<span class="muted">(as an admin you see every work plan)</span>' : '') +
     (canCreate ? '<button type="button" class="btn primary" style="margin-left:auto" data-act="newProposal">New proposal work plan</button>' : '') + '</div>' +
     (list ? '<div class="plist">' + list + '</div>' : '<p class="empty">' + esc(empty) + '</p>');
 }
@@ -452,7 +452,7 @@ function viewPeople() {
   const me = S.me && S.me.profile;
   const mine = me ? '<p>Your profile: <b>' + esc(personName(me)) + '</b> · ' + esc(me.institution || 'no institution') + ' · ' + (me.us ? 'US institution' : 'non-US institution') +
     ' <button type="button" class="btn" data-editperson="' + me.id + '">Edit my profile</button></p>' :
-    '<p class="muted">You have no profile yet. One of a proposal\'s full editors, or a core member, makes it, with your Google email (' + esc(S.cfg ? S.cfg.email : '') + ').</p>';
+    '<p class="muted">You have no profile yet. One of a work plan\'s full editors, or a core member, makes it, with your Google email (' + esc(S.cfg ? S.cfg.email : '') + ').</p>';
   const others = S.people.filter(p => !me || p.id !== me.id);
   const rows = others.map(p => '<tr><td>' + esc(personName(p)) + '</td><td class="mono">' + esc(p.email || '—') + '</td><td>' + esc(p.institution) + '</td><td>' + (p.us ? 'US' : 'non-US') + '</td>' +
     '<td><button type="button" class="btn" data-editperson="' + p.id + '">Edit</button></td></tr>').join('');
@@ -461,7 +461,7 @@ function viewPeople() {
     (canAdd ? '<button type="button" class="btn primary" style="margin-left:auto" data-act="newPerson">New person</button>' : '') + '</div>' +
     '<div class="card stack">' + mine +
     (others.length ? '<div class="scroll"><table class="t"><thead><tr><th>Name</th><th>Google email</th><th>Institution</th><th>US?</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '') +
-    '<p class="hint">A profile is shared by every proposal the person is on. Its email must be the Google email they use to access WorPT, or they will not see their proposals.</p></div>';
+    '<p class="hint">A profile is shared by every work plan the person is on. Its email must be the Google email they use to access WorPT, or they will not see their work plans.</p></div>';
 }
 
 /** Edit (or, with person = null, make) a profile. Resolves to the saved profile, or null. */
@@ -509,9 +509,9 @@ function viewProposal() {
   const P = S.P, p = P.proposal;
   const leads = P.members.filter(m => m.is_lead).map(personName).join(', ');
   const body = { plan: viewPlan, team: viewTeam, budget: viewBudget, tables: viewTables, snapshots: viewSnapshots, settings: viewSettings }[S.tab]();
-  return '<div class="row" style="margin-bottom:6px"><button type="button" class="backlink" data-backlist>← All proposals</button></div><div class="ptitle"><h1>' + esc(p.title) + '</h1><span class="meta">' + esc(p.program || 'no program set') + ' · ' + p.n_years + ' year' + (p.n_years === 1 ? '' : 's') +
+  return '<div class="row" style="margin-bottom:6px"><button type="button" class="backlink" data-backlist>← All Proposal Work Plans</button></div><div class="ptitle"><h1>' + esc(p.title) + '</h1><span class="meta">' + esc(p.program || 'no program set') + ' · ' + p.n_years + ' year' + (p.n_years === 1 ? '' : 's') +
     ' · full editors: ' + esc(leads || '—') + (P.you.member_id ? '' : ' · viewing as admin') + '</span></div>' +
-    '<nav class="tabs" aria-label="Proposal sections">' + TABS.map(t => '<button type="button" data-tab="' + t[0] + '" aria-current="' + (S.tab === t[0] ? 'page' : 'false') + '">' + esc(t[1]) + '</button>').join('') + '</nav>' + body;
+    '<nav class="tabs" aria-label="Work plan sections">' + TABS.map(t => '<button type="button" data-tab="' + t[0] + '" aria-current="' + (S.tab === t[0] ? 'page' : 'false') + '">' + esc(t[1]) + '</button>').join('') + '</nav>' + body;
 }
 
 // The tree, in order, with depth and label.
@@ -707,7 +707,7 @@ function viewTeam() {
     '<button type="button" class="btn primary" style="align-self:flex-end" data-act="addMember">Add</button>' +
     '<button type="button" class="btn" style="align-self:flex-end" data-act="newPerson">New person…</button></div>' +
     '<p class="hint">Roles: PI, Sci-PI, Admin-PI, co-I(1), co-I(2)…, coll(1)…, gst(1) (graduate student), pd(1) (postdoc)… Each person is shown by their role, never their name (co-I(1) as "co-I 1", coll(1) as "collab 1"), so the plan and tables can stay anonymous. Each person needs a role of their own.</p></fieldset>' : '';
-  return '<div class="card"><h2 class="h2">Team</h2>' + (can ? '' : '<p class="hint" style="margin:0 0 8px">Only this proposal\'s full editors (and admins) change the team; you can see it here.</p>') +
+  return '<div class="card"><h2 class="h2">Team</h2>' + (can ? '' : '<p class="hint" style="margin:0 0 8px">Only this work plan\'s full editors (and admins) change the team; you can see it here.</p>') +
     '<div class="scroll"><table class="t"><thead><tr><th>Person</th><th>Role</th><th>Full editor</th><th>FTE accuracy</th><th>Team summary, and their part in the plan</th>' + (hst ? '<th>HST role text</th>' : '') + '<th></th></tr></thead><tbody>' +
     (rows || '<tr><td colspan="7" class="muted">No one yet.</td></tr>') + '</tbody></table></div>' + add + '</div>';
 }
@@ -810,12 +810,12 @@ function viewSnapshots() {
     (can ? '<button type="button" class="btn" data-restore="' + s.id + '">Restore…</button> <button type="button" class="btn icon" data-delsnap="' + s.id + '" aria-label="Delete this snapshot">✕</button>' : '') +
     '</td></tr>').join('');
   return '<div class="card stack"><h2 class="h2" style="margin:0">Snapshots</h2>' +
-    '<p class="hint" style="margin:0">WorPT saves a snapshot of the whole proposal (plan, team, budget and settings) at the first change of each day, and just before anything drastic: deleting a task category or a task with subtasks, taking someone off the team, changing the number of years, or restoring. Automatic snapshots are kept for 60 days; the ones you name, until deleted. Profiles are shared between proposals and are not part of a snapshot.</p>' +
+    '<p class="hint" style="margin:0">WorPT saves a snapshot of the whole work plan (plan, team, budget and settings) at the first change of each day, and just before anything drastic: deleting a task category or a task with subtasks, taking someone off the team, changing the number of years, or restoring. Automatic snapshots are kept for 60 days; the ones you name, until deleted. Profiles are shared between work plans and are not part of a snapshot.</p>' +
     '<div class="row"><input id="snap-name" placeholder="e.g. before the co-I review" style="flex:1;min-width:220px;max-width:420px" aria-label="Name for the snapshot">' +
     '<button type="button" class="btn primary" data-act="saveSnapshot">Save a snapshot now</button></div>' +
     (rows ? '<div class="scroll"><table class="t"><thead><tr><th>When</th><th>Snapshot</th><th>Kind</th><th>By</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
           : '<p class="muted" style="margin:0">No snapshots yet. The first one is saved automatically at the first change of the day.</p>') +
-    (can ? '' : '<p class="hint" style="margin:0">Only this proposal\'s full editors (and admins) can restore or delete snapshots.</p>') + '</div>';
+    (can ? '' : '<p class="hint" style="margin:0">Only this work plan\'s full editors (and admins) can restore or delete snapshots.</p>') + '</div>';
 }
 
 // ── settings ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -828,8 +828,8 @@ function viewSettings() {
     '<label class="f">FTE rounding<select data-save="proposal:' + esc(p.id) + ':rounding"' + v + '><option value="nearest"' + (p.rounding === 'nearest' ? ' selected' : '') + '>to the nearest step</option>' +
     '<option value="up"' + (p.rounding === 'up' ? ' selected' : '') + '>up (as the old Sheet did)</option></select></label></div>' +
     '<p class="hint">Created ' + esc(when(p.created_at)) + ' by ' + esc(p.created_by) + '.</p></div>' +
-    (can ? '<div class="card stack" style="flex:1 1 300px;border-color:#5a3030"><h2 class="h2">Delete this proposal</h2><p style="margin:0;line-height:1.5">Deletes the whole proposal for everyone. A copy is kept in the history. Type the title exactly to confirm.</p>' +
-      '<input id="del-title" aria-label="Type the title to confirm" placeholder="' + esc(p.title) + '"><div><button type="button" class="btn danger" data-act="deleteProposal">Delete proposal</button></div></div>' : '') + '</div>';
+    (can ? '<div class="card stack" style="flex:1 1 300px;border-color:#5a3030"><h2 class="h2">Delete this work plan</h2><p style="margin:0;line-height:1.5">Deletes the whole work plan for everyone (WorPT keeps a copy in its records). Type the title exactly to confirm.</p>' +
+      '<input id="del-title" aria-label="Type the title to confirm" placeholder="' + esc(p.title) + '"><div><button type="button" class="btn danger" data-act="deleteProposal">Delete work plan</button></div></div>' : '') + '</div>';
 }
 
 // ── actions ──────────────────────────────────────────────────────────────────────────────────────────────────
@@ -874,7 +874,7 @@ const ACTIONS = {
   },
   deleteProposal: () => attempt(async () => {
     await api('deleteProposal', S.pid, $('#del-title').value);
-    toast('Proposal deleted.', true); go('proposals');
+    toast('Work plan deleted.', true); go('proposals');
   }),
 };
 
@@ -955,7 +955,7 @@ function wire() {
     const id = +b.dataset.editperson;
     let p = S.people.find(x => x.id === id) || (S.me && S.me.profile && S.me.profile.id === id ? S.me.profile : null);
     if (!p) { await loadPeople(); p = S.people.find(x => x.id === id); }
-    if (p) editPerson(p); else toast('You can edit your own profile, or the profiles of people on proposals where you are a full editor.');
+    if (p) editPerson(p); else toast('You can edit your own profile, or the profiles of people on work plans where you are a full editor.');
   });
   app.querySelectorAll('[data-move]').forEach(b => b.onclick = () => attempt(async () => {
     const it = S.P.items.find(i => i.id === S.sel);
@@ -965,7 +965,7 @@ function wire() {
   app.querySelectorAll('[data-delnl]').forEach(b => b.onclick = () => attempt(() => change('deleteNonlabor', +b.dataset.delnl)));
   app.querySelectorAll('[data-restore]').forEach(b => b.onclick = () => attempt(async () => {
     const s = S.snaps.find(x => x.id === +b.dataset.restore);
-    const ok = await ask('Restore this snapshot?', 'The whole proposal (plan, team, budget and settings) goes back to how it was on ' + when(s.at) +
+    const ok = await ask('Restore this snapshot?', 'The whole work plan (plan, team, budget and settings) goes back to how it was on ' + when(s.at) +
       ' ("' + s.name + '"). Anyone added to the team since then is taken off it. WorPT first saves a snapshot of how things are now, so you can undo this.',
       [['Restore', true, 'primary']]);
     if (!ok) return;

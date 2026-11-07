@@ -196,7 +196,7 @@ allows it once, the first time they open it.
 
 **5. Try it.** Open the link. Admins and core members go straight in; everyone else types the access code
 once. Then, in **People & profiles**, make a profile for each person (with the Google email they sign in
-with: that is how WorPT recognizes them), and in **Proposals**, **New proposal work plan**.
+with: that is how WorPT recognizes them), and in **Proposal Work Plans**, **New proposal work plan**.
 
 ### Updating the dashboard
 
@@ -243,7 +243,7 @@ exit
 sudo systemctl start worpt
 ```
 
-A backup restores every proposal at once. To put back just one proposal, use its **Snapshots** tab in the
+A backup restores every work plan at once. To put back just one work plan, use its **Snapshots** tab in the
 dashboard instead: WorPT saves a snapshot at the first change of each day and before anything drastic,
 and anyone can save a named one.
 

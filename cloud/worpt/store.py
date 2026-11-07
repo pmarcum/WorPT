@@ -191,9 +191,9 @@ class Store:
         p = self.one(db, 'SELECT * FROM proposals WHERE id = ?', proposal_id)
         m = p and self.membership(db, user, proposal_id)
         if p is None or not (user.admin or m):
-            raise WorptError('That proposal does not exist, or you are not on its team.', 'not_found')
+            raise WorptError('That work plan does not exist, or you are not on its team.', 'not_found')
         if need == 'team' and not (user.admin or m['is_lead']):
-            raise WorptError("Only this proposal's full editors (or an admin) can change its team and full editors.")
+            raise WorptError("Only this work plan's full editors (or an admin) can change its team and full editors.")
         return p
 
     def can_edit_person(self, db, user, person_id):
@@ -230,7 +230,7 @@ class Store:
     def create_person(self, user, fields):
         with self.connect() as db:
             if not (user.core or self.is_any_lead(db, user)):
-                raise WorptError('Only admins, core members and full editors of a proposal can add people.')
+                raise WorptError('Only admins, core members and full editors of a work plan can add people.')
             f = self.clean_person({k: v for k, v in fields.items() if k in EDITABLE['people']})
             if not f.get('last'): raise WorptError('A profile needs at least a last name.', 'missing')
             self.check_email_free(db, f.get('email'))
@@ -239,7 +239,7 @@ class Store:
     def update_person(self, user, person_id, version, fields):
         with self.connect() as db:
             if not self.can_edit_person(db, user, person_id):
-                raise WorptError("You can edit your own profile, or the profiles of people on proposals where you are a full editor.")
+                raise WorptError("You can edit your own profile, or the profiles of people on work plans where you are a full editor.")
             f = self.clean_person({k: v for k, v in fields.items() if k in EDITABLE['people']})
             if 'email' in f: self.check_email_free(db, f['email'], person_id)
             p = self.update_row(db, user, 'people', person_id, version, f, None, 'profile')
@@ -265,11 +265,11 @@ class Store:
 
     # ------------------------------------------------ proposals
     def create_proposal(self, user, title, program='', n_years=3, leads=()):
-        if not user.core: raise WorptError('Only admins and core members can create proposals.')
+        if not user.core: raise WorptError('Only admins and core members can create work plans.')
         title = (title or '').strip()
-        if not title: raise WorptError('A proposal needs a title.', 'missing')
+        if not title: raise WorptError('A work plan needs a title.', 'missing')
         n_years = self.check_years(n_years)
-        if not leads: raise WorptError('Name at least one full editor for the new proposal.', 'missing')
+        if not leads: raise WorptError('Name at least one full editor for the new work plan.', 'missing')
         with self.connect() as db:
             pid = secrets.token_urlsafe(9)
             p = self.insert_row(db, user, 'proposals', dict(id=pid, title=title, program=(program or '').strip(), n_years=n_years,
@@ -282,7 +282,7 @@ class Store:
     def check_years(n):
         try: n = int(n)
         except (TypeError, ValueError): raise WorptError('The number of years must be a whole number.', 'invalid')
-        if n < 1: raise WorptError('A proposal needs at least one year.', 'invalid')
+        if n < 1: raise WorptError('A work plan needs at least one year.', 'invalid')
         return n
 
     LIST = ("SELECT p.*, (SELECT max(at) FROM history h WHERE h.proposal_id = p.id) AS last_changed_at, "
@@ -311,7 +311,7 @@ class Store:
             self.proposal(db, user, proposal_id)
             f = dict(fields)
             if 'n_years' in f: f['n_years'] = self.check_years(f['n_years'])
-            if 'title' in f and not (f['title'] or '').strip(): raise WorptError('A proposal needs a title.', 'missing')
+            if 'title' in f and not (f['title'] or '').strip(): raise WorptError('A work plan needs a title.', 'missing')
             if 'rounding' in f and f['rounding'] not in ('nearest', 'up'): raise WorptError('Rounding is "nearest" or "up".', 'invalid')
             old = self.one(db, 'SELECT n_years, version FROM proposals WHERE id = ?', proposal_id)
             if 'n_years' in f and f['n_years'] != old['n_years'] and version is not None and int(version) == old['version']:
@@ -322,7 +322,7 @@ class Store:
         with self.connect() as db:
             p = self.proposal(db, user, proposal_id, need='team')
             if (confirm_title or '').strip() != p['title'].strip():
-                raise WorptError('To delete this proposal, type its title exactly as it appears.', 'confirm_title')
+                raise WorptError('To delete this work plan, type its title exactly as it appears.', 'confirm_title')
             snapshot = self.export(db, proposal_id)
             db.execute('DELETE FROM proposals WHERE id = ?', (proposal_id,))
             self.log(db, user, proposal_id, 'proposal_snapshot', proposal_id, 'delete', snapshot, None)
@@ -345,7 +345,7 @@ class Store:
             f['short_id'] = role_label(f['role'])
             if f['short_id'].lower() == 'team': raise WorptError('"team" stands for "everyone not named"; choose another role.', 'invalid')
             other = self.one(db, 'SELECT id, role FROM members WHERE proposal_id = ? AND short_id = ? AND id != ?', proposal_id, f['short_id'], member_id or -1)
-            if other: raise WorptError(f'Someone on this proposal already has the role {other["role"]} ({f["short_id"]}); '
+            if other: raise WorptError(f'Someone on this work plan already has the role {other["role"]} ({f["short_id"]}); '
                                        'each person needs a role of their own, e.g. co-I(1), co-I(2).', 'duplicate')
         if 'is_lead' in f: f['is_lead'] = 1 if f['is_lead'] else 0
         return f
@@ -353,7 +353,7 @@ class Store:
     def add_member_db(self, db, user, proposal_id, fields):
         person = self.get(db, 'people', fields.get('person_id'), 'profile')
         if self.one(db, 'SELECT id FROM members WHERE proposal_id = ? AND person_id = ?', proposal_id, person['id']):
-            raise WorptError(f'{person["first"]} {person["last"]} is already on this proposal.', 'duplicate')
+            raise WorptError(f'{person["first"]} {person["last"]} is already on this work plan.', 'duplicate')
         f = {k: v for k, v in fields.items() if k in EDITABLE['members']}
         f.setdefault('role', '')
         f = self.check_member_fields(db, proposal_id, f, person=person)
@@ -375,7 +375,7 @@ class Store:
 
     def keep_a_lead(self, db, m):
         n = db.execute('SELECT count(*) FROM members WHERE proposal_id = ? AND is_lead = 1', (m['proposal_id'],)).fetchone()[0]
-        if n <= 1: raise WorptError('A proposal must always have at least one full editor. Make someone else a full editor first.', 'last_lead')
+        if n <= 1: raise WorptError('A work plan must always have at least one full editor. Make someone else a full editor first.', 'last_lead')
 
     def remove_member(self, user, member_id, confirm=False):
         with self.connect() as db:
@@ -420,7 +420,7 @@ class Store:
         """A new parent must be in the same proposal, keep the tree within 3 levels, and must not hold effort itself."""
         if parent_id is None: return
         parent = self.get(db, 'items', parent_id, 'item')
-        if parent['proposal_id'] != proposal_id: raise WorptError('An item can only be placed inside the same proposal.', 'invalid')
+        if parent['proposal_id'] != proposal_id: raise WorptError('An item can only be placed inside the same work plan.', 'invalid')
         if self.depth(db, parent_id) + subtree_height > 2:
             raise WorptError('WorPT has three levels: task category, task and subtask. This would make a fourth.', 'too_deep')
         work = self.all(db, 'SELECT * FROM assignments WHERE item_id = ?', parent_id)
@@ -524,7 +524,7 @@ class Store:
         if f.get('is_team'): f['member_id'] = None
         elif 'member_id' in f:
             m = self.get(db, 'members', f['member_id'], 'team member')
-            if m['proposal_id'] != item['proposal_id']: raise WorptError('That person is not on this proposal.', 'invalid')
+            if m['proposal_id'] != item['proposal_id']: raise WorptError('That person is not on this work plan.', 'invalid')
         who = 'is_team = 1' if f.get('is_team') else 'member_id = ?'
         args = () if f.get('is_team') else (f.get('member_id'),)
         if ('member_id' in f or f.get('is_team')) and self.one(db, f'SELECT id FROM assignments WHERE item_id = ? AND {who} AND id != ?', item['id'], *args, assignment_id or -1):
@@ -661,7 +661,7 @@ class Store:
             self.proposal(db, user, pid, need='team')
             data, me = json.loads(s['data']), self.person_for(db, user)
             if not user.admin and not any(me and m['person_id'] == me['id'] and m['is_lead'] for m in data['members']):
-                raise WorptError('That snapshot is from before you were a full editor of this proposal, so restoring it would take '
+                raise WorptError('That snapshot is from before you were a full editor of this work plan, so restoring it would take '
                                  'away your access. Ask another full editor or an admin to restore it.', 'refused')
             self.snapshot(db, user, pid, 'before', f'Before restoring the snapshot of {s["at"]}')
             p = data['proposal']
