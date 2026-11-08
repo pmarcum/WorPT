@@ -47,6 +47,7 @@ input:disabled,select:disabled,textarea:disabled{opacity:.6}
 .logo b{font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.02em;color:var(--text)}
 .logo b i{font-style:normal;color:var(--accent);font-weight:700}
 .logo .words span{font-size:10px;color:var(--muted)}
+.logo .words .versions{font-family:var(--mono);font-size:9px;cursor:help}
 .nav{display:flex;gap:4px;flex-wrap:wrap}
 .nav button,.tabs button{padding:7px 14px;min-height:34px;border-radius:5px;border:0;background:transparent;color:var(--muted);cursor:pointer;font-family:var(--mono);font-size:12px}
 .nav button[aria-current=page],.tabs button[aria-current=page]{background:rgba(126,184,247,.14);color:var(--accent)}
@@ -180,7 +181,6 @@ pre.latex{background:var(--bg);border:1px solid var(--border);border-radius:6px;
 .compare div{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;white-space:pre-wrap;word-break:break-word}
 #toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);max-width:min(640px,92vw);background:#2a1618;border:1px solid #5a3030;color:#f7c0c0;padding:10px 14px;border-radius:8px;z-index:60;line-height:1.5}
 #toast[hidden]{display:none}
-.versions{padding:14px 18px 18px;font-family:var(--mono);font-size:10px;color:var(--muted);text-align:right}
 .nav button.back{color:var(--accent);box-shadow:inset 0 0 0 1px var(--border2)}
 .nav button.back:hover{background:rgba(126,184,247,.10);color:var(--accent)}
 #toast.ok{background:#14261e;border-color:#245a40;color:#bff0d8}
@@ -189,7 +189,7 @@ pre.latex{background:var(--bg);border:1px solid var(--border);border-radius:6px;
 </head>
 <body>
 <header class="topbar">
-  <a class="logo" href="https://github.com/pmarcum/WorPT" target="_blank" rel="noopener" title="WorPT on GitHub"><img src="https://raw.githubusercontent.com/pmarcum/WorPT/main/images/worpt-logo-dark.png" alt="WorPT" width="75" height="46"><span class="words"><b><i>Wor</i>k <i>P</i>lan <i>T</i>ool</b><span>for proposals</span></span></a>
+  <a class="logo" href="https://github.com/pmarcum/WorPT" target="_blank" rel="noopener" title="WorPT on GitHub"><img src="https://raw.githubusercontent.com/pmarcum/WorPT/main/images/worpt-logo-dark.png" alt="WorPT" width="75" height="46"><span class="words"><b><i>Wor</i>k <i>P</i>lan <i>T</i>ool</b><span>for proposals</span><span id="versions" class="versions"></span></span></a>
   <nav class="nav" aria-label="Main">
     <button type="button" data-go="proposals">Proposal Work Plans</button>
     <button type="button" data-go="people">People &amp; profiles</button>
@@ -200,7 +200,6 @@ pre.latex{background:var(--bg);border:1px solid var(--border);border-radius:6px;
 <main class="wrap" id="app"><p class="empty">Opening WorPT…</p></main>
 <div id="modal" hidden></div>
 <div id="toast" role="alert" hidden></div>
-<footer id="versions" class="versions"></footer>
 
 <script>
 'use strict';
@@ -382,7 +381,10 @@ async function start() {
     $('#who').textContent = S.cfg.email + (S.cfg.access !== 'code' ? ' · ' + S.cfg.access : '');
     // vCORE.DASHBOARD: the Core library version, then the Dashboard web app version (e.g. v2.1)
     $('#versions').textContent = 'WorPT v' + S.cfg.coreLibraryVersion + '.' + S.cfg.webAppVersion;
-    $('#versions').title = 'WorPT Core library ' + S.cfg.coreLibraryVersion + ', Dashboard ' + S.cfg.webAppVersion;
+    $('#versions').title = 'WorPT v' + S.cfg.coreLibraryVersion + '.' + S.cfg.webAppVersion + ':\n' +
+      'Core library, version ' + S.cfg.coreLibraryVersion + ': the WorPT Apps Script library that does the work for every dashboard\n' +
+      'Dashboard, version ' + S.cfg.webAppVersion + ': your dashboard web app (its Code.gs and deployment)\n' +
+      'This page itself always comes up to date from GitHub.';
     const notes = [];
     if (S.cfg.latestCoreLibrary > S.cfg.coreLibraryVersion) notes.push('WorPT Core ' + S.cfg.latestCoreLibrary + ' is available (this dashboard uses ' + S.cfg.coreLibraryVersion + '). ' + S.cfg.coreLibraryNotes);
     if (S.cfg.latestWebApp > S.cfg.webAppVersion) notes.push('A new WorPT Dashboard Code.gs (version ' + S.cfg.latestWebApp + ') is available. ' + S.cfg.webAppNotes);
