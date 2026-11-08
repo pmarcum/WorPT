@@ -52,8 +52,8 @@ Refer to <b>Customizations</b> section below to add personal preferences in the 
 \input{isANONfte}   % reset file parameters
 
 \begin{isANONfte}
-<mark>\caption{Details of work efforts per member to be funded for the present proposal; {\color{red}Detailed responsibilities, tied to tasks and science goals, are provided in Sec.\,\ref{Subsec:tmeline}.}}</mark>
-<mark>\label{tab:isANONfte}</mark>
+\caption{Details of work efforts per member to be funded for the present proposal; {\color{red}[Say where the detailed responsibilities, tied to tasks and science goals, are given, e.g. Sec.\,X.]}}
+\label{tab:isANONfte}
 \end{isANONfte}
 %::::::::::::::::::::: end isANONfte :::::::::::::::::::::::
 </code></pre>

@@ -52,8 +52,8 @@ Refer to <b>Customizations</b> section below to add personal preferences in the 
 \input{NOTANONfte}   % reset/define parameters
 
 \begin{NOTANONfte}
-<mark>\caption{Details of work efforts per member involved in the present proposal; {\color{red}Detailed responsibilities, tied to tasks and science goals, are provided in Sec.\,\ref{Subsec:tmeline}.}}
-\label{tab:NOTANONfte}</mark>
+\caption{Details of work efforts per member involved in the present proposal; {\color{red}[Say where the detailed responsibilities, tied to tasks and science goals, are given, e.g. Sec.\,X.]}}
+\label{tab:NOTANONfte}
 \end{NOTANONfte}
 %::::::::::::::::::: end NOTANONfte :::::::::::::::::::::::
 </code></pre>

@@ -99,7 +99,10 @@ def test_read_key_only_reads_tables(team, client):
     assert r.ok('get', f"/api/proposals/{team['pid']}/tables")['style'] == 'worpt' and '\\ProvidesPackage{worpt}' in sty['latex']
     every = r.ok('get', f"/api/proposals/{team['pid']}/tables?files=1")                # all of it in one request, for gooTeX
     assert sorted(every['files']) == sorted([f'{n}.tex' for n in TABLES] + ['worpt.sty']) and every['work_plan']['id'] == team['pid']
-    assert every['files']['worpt.sty'] == sty['latex'] and every['files']['NOTANONtasks.tex'] == r.ok('get', f"/api/proposals/{team['pid']}/tables/NOTANONtasks")['latex']
+    one = r.ok('get', f"/api/proposals/{team['pid']}/tables/NOTANONtasks")
+    assert every['files']['worpt.sty'] == sty['latex'] and every['files']['NOTANONtasks.tex'] == one['latex']
+    assert sorted(every['blocks']) == sorted(list(TABLES) + ['worpt']) and every['blocks']['NOTANONtasks'] == one['block']    # paste-in blocks
+    assert '\\input{NOTANONtasks}' in one['block'] and every['blocks']['worpt'] == sty['block'] and sty['block'].startswith('\\usepackage{worpt}')
     assert r.ok('get', f"/api/proposals/{team['pid']}/tables?files=1")['digest'] == every['digest']                 # unchanged: same digest
     ann = team['ann']; p = team['people']['bob']
     ann.ok('patch', f"/api/people/{p['id']}", dict(version=p['version'], institution='Elsewhere'))                  # a profile edit

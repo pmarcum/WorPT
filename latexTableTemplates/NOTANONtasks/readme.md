@@ -55,8 +55,8 @@ Refer to <b>Customizations</b> section below to add personal preferences in the 
 \input{NOTANONtasks} % reset file parameters
 
 \begin{NOTANONtasks}
-<mark>\caption{\normalsize\textbf{Task Management and Team Responsibilities}:\\
-The tasks ({\color{red}gray} headers) and sub-tasks (left), with specific assignments for the roles of task lead (middle) and expertise / analysis assistance (right).} \label{tab:NOTANONtasks}</mark>
+\caption{\normalsize\textbf{Task Management and Team Responsibilities}:\\
+The tasks (gray headers) and sub-tasks (left), with specific assignments for the roles of task lead (middle) and expertise / analysis assistance (right).} \label{tab:NOTANONtasks}
 \end{NOTANONtasks}
 %::::::::::::::::::: end NOTANONtasks :::::::::::::::::::::
 </code></pre>

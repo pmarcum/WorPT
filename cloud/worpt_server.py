@@ -16,7 +16,7 @@ import hashlib, hmac, logging, os, pathlib, sys
 from flask import Flask, jsonify, request
 from worpt.store import Store, User, WorptError
 from worpt.effort import compute, label_tree
-from worpt.tables import build, style, travel_summary, TABLES
+from worpt.tables import build, paste_in, style, travel_summary, TABLES
 
 log = logging.getLogger('worpt')
 
@@ -199,23 +199,25 @@ def create_app(db_path=None, credential=None, read_credential=None):
 
     @app.get('/api/proposals/<pid>/tables')
     def table_names(pid):
-        """The table names; with ?files=1, every file a document needs, ready to write: <table>.tex and worpt.sty."""
+        """The table names; with ?files=1, every file a document needs, ready to write (<table>.tex and worpt.sty), and
+        each table's paste-in block (and worpt's preamble line)."""
         data = work_plan(pid)
         if str(request.args.get('files', '')).lower() not in ('1', 'true', 'yes'):
             return ok(tables=list(TABLES), style='worpt')        # /tables/worpt is worpt.sty
         out = build(store.model(pid, data)[0])
         files = {f'{n}.tex': out[n] for n in TABLES}
         files['worpt.sty'] = style()
-        digest = hashlib.sha256('\0'.join(f'{k}\0{v}' for k, v in sorted(files.items())).encode()).hexdigest()
-        return ok(work_plan=dict(id=pid, title=data['proposal']['title']), files=files, digest=digest, checks=checks_of(out))
+        blocks = {n: paste_in(n) for n in TABLES + ('worpt',)}
+        digest = hashlib.sha256('\0'.join(f'{k}\0{v}' for k, v in sorted(files.items()) + sorted(('block:' + k, v) for k, v in blocks.items())).encode()).hexdigest()
+        return ok(work_plan=dict(id=pid, title=data['proposal']['title']), files=files, blocks=blocks, digest=digest, checks=checks_of(out))
 
     @app.get('/api/proposals/<pid>/tables/<name>')
     def table(pid, name):
         if name not in TABLES + ('worpt',):
             return refuse(f'There is no table called "{name}". Tables: {", ".join(TABLES)}; and worpt (worpt.sty).', 'unknown_table')
         data = work_plan(pid)
-        if name == 'worpt': return ok(name=name, latex=style(), checks=[])
+        if name == 'worpt': return ok(name=name, latex=style(), block=paste_in(name), checks=[])
         out = build(store.model(pid, data)[0], [name])
-        return ok(name=name, latex=out[name], checks=checks_of(out))
+        return ok(name=name, latex=out[name], block=paste_in(name), checks=checks_of(out))
 
     return app

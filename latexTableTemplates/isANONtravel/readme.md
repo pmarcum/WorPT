@@ -53,22 +53,22 @@ Refer to <b>Customizations</b> section below to add personal preferences in the 
 %::::::::::::::::: start isANONtravel ::::::::::::::::::::
 \input{isANONtravel}  % reset file parameters
 
-\begin{isANONtravel}  
-<mark>\caption{\normalsize \newline \newline
+\begin{isANONtravel}
+\caption{\normalsize \newline \newline
 \textbf{Notes and assumptions}:
 \newline \newline
 While final destinations are not known at this time, domestic and international costs are estimated based on values taken from NASA Travel Guidebook using historical averages for a \daysPerDomesticTrip-- and \daysPerInternationalTrip--day conference for U.S. and European cities, resp., likely to host topical meetings aligned with the science of the proposed work. Domestic lodging and per diem rates are set by the GSA; international lodging and per diem are set by the Dept. of State (note that M\&IE is included in the per diem values shown here).
-\newline \newline \noindent {\color{red} Yrs~1-2 funds will be used to present pre-publication findings at science conferences and potentially to fund trips for collaboration with team members (i.e., NASA/GSFC).}
-\newline \newline \underline{\scshape{domestic}}: 
+\newline \newline \noindent {\color{red}[Say what each year's travel funds are for.]}
+\newline \newline \underline{\scshape{domestic}}:
 per diem$+$M\&IE, car rental/day at \$\domesticPerDiemDollars\ and \$\domesticGroundTravelDollars, resp.
-\newline \newline \underline{\scshape{international}}: 
+\newline \newline \underline{\scshape{international}}:
 per diem$+$M\&IE, public transport/day estimated at  \$\internationalPerDiemDollars\ and \$\internationalGroundTravelDollars, resp.
-\newline \newline \underline{\scshape{Travel Per Team Member}} 
+\newline \newline \underline{\scshape{Travel Per Team Member}}
 (summed over \grantYears-year grant):
 \newline
 \perPersonNumberTripsList\
-\newline All travel will be to present science results of this project at conferences and/or visits to home institutions of the team members for in-person collaboration. Note that above values above do not include institutional overhead.}</mark>
-<mark>\label{tab:isANONtravel}</mark>
+\newline All travel will be to present science results of this project at conferences and/or visits to home institutions of the team members for in-person collaboration. Note that above values above do not include institutional overhead.}
+\label{tab:isANONtravel}
 \end{isANONtravel}
 %::::::::::::::::::: end isANONtravel ::::::::::::::::::::::
 </code></pre>

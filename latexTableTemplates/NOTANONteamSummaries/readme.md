@@ -53,7 +53,7 @@ Refer to <b>Customizations</b> section below to add personal preferences in the 
 \input{NOTANONteamSummaries} % reset file parameters
 
 \begin{NOTANONteamSummaries}
-\end{NOTANONteamSummaries}  
+\end{NOTANONteamSummaries}
 %::::::::::::::: end NOTANONteamSummaries ::::::::::::::::::
 </code></pre>
 

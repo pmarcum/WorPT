@@ -1,15 +1,15 @@
 # Bringing WorPT tables into gooTeX
 
 This is for whoever builds the gooTeX side of the link. It says what WorPT offers, how to ask for it,
-and what a document needs in order to use it. WorPT's side is finished and tested; nothing here needs
-a change to WorPT.
+and what a document needs in order to use it. WorPT's side is finished and tested.
 
 ## What the link does
 
 A WorPT work plan produces nine LaTeX tables (team, tasks, effort, schedule, travel, budget) and one
 package file, `worpt.sty`, that every table needs. gooTeX fetches those ten files from WorPT for the
 work plan a document names, writes them where the document's LaTeX can find them, and compiles as
-usual. The document itself only loads `worpt.sty` once and pastes in a short block per table.
+usual. The document itself only loads `worpt.sty` once and has a short paste-in block per table, which
+WorPT also hands out, so gooTeX can insert and update those too.
 
 ## Where WorPT is
 
@@ -83,15 +83,28 @@ Answer (always HTTP 200; look at `status`):
     "isANONnonlabor.tex": "...", "isANONtasks.tex": "...", "isANONtravel.tex": "...",
     "worpt.sty": "..."
   },
+  "blocks": {
+    "NOTANONfte": "%::: start NOTANONfte :::\n\\input{NOTANONfte} ...\n\\begin{NOTANONfte}\n\\caption{...}\n\\label{tab:NOTANONfte}\n\\end{NOTANONfte}\n%::: end NOTANONfte :::\n",
+    "...": "... one per table ...",
+    "worpt": "\\usepackage{worpt}   % the last package in the preamble\n"
+  },
   "digest": "3f1c…(64 hex characters)",
   "checks": [{"level": "fix", "item": "B2", "message": "has no timeline, so its weeks are not counted in any year"}]
 }
 ```
 
 - `files`: file name → contents (UTF-8 text). Write each one as is, overwriting any older copy.
-- `digest`: a fingerprint of all ten files together. It changes whenever any file's content changes:
-  an edit to the plan, to a person's profile (names and institutions appear in the tables), or a
-  WorPT update to the table templates. gooTeX can keep the last digest and skip rewriting the files
+- `blocks`: table name → its paste-in block, the LaTeX that goes in the document where the table
+  appears: the `\input`, the table's environment, and a default caption and label. Each block starts
+  with a `%::: start <name> :::` line and ends with a `%::: end <name> :::` line, so a block already in
+  a document can be found and replaced. Captions have parts meant to be rewritten for each proposal,
+  in red and in square brackets (`{\color{red}[Describe ...]}`); once a person has edited a caption,
+  replacing their block would undo the edit, so how and when gooTeX refreshes a block is gooTeX's choice.
+  `blocks["worpt"]` is the preamble line, `\usepackage{worpt}`, which goes after all other packages.
+  These are the same blocks the readmes show, and every one compiles with `worpt.sty` alone.
+- `digest`: a fingerprint of all ten files and the blocks together. It changes whenever any of them
+  changes: an edit to the plan, to a person's profile (names and institutions appear in the tables), or
+  a WorPT update to the table templates. gooTeX can keep the last digest and skip rewriting the files
   when it is the same. Don't use anything else (such as a time) to decide whether the files are current.
 - `checks`: problems WorPT found in the plan. `level` is `fix` (needs attention: some effort is not
   counted) or `warn`; `item` is a task label such as `B2`, or a team member's label; `message` is
@@ -106,7 +119,7 @@ Other read-only requests, if useful:
 |---|---|
 | `GET /health` (no key) | `{"service":"worpt","status":"ok"}` when WorPT is up |
 | `GET /api/proposals/<ID>/tables` | `{"tables": [nine names], "style": "worpt"}` |
-| `GET /api/proposals/<ID>/tables/<name>` | `{"name", "latex", "checks"}` for one table; `<name>` = `worpt` gives `worpt.sty` |
+| `GET /api/proposals/<ID>/tables/<name>` | `{"name", "latex", "block", "checks"}` for one table; `<name>` = `worpt` gives `worpt.sty` and its preamble line |
 
 ## When something is wrong
 
@@ -140,13 +153,16 @@ in its readme, placed in their own document, never by editing the files (the nex
    ```latex
    \usepackage{worpt}
    ```
-2. Where a table goes, its paste-in block from that table's readme, for example:
+2. Where a table goes, its paste-in block (from `blocks` above, or that table's readme), for example:
    ```latex
-   \input{isANONfte}
+   %:::::::::::::::::::: start isANONfte ::::::::::::::::::::::
+   \input{isANONfte}   % reset file parameters
+
    \begin{isANONfte}
-   \caption{...}
+   \caption{Details of work efforts per member to be funded for the present proposal; {\color{red}[Say where ...]}}
    \label{tab:isANONfte}
    \end{isANONfte}
+   %::::::::::::::::::::: end isANONfte :::::::::::::::::::::::
    ```
    The readmes, one per table with a picture of it and its settings:
    https://github.com/pmarcum/WorPT/tree/main/latexTableTemplates
@@ -159,4 +175,7 @@ can't compile anything, WorPT or not.
 ## Compatibility
 
 WorPT may add fields to these answers; it won't remove or rename the ones above without saying so in
-this file. New tables would appear as new entries in `files`.
+this file. New tables would appear as new entries in `files` and `blocks`.
+
+Added after the first version of this file: `blocks` in the all-files answer, and `block` in each
+table's answer.

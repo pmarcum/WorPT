@@ -98,6 +98,15 @@ def style():
     return (TEMPLATE_DIR / 'worpt.sty').read_text()
 
 
+STYLE_BLOCK = '\\usepackage{worpt}   % the last package in the preamble\n'
+
+
+def paste_in(name):
+    """What a document puts where the table goes (its readme shows the same): \\input, the environment, a caption to edit.
+    For 'worpt', the preamble line."""
+    return STYLE_BLOCK if name == 'worpt' else (TEMPLATE_DIR / name / 'pastein.tex').read_text()
+
+
 # ------------------------------------------------ everything the tables need, computed once
 def full_role(role):
     for pat, full in ((r'admin', 'Administrative PI'), (r'sci', 'Science PI'), (r'pi', 'Principal Investigator'),
