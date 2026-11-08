@@ -107,8 +107,7 @@ input.wk.on{border-color:#4a6a90}
 .star{border:0;background:transparent;cursor:pointer;padding:0 1px;font-size:12px;color:#4a4a55}
 .star.lead{color:var(--accent2)} .star.none{color:transparent;cursor:default}
 .tl{position:relative;height:100%;display:grid}
-.tl.cal{background-image:repeating-linear-gradient(to right,#5a5a68 0 1px,transparent 1px var(--yr)),repeating-linear-gradient(to right,#454552 0 1px,transparent 1px var(--qt)),
-  repeating-linear-gradient(to right,#33333d 0 1px,transparent 1px var(--mo)),repeating-linear-gradient(to right,#26262d 0 1px,transparent 1px var(--wk))}
+.tl.cal{background-image:var(--calbg)}
 .tl.leaf{touch-action:none}
 .sg-head .tl{height:auto}
 .yh{grid-column:span 4;text-align:center;font-family:var(--mono);font-size:11px;padding:3px 0;border-left:1px solid #5a5a68}
@@ -462,6 +461,7 @@ function render() {
     } else sc.scrollLeft = scrollX;
   }
   S.zoomKeep = null;
+  if (sc && planZoom() === 0 && sc.scrollWidth > sc.clientWidth + 1 && !S.refit) { S.refit = true; render(); S.refit = false; }
   if (key) {
     const b = document.querySelector('[data-save="' + CSS.escape(key) + '"],[data-key="' + CSS.escape(key) + '"]');
     if (b) {
@@ -614,8 +614,15 @@ const wIndex = (y, w) => (y && w) ? (y - 1) * WEEKS + (w - 1) : null;
 const yw = i => [Math.floor(i / WEEKS) + 1, i % WEEKS + 1];
 const qOf = w => Math.floor((w - 1) / 13) + 1;
 const ywText = i => { const [y, w] = yw(i); return 'Y' + y + ' W' + w; };
-// the calendar's lines: years, quarters, months (4 1/3 weeks), weeks
-const calStyle = ny => '--yr:' + (100 / ny) + '%;--qt:' + (100 / (ny * 4)) + '%;--mo:' + (100 / (ny * 12)) + '%;--wk:' + (100 / (ny * WEEKS)) + '%';
+// The calendar's lines, for w whole pixels a week, so each line falls on a pixel: years, quarters, months, weeks.
+// Months follow the schedule table: each quarter's 13 weeks are months of 5, 4 and 4 weeks.
+const calBg = w => {
+  const q = 13 * w, line = (c, at) => c + ' ' + at + 'px ' + (at + 1) + 'px';
+  return '--calbg:repeating-linear-gradient(to right,' + line('#5a5a68', 0) + ',transparent 1px ' + 52 * w + 'px),' +
+    'repeating-linear-gradient(to right,' + line('#454552', 0) + ',transparent 1px ' + q + 'px),' +
+    'repeating-linear-gradient(to right,transparent 0 ' + 5 * w + 'px,' + line('#33333d', 5 * w) + ',transparent ' + (5 * w + 1) + 'px ' + 9 * w + 'px,' + line('#33333d', 9 * w) + ',transparent ' + (9 * w + 1) + 'px ' + q + 'px),' +
+    'repeating-linear-gradient(to right,' + line('#26262d', 0) + ',transparent 1px ' + w + 'px)';
+};
 function teamView() { try { return localStorage.getItem('worpt_team_view') || 'columns'; } catch (e) { return 'columns'; } }
 // Calendar zoom: pixels per week. The first step fits the window (at least 5 px a week); the others scroll sideways,
 // with the titles and team columns pinned on the left.
@@ -636,8 +643,11 @@ function viewPlan() {
   const zoom = planZoom(), zoomed = zoom > 0, TITLE = 240;
   const tagLen = m => isColl(m) ? 5 : Math.max(0, ...P.items.map(i => { const u = unfundedFor(i.id, m); return u > 0 ? (wk(u) + 'u').length : 0; }));
   const colW = cols ? P.members.map(m => { const t = tagLen(m); return Math.max(54, Math.ceil(34 + 14 + (t ? 3 + t * 6.1 : 0) + 4)); }) : [];
-  const calW = NW * ZOOMS[zoom];                       // fit: at least 5 px a week, room to drag by one week
-  const tmpl = 'grid-template-columns:52px ' + (zoomed ? TITLE + 'px ' : 'minmax(200px,300px) ') + colW.map(w => w + 'px ').join('') + (zoomed ? calW + 'px' : 'minmax(' + calW + 'px,1fr)');
+  // whole pixels a week: zoomed, the step chosen; fitted, as many as fill the room (at least 5, room to drag by a week)
+  const room = ($('#plan-scroll') || {}).clientWidth || (($('#app') || {}).clientWidth || 1200) - 34;
+  const pxw = zoomed ? ZOOMS[zoom] : Math.max(ZOOMS[0], Math.floor((room - 52 - TITLE - colW.reduce((a, w) => a + w, 0)) / NW));
+  const calW = NW * pxw;
+  const tmpl = 'grid-template-columns:52px ' + TITLE + 'px ' + colW.map(w => w + 'px ').join('') + calW + 'px';
   const minW = 52 + TITLE + colW.reduce((a, w) => a + w, 0) + calW;
   const pinAt = colW.reduce((a, w) => a.concat(a[a.length - 1] + w), [52 + TITLE]);      // where each team column is pinned
   const pin = (i, z) => zoomed ? ' style="left:' + (i < 0 ? (i === -2 ? 0 : 52) : pinAt[i]) + 'px' + (z ? ';z-index:' + z : '') + '"' : '';
@@ -674,7 +684,7 @@ function viewPlan() {
     return '<div class="sg-row ' + (d === 0 ? 'cat' : '') + (open ? ' open' : '') + '" style="' + tmpl + '">' +
       '<span class="sg-lab pin"' + pin(-2) + '>' + esc(labelOf(it.id)) + '</span>' +
       '<button type="button" class="sg-title pin" data-openitem="' + it.id + '" aria-expanded="' + open + '" style="padding-left:' + (4 + d * 16) + 'px' + (zoomed ? ';left:52px' : '') + '">' + esc(it.title || '(untitled)') + '</button>' + colCells +
-      '<div class="tl cal' + (leaf ? ' leaf' : '') + '" data-tl="' + it.id + '" style="' + calStyle(ny) + '">' + bar + '</div></div>' +
+      '<div class="tl cal' + (leaf ? ' leaf' : '') + '" data-tl="' + it.id + '">' + bar + '</div></div>' +
       (open ? '<div class="sg-details card stack">' + viewItem(n, nodes) + '</div>' : '');
   }).join('');
   const toggle = P.members.length ? '<div class="row" role="group" aria-label="Where team members are shown" style="margin-left:auto"><span class="muted" style="font-size:11px">Team members shown</span>' +
@@ -683,9 +693,9 @@ function viewPlan() {
     '<button type="button" class="btn" data-zoom="-1" aria-label="Zoom out"' + (zoom === 0 ? ' disabled' : '') + '>−</button>' +
     '<button type="button" class="btn' + (zoomed ? '' : ' on') + '" data-zoom="fit" title="Fit the calendar to the window">Fit</button>' +
     '<button type="button" class="btn" data-zoom="1" aria-label="Zoom in"' + (zoom === ZOOMS.length - 1 ? ' disabled' : '') + '>+</button>' +
-    '<span class="muted mono" style="font-size:10px;min-width:62px">' + (zoomed ? ZOOMS[zoom] + ' px/week' : '') + '</span></div>';
+    '<span class="muted mono" style="font-size:10px;min-width:62px">' + pxw + ' px/week</span></div>';
   return '<section class="card" aria-label="Schedule"><div class="row" style="margin-bottom:8px"><h2 class="h2" style="margin:0">Work plan</h2>' + zoomer + toggle + '</div>' +
-    '<div class="scroll' + (zoomed ? ' zoomed' : '') + '" id="plan-scroll"><div style="min-width:' + minW + 'px">' + head +
+    '<div class="scroll' + (zoomed ? ' zoomed' : '') + '" id="plan-scroll" style="' + calBg(pxw) + '"><div style="min-width:' + minW + 'px">' + head +
     (rows || '<p class="muted" style="padding:14px 4px">No task categories yet. Start with a task category (a group of related tasks), then add tasks to it.</p>') + '</div></div>' +
     '<div class="row" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"><button type="button" class="btn" data-act="addCategory">+ Task category</button>' +
     '<span class="hint" style="margin:0;flex:1;min-width:260px">Drag across a task\'s row to draw its bar, week by week; drag a bar\'s ends (the cursor becomes ↔) to lengthen or shorten it, or its middle to move it. ' +
@@ -991,6 +1001,13 @@ const ACTIONS = {
     toast('Work plan deleted.', true); go('proposals');
   }),
 };
+
+// Fitted, the calendar follows the window's width.
+let refitTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(refitTimer);
+  refitTimer = setTimeout(() => { if (S.view === 'proposal' && S.P && planZoom() === 0 && $('#plan-scroll') && !DRAG) render(); }, 150);
+});
 
 // ── dragging a bar on the calendar (shown live; saved once, when the mouse is let go) ───────────────────────────
 let DRAG = null;
