@@ -15,6 +15,7 @@ Who may do what (agreed 5 November 2026):
 import contextlib, datetime, json, re, secrets, sqlite3
 from .tables import numbered_roles
 from .model import Person, Assignment, Item, Proposal, TravelCosts, NonlaborItem
+from .effort import WEEKS_PER_YEAR, WEEKS_PER_QUARTER
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -36,7 +37,7 @@ CREATE TABLE IF NOT EXISTS members (
 CREATE TABLE IF NOT EXISTS items (
   id INTEGER PRIMARY KEY, proposal_id TEXT NOT NULL REFERENCES proposals(id) ON DELETE CASCADE,
   parent_id INTEGER REFERENCES items(id) ON DELETE CASCADE, position INTEGER NOT NULL, title TEXT NOT NULL DEFAULT '',
-  start_year INTEGER, start_q INTEGER, end_year INTEGER, end_q INTEGER, version INTEGER NOT NULL DEFAULT 1);
+  start_year INTEGER, start_week INTEGER, end_year INTEGER, end_week INTEGER, version INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS assignments (
   id INTEGER PRIMARY KEY, item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
   member_id INTEGER REFERENCES members(id) ON DELETE CASCADE, is_team INTEGER NOT NULL DEFAULT 0,
@@ -60,7 +61,7 @@ EDITABLE = dict(
     people=('email', 'first', 'middle', 'last', 'prefix', 'suffix', 'institution', 'position', 'us', 'expertise', 'pronoun'),
     proposals=('title', 'program', 'n_years', 'rounding', 'travel'),
     members=('role', 'is_lead', 'fte_accuracy', 'bio_summary', 'task_summary', 'trips'),     # short_id follows the role
-    items=('title', 'start_year', 'start_q', 'end_year', 'end_q'),
+    items=('title', 'start_year', 'start_week', 'end_year', 'end_week'),
     assignments=('member_id', 'is_team', 'is_lead', 'weeks', 'unfunded'),
     nonlabor=('item', 'amounts'))
 JSON_COLS = {'travel', 'trips', 'amounts'}
@@ -68,7 +69,16 @@ DERIVED = dict(members=('short_id',))           # set by the server itself, neve
 PRONOUNS = ('', 'he', 'she', 'they')
 AUTO_SNAPSHOT_DAYS = 60          # automatic snapshots are kept this long; named ones until someone deletes them
 # Columns added after the first release, so an existing database gains them when the server starts.
-ADDED_COLUMNS = [('people', 'expertise', "TEXT NOT NULL DEFAULT ''"), ('people', 'pronoun', "TEXT NOT NULL DEFAULT ''")]
+ADDED_COLUMNS = [('people', 'expertise', "TEXT NOT NULL DEFAULT ''"), ('people', 'pronoun', "TEXT NOT NULL DEFAULT ''"),
+                 ('items', 'start_week', 'INTEGER'), ('items', 'end_week', 'INTEGER')]
+TIMELINE = ('start_year', 'start_week', 'end_year', 'end_week')
+
+
+def weeks_from_quarters(item):
+    """An item's timeline in weeks, from one saved in quarters (before November 2026): quarter q is weeks 13q-12 to 13q."""
+    if 'start_week' in item: return item
+    q0, q1 = item.pop('start_q', None), item.pop('end_q', None)
+    return dict(item, start_week=None if q0 is None else (q0 - 1) * WEEKS_PER_QUARTER + 1, end_week=None if q1 is None else q1 * WEEKS_PER_QUARTER)
 ROLE_WORDS = {'co-i': 'co-I', 'coi': 'co-I', 'coll': 'collab', 'gst': 'grad', 'pd': 'postdoc'}
 # Roles WorPT numbers by itself (co-I(1), co-I(2)...): what may be typed or chosen, and the code it is stored as.
 NUMBERED_ROLES = {'co-i': 'co-I', 'coi': 'co-I', 'co-investigator': 'co-I', 'coll': 'coll', 'collab': 'coll', 'collaborator': 'coll',
@@ -118,6 +128,11 @@ class Store:
             for table, column, kind in ADDED_COLUMNS:
                 if column not in {r['name'] for r in db.execute(f'PRAGMA table_info({table})')}:
                     db.execute(f'ALTER TABLE {table} ADD COLUMN {column} {kind}')
+            # timelines are kept in weeks (from November 2026): convert ones kept in quarters, exactly, then drop the quarters
+            if 'start_q' in {r['name'] for r in db.execute('PRAGMA table_info(items)')}:
+                db.execute(f'UPDATE items SET start_week = (start_q - 1) * {WEEKS_PER_QUARTER} + 1 WHERE start_q IS NOT NULL AND start_week IS NULL')
+                db.execute(f'UPDATE items SET end_week = end_q * {WEEKS_PER_QUARTER} WHERE end_q IS NOT NULL AND end_week IS NULL')
+                db.execute('ALTER TABLE items DROP COLUMN start_q'); db.execute('ALTER TABLE items DROP COLUMN end_q')
             # roles are numbered by WorPT, and labels come from roles (from November 2026): bring older members in line
             for (pid,) in db.execute('SELECT DISTINCT proposal_id FROM members').fetchall():
                 self.renumber_roles(db, User('worpt-server', 'admin'), pid)
@@ -486,7 +501,7 @@ class Store:
                 self.log(db, user, proposal_id, 'assignments', a['id'], 'move', a, self.get(db, 'assignments', a['id'], 'assignment'))
             else:
                 self.delete_row(db, user, 'assignments', a['id'], proposal_id, 'assignment')
-        timeline = {k: parent[k] for k in ('start_year', 'start_q', 'end_year', 'end_q')}
+        timeline = {k: parent[k] for k in TIMELINE}
         self.update_row(db, user, 'items', parent['id'], parent['version'], dict.fromkeys(timeline), proposal_id, 'item')
         if move['destination'] == 'new_child':
             child = self.update_row(db, user, 'items', child['id'], child['version'], timeline, proposal_id, 'item')
@@ -497,13 +512,13 @@ class Store:
             it = self.get(db, 'items', item_id, 'item')
             self.proposal(db, user, it['proposal_id'])
             f = dict(fields)
-            if any(k in f for k in ('start_year', 'start_q', 'end_year', 'end_q')):
+            if any(k in f for k in TIMELINE):
                 if self.depth(db, item_id) == 0: raise WorptError('A task category has no timeline of its own; give its tasks timelines.', 'invalid')
                 if self.has_children(db, item_id): raise WorptError("This task's timeline comes from its subtasks.", 'invalid')
                 for k in ('start_year', 'end_year'):
                     if f.get(k) is not None and int(f[k]) < 1: raise WorptError('Years are counted from 1.', 'invalid')
-                for k in ('start_q', 'end_q'):
-                    if f.get(k) is not None and int(f[k]) not in (1, 2, 3, 4): raise WorptError('Quarters are 1 to 4.', 'invalid')
+                for k in ('start_week', 'end_week'):
+                    if f.get(k) is not None and not 1 <= int(f[k]) <= WEEKS_PER_YEAR: raise WorptError(f'Weeks are 1 to {WEEKS_PER_YEAR}.', 'invalid')
             if 'title' in f: f['title'] = (f['title'] or '').strip()
             out = self.update_row(db, user, 'items', item_id, version, f, it['proposal_id'], 'item')
             if 'parent_id' in fields or 'position' in fields:
@@ -715,13 +730,13 @@ class Store:
                                  'VALUES (?,?,?,?,?,?,?,?,?)', (pid, m['person_id'], role_label(role), role, int(m['is_lead']), m['fte_accuracy'],
                                                                 m['bio_summary'], m['task_summary'], json.dumps(m['trips'])))
                 member_id[m['id']] = cur.lastrowid
-            item_id, pending = {}, list(data['items'])
+            item_id, pending = {}, [weeks_from_quarters(dict(i)) for i in data['items']]   # snapshots saved before weeks have quarters
             while pending:                                                  # parents before their children
                 ready = [i for i in pending if i['parent_id'] is None or i['parent_id'] in item_id]
                 if not ready: break
                 for i in ready:
-                    cur = db.execute('INSERT INTO items (proposal_id, parent_id, position, title, start_year, start_q, end_year, end_q) VALUES (?,?,?,?,?,?,?,?)',
-                                     (pid, item_id.get(i['parent_id']), i['position'], i['title'], i['start_year'], i['start_q'], i['end_year'], i['end_q']))
+                    cur = db.execute('INSERT INTO items (proposal_id, parent_id, position, title, start_year, start_week, end_year, end_week) VALUES (?,?,?,?,?,?,?,?)',
+                                     (pid, item_id.get(i['parent_id']), i['position'], i['title'], i['start_year'], i['start_week'], i['end_year'], i['end_week']))
                     item_id[i['id']] = cur.lastrowid
                     pending.remove(i)
             for a in data['assignments']:
@@ -742,8 +757,8 @@ class Store:
         members = [Person(m['short_id'], m['role'], m['us'], m['fte_accuracy'], last=m['last'], first=m['first'], middle=m['middle'],
                           prefix=m['prefix'], suffix=m['suffix'], institution=m['institution'], position=m['position'],
                           bio_summary=m['bio_summary'], task_summary=m['task_summary'], trips=m['trips']) for m in data['members']]
-        nodes = {i['id']: Item(i['title'], start=(i['start_year'], i['start_q']) if i['start_year'] and i['start_q'] else None,
-                               end=(i['end_year'], i['end_q']) if i['end_year'] and i['end_q'] else None) for i in data['items']}
+        nodes = {i['id']: Item(i['title'], start=(i['start_year'], i['start_week']) if i['start_year'] and i['start_week'] else None,
+                               end=(i['end_year'], i['end_week']) if i['end_year'] and i['end_week'] else None) for i in data['items']}
         for a in data['assignments']:
             nodes[a['item_id']].assignments.append(Assignment('team' if a['is_team'] else short[a['member_id']], a['weeks'], a['unfunded'], a['is_lead']))
         goals, order = [], {}

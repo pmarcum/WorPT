@@ -56,9 +56,9 @@ def team(client):
     return dict(ann=ann, bob=bob, cat=cat, dan=dan, eve=eve, people=p, prop=prop, pid=prop['id'], bob_m=bob_m, goal=goal, task=task)
 
 
-def timed(api, task, years=(1, 1, 1, 4)):
-    sy, sq, ey, eq = years
-    return api.ok('patch', f"/api/items/{task['id']}", dict(version=task['version'], start_year=sy, start_q=sq, end_year=ey, end_q=eq))['item']
+def timed(api, task, years=(1, 1, 1, 52)):
+    sy, sw, ey, ew = years                                       # (start year, start week, end year, end week)
+    return api.ok('patch', f"/api/items/{task['id']}", dict(version=task['version'], start_year=sy, start_week=sw, end_year=ey, end_week=ew))['item']
 
 
 # ------------------------------------------------ credential gate
@@ -266,11 +266,19 @@ def test_an_older_database_is_brought_up_to_date(tmp_path):
       trips TEXT NOT NULL DEFAULT '[]', version INTEGER NOT NULL DEFAULT 1, UNIQUE (proposal_id, short_id), UNIQUE (proposal_id, person_id));
       INSERT INTO people (id, last) VALUES (1, 'Marcum'), (2, 'Bobson');
       INSERT INTO proposals (id, title, created_at, created_by) VALUES ('p1', 'Old', '2026-11-06', 'x');
-      INSERT INTO members (proposal_id, person_id, short_id, role, is_lead) VALUES ('p1', 1, 'PM', 'PI', 1), ('p1', 2, 'BB', 'Co-I(3)', 0);''')
+      INSERT INTO members (proposal_id, person_id, short_id, role, is_lead) VALUES ('p1', 1, 'PM', 'PI', 1), ('p1', 2, 'BB', 'Co-I(3)', 0);
+      CREATE TABLE items (id INTEGER PRIMARY KEY, proposal_id TEXT NOT NULL, parent_id INTEGER, position INTEGER NOT NULL,
+      title TEXT NOT NULL DEFAULT '', start_year INTEGER, start_q INTEGER, end_year INTEGER, end_q INTEGER, version INTEGER NOT NULL DEFAULT 1);
+      INSERT INTO items (id, proposal_id, parent_id, position, title, start_year, start_q, end_year, end_q) VALUES
+        (1, 'p1', NULL, 0, 'Goal', NULL, NULL, NULL, NULL), (2, 'p1', 1, 0, 'Task', 1, 2, 2, 3), (3, 'p1', 1, 1, 'Undated', NULL, NULL, NULL, NULL);''')
     c.commit(); c.close()
     app = create_app(str(db), KEY, READ)
     out = Api(app.test_client(), 'eve@x.org', 'admin').ok('get', '/api/proposals/p1')
     assert {(m['role'], m['short_id']) for m in out['members']} == {('PI', 'PI'), ('co-I(1)', 'co-I 1')} and out['members'][0]['expertise'] == ''
+    timeline = {i['title']: (i['start_year'], i['start_week'], i['end_year'], i['end_week']) for i in out['items']}
+    assert timeline == {'Goal': (None,) * 4, 'Task': (1, 14, 2, 39), 'Undated': (None,) * 4}     # Q2 of year 1 to Q3 of year 2, in weeks
+    assert 'start_q' not in out['items'][0]
+    with sqlite3.connect(db) as c: assert 'start_q' not in {r[1] for r in c.execute('PRAGMA table_info(items)')}
 
 
 def test_a_proposal_always_keeps_a_lead(team):
@@ -312,19 +320,20 @@ def test_effort_only_on_the_lowest_level(team):
     ann.no('post', f"/api/items/{task['id']}/assignments", dict(member_id=m['id'], weeks=-1), code='invalid')
     a = ann.ok('post', f"/api/items/{task['id']}/assignments", dict(member_id=m['id'], weeks=10, unfunded=2))['assignment']
     ann.no('post', f"/api/items/{task['id']}/assignments", dict(member_id=m['id'], weeks=3), code='duplicate')
-    t = ann.ok('patch', f"/api/items/{task['id']}", dict(version=task['version'], start_year=1, start_q=1, end_year=2, end_q=4))['item']
+    t = ann.ok('patch', f"/api/items/{task['id']}", dict(version=task['version'], start_year=1, start_week=1, end_year=2, end_week=52))['item']
     # adding a subtask under a task with effort asks where the effort goes
     out = ann.no('post', f'/api/proposals/{pid}/items', dict(title='Sub', parent_id=task['id']), code='parent_has_effort')
     assert len(out['assignments']) == 1
     sub = ann.ok('post', f'/api/proposals/{pid}/items', dict(title='Sub', parent_id=task['id'], effort_destination='new_child'))['item']
-    assert (sub['start_year'], sub['end_q']) == (1, 4)
+    assert (sub['start_year'], sub['end_week']) == (1, 52)
     data = ann.ok('get', f'/api/proposals/{pid}')
     assert [x['item_id'] for x in data['assignments']] == [sub['id']]
     assert {i['id']: i['start_year'] for i in data['items']}[task['id']] is None
     ann.no('post', f"/api/items/{task['id']}/assignments", dict(member_id=m['id'], weeks=1), code='invalid')
     ann.no('patch', f"/api/items/{task['id']}", dict(version=t['version'] + 1, start_year=1), code='invalid')
     ann.no('patch', f"/api/items/{goal['id']}", dict(version=goal['version'], start_year=1), code='invalid')
-    ann.no('patch', f"/api/items/{sub['id']}", dict(version=sub['version'], start_q=5), code='invalid')
+    ann.no('patch', f"/api/items/{sub['id']}", dict(version=sub['version'], start_week=53), code='invalid')
+    ann.no('patch', f"/api/items/{sub['id']}", dict(version=sub['version'], end_week=0), code='invalid')
     computed = data['computed']
     assert computed['items'][str(task['id'])]['fte'] == computed['items'][str(sub['id'])]['fte']   # parents roll up
     assert computed['items'][str(task['id'])]['start'] == [1, 1]
@@ -449,8 +458,9 @@ def store_fixture(api, folder):
         for t in g['tasks']:
             task = api.ok('post', f'/api/proposals/{pid}/items', dict(title=t['title'], parent_id=goal['id']))['item']
             if t['start'] or t['end']:
-                (sy, sq), (ey, eq) = t['start'] or (None, None), t['end'] or (None, None)
-                api.ok('patch', f"/api/items/{task['id']}", dict(version=task['version'], start_year=sy, start_q=sq, end_year=ey, end_q=eq))
+                (sy, sq), (ey, eq) = t['start'] or (None, None), t['end'] or (None, None)     # the fixture's timelines are in quarters
+                api.ok('patch', f"/api/items/{task['id']}", dict(version=task['version'], start_year=sy, start_week=sq and (sq - 1) * 13 + 1,
+                                                                   end_year=ey, end_week=eq and eq * 13))
             for a in t['assignments']:
                 who = dict(is_team=True) if a['person'] == 'team' else dict(member_id=ids[a['person']])
                 api.ok('post', f"/api/items/{task['id']}/assignments", dict(who, weeks=a['weeks'], unfunded=a['unfunded'], is_lead=a['lead']))
@@ -537,7 +547,7 @@ def plan_of(api, pid):
     who = {m['id']: m['short_id'] for m in d['members']}
     return dict(settings={k: d['proposal'][k] for k in ('title', 'program', 'n_years', 'rounding', 'travel')},
                 members=sorted((m['short_id'], m['role'], m['is_lead'], m['bio_summary']) for m in d['members']),
-                items=sorted((i['title'], title.get(i['parent_id']), i['position'], i['start_year'], i['end_q']) for i in d['items']),
+                items=sorted((i['title'], title.get(i['parent_id']), i['position'], i['start_year'], i['end_week']) for i in d['items']),
                 work=sorted((title[a['item_id']], 'team' if a['is_team'] else who[a['member_id']], a['weeks'], a['is_lead']) for a in d['assignments']),
                 budget=sorted((r['item'], tuple(r['amounts'])) for r in d['nonlabor']))
 
@@ -582,6 +592,22 @@ def test_restore_refuses_to_lock_out_the_person_restoring(team):
     ann.ok('post', f"/api/proposals/{pid}/members", dict(person_id=p['cat']['id'], role='co-I(2)', is_lead=True))
     team['cat'].no('post', f"/api/snapshots/{snap['id']}/restore", code='refused')
     team['eve'].ok('post', f"/api/snapshots/{snap['id']}/restore")                # an admin may
+
+
+def test_a_snapshot_saved_in_quarters_restores_in_weeks(team, tmp_path):
+    ann, pid = team['ann'], team['pid']
+    timed(ann, team['task'], (1, 14, 2, 39))
+    snap = ann.ok('post', f'/api/proposals/{pid}/snapshots', dict(name='before weeks'))['snapshot']
+    import sqlite3                                                      # make it look like one saved before timelines were in weeks
+    with sqlite3.connect(tmp_path / 'worpt.db') as c:
+        data = json.loads(c.execute('SELECT data FROM snapshots WHERE id = ?', (snap['id'],)).fetchone()[0])
+        for i in data['items']:
+            w0, w1 = i.pop('start_week'), i.pop('end_week')
+            i['start_q'], i['end_q'] = w0 and (w0 - 1) // 13 + 1, w1 and (w1 - 1) // 13 + 1
+        c.execute('UPDATE snapshots SET data = ? WHERE id = ?', (json.dumps(data), snap['id']))
+    ann.ok('post', f"/api/snapshots/{snap['id']}/restore")
+    task = next(i for i in ann.ok('get', f'/api/proposals/{pid}')['items'] if i['title'] == 'Task A1')
+    assert (task['start_year'], task['start_week'], task['end_year'], task['end_week']) == (1, 14, 2, 39)
 
 
 def test_old_automatic_snapshots_are_removed_named_ones_kept(team, tmp_path):

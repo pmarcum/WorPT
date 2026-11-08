@@ -16,7 +16,7 @@ timeline and FTE with no people of its own.
 import math, os, pathlib, re
 from decimal import Decimal, ROUND_HALF_UP
 import numpy as np
-from .effort import compute, label_tree, TEAM
+from .effort import compute, label_tree, TEAM, WEEKS_PER_YEAR, WEEKS_PER_QUARTER, week_index
 
 TEMPLATE_DIR = pathlib.Path(os.environ.get('WORPT_TEMPLATES') or pathlib.Path(__file__).resolve().parents[2] / 'latexTableTemplates')
 ROUND_DOLLARS = 5
@@ -245,7 +245,8 @@ def tasks_anonymous(c):
         roles = [c['people'][e['id']]['newrole'] for e in row['experts']]          # FIX-5: team shows as "team"
         experts = TEAM if roles == [TEAM] else _consolidate(roles)
         lead = c['people'][row['lead']['id']]['newrole'] if row['lead'] else ''
-        (sy, sq), (fy, fq) = row['start'] or ('', ''), row['end'] or ('', '')
+        quarter = lambda yw: (yw[0], (yw[1] - 1) // WEEKS_PER_QUARTER + 1) if yw else ('', '')     # the quarter a week falls in
+        (sy, sq), (fy, fq) = quarter(row['start']), quarter(row['end'])
         s = jrep(task, '[INSERTTASKID]', row['label'])
         for k, v in (('[INSERTTASKTITLE]', row['title']), ('[INSERTLEADROLE]', lead), ('[INSERTEXPERTISEROLE]', experts),
                      ('[INSERTSTARTYEAR]', sy), ('[INSERTSTARTQTR]', sq), ('[INSERTFINISHYEAR]', fy), ('[INSERTFINISHQTR]', fq)):
@@ -330,8 +331,10 @@ def _assignment(tp, e, weeks):
 
 
 def schedule(c):
-    n, slices, ntypes = c['n'], 4, 3
-    t = jsub(template('NOTANONschedule'), r'\[INSERTLATEXFILESUBDIRECTORY\]', c['p'].latex_subdir, every=False)
+    t = template('NOTANONschedule')
+    m = re.search(r'\\def\\SlicesPerYear\{(\d+)\}', t)        # columns per year: the template says (12, months); the Sheet's had quarters
+    n, slices, ntypes = c['n'], int(m.group(1)) if m else 4, 3
+    t = jsub(t, r'\[INSERTLATEXFILESUBDIRECTORY\]', c['p'].latex_subdir, every=False)
     for k, v in (('FILENAME', 'NOTANONschedule'), ('NUMBERYEARSLICESPLUSFIVE', n * slices + 5), ('NUMBERYEARSLICESPLUSFOUR', n * slices + 4),
                  ('NUMBERYEARSLICESPLUSTHREE', n * slices + 3), ('NUMBERYEARSLICESPLUSTWO', n * slices + 2),
                  ('NUMBERYEARSLICESPLUSONE', n * slices + 1), ('NUMBERYEARSLICES', n * slices), ('NUMBERFTETYPES', ntypes),
@@ -343,10 +346,16 @@ def schedule(c):
                      ('unfunded', 'UNFUNDEDUSTEAMASSIGNMENT'), ('international', 'INTERNATIONALTEAMASSIGNMENT'), ('id2name', 'IDTONAME')):
         t, tp[key] = extract(t, f'START{tag}TEMPLATE', f'END{tag}TEMPLATE')
     t = jrep(t, '[INSERTYEARLABELLIST]', ''.join(jrep(tp['year'], '[INSERTYEARNUMBER]', y) for y in range(1, n + 1)))
-    t = jrep(t, '[INSERTYEARSLICELABELLIST]', ''.join(jrep(tp['slice'], '[INSERTSLICENUMBER]', s) for y in range(n) for s in range(1, slices + 1)))
+    m = re.search(r'\\def\\SlicesPerLabel\{(\d+)\}', t)        # a label may span several columns (a quarter over its months)
+    span = int(m.group(1)) if m else 1
+    def slice_label(k):
+        out = jrep(jrep(tp['slice'], '[INSERTSLICENUMBER]', k), '[INSERTSLICESPERLABEL]', span)
+        return jrep(out, '[INSERTLABELRULE]', '' if k == slices // span else '\\QuarterRule')
+    t = jrep(t, '[INSERTYEARSLICELABELLIST]', ''.join(slice_label(k) for y in range(n) for k in range(1, slices // span + 1)))
     def timeline(row):
         if not row['start'] or not row['end']: return tp['empty'] * (n * slices)
-        q0, q1 = (row['start'][0] - 1) * 4 + row['start'][1] - 1, (row['end'][0] - 1) * 4 + row['end'][1] - 1
+        slice_of = lambda w: (w // WEEKS_PER_YEAR) * slices + (w % WEEKS_PER_YEAR) * slices // WEEKS_PER_YEAR   # the slice a week falls in
+        q0, q1 = slice_of(week_index(row['start'])), slice_of(week_index(row['end']))
         return ''.join(tp['filled'] if q0 <= q <= q1 else tp['empty'] for q in range(n * slices))
     sections, section, tasks = [], None, []
     def close():

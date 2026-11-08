@@ -100,14 +100,13 @@ input.wk.on{border-color:#4a6a90}
 .star{border:0;background:transparent;cursor:pointer;padding:0 1px;font-size:12px;color:#4a4a55}
 .star.lead{color:var(--accent2)} .star.none{color:transparent;cursor:default}
 .tl{position:relative;height:100%;display:grid}
-.tl .q{height:100%;border-left:1px solid #222228}
-.tl .q.y{border-left-color:var(--border2)}
-.tl.leaf .q{touch-action:none}
-.tl.leaf .q:hover{background:rgba(126,184,247,.08)}
+.tl.cal{background-image:repeating-linear-gradient(to right,#5a5a68 0 1px,transparent 1px var(--yr)),repeating-linear-gradient(to right,#454552 0 1px,transparent 1px var(--qt)),
+  repeating-linear-gradient(to right,#33333d 0 1px,transparent 1px var(--mo)),repeating-linear-gradient(to right,#26262d 0 1px,transparent 1px var(--wk))}
+.tl.leaf{touch-action:none}
 .sg-head .tl{height:auto}
-.yh{grid-column:span 4;text-align:center;font-family:var(--mono);font-size:11px;padding:3px 0;border-left:1px solid var(--border2)}
-.qh{text-align:center;font-family:var(--mono);font-size:10px;color:var(--muted);padding:2px 0 5px;border-left:1px solid #222228}
-.qh.y{border-left-color:var(--border2)}
+.yh{grid-column:span 4;text-align:center;font-family:var(--mono);font-size:11px;padding:3px 0;border-left:1px solid #5a5a68}
+.qh{text-align:center;font-family:var(--mono);font-size:10px;color:var(--muted);padding:2px 0 5px;border-left:1px solid #454552}
+.qh.y{border-left-color:#5a5a68}
 .bar{position:absolute;pointer-events:none;display:flex;align-items:center;padding:0 8px;font-family:var(--mono);font-size:11px;white-space:nowrap;overflow:visible}
 .bar.leaf{top:17%;bottom:17%;border-radius:5px;background:rgba(126,184,247,.55);box-shadow:inset 5px 0 0 rgba(255,255,255,.5),inset -5px 0 0 rgba(255,255,255,.5)}
 .bar.leaf.sub{background:rgba(126,184,247,.42)}
@@ -591,19 +590,24 @@ function itemWeeks(id) {          // weeks on an item and everything under it ("
 }
 
 // The Plan tab is one schedule grid: every task category, task and subtask in order; a weeks column per team
-// member (or the people written on the bars); then the calendar in quarters, where task and subtask bars are dragged.
+// member (or the people written on the bars); then the calendar in weeks, where task and subtask bars are dragged.
 const LEVEL = ['Task category', 'Task', 'Subtask'];
-const qIndex = (y, q) => (y && q) ? (y - 1) * 4 + (q - 1) : null;
+const WEEKS = 52;                                     // a timeline year: 52 weeks, 13 to a quarter
+const wIndex = (y, w) => (y && w) ? (y - 1) * WEEKS + (w - 1) : null;
+const yw = i => [Math.floor(i / WEEKS) + 1, i % WEEKS + 1];
+const qOf = w => Math.floor((w - 1) / 13) + 1;
+const ywText = i => { const [y, w] = yw(i); return 'Y' + y + ' W' + w; };
+// the calendar's lines: years, quarters, months (4 1/3 weeks), weeks
+const calStyle = ny => '--yr:' + (100 / ny) + '%;--qt:' + (100 / (ny * 4)) + '%;--mo:' + (100 / (ny * 12)) + '%;--wk:' + (100 / (ny * WEEKS)) + '%';
 function teamView() { try { return localStorage.getItem('worpt_team_view') || 'columns'; } catch (e) { return 'columns'; } }
 function setTeamView(v) { try { localStorage.setItem('worpt_team_view', v); } catch (e) { /* not kept: fine */ } render(); }
 
 function viewPlan() {
-  const P = S.P, nodes = tree(), ny = P.proposal.n_years, NQ = ny * 4, cols = teamView() === 'columns' && P.members.length > 0;
+  const P = S.P, nodes = tree(), ny = P.proposal.n_years, NQ = ny * 4, NW = ny * WEEKS, cols = teamView() === 'columns' && P.members.length > 0;
   const tagLen = m => isColl(m) ? 5 : Math.max(0, ...P.items.map(i => { const u = unfundedFor(i.id, m); return u > 0 ? (wk(u) + 'u').length : 0; }));
   const colW = cols ? P.members.map(m => { const t = tagLen(m); return Math.max(54, Math.ceil(34 + 14 + (t ? 3 + t * 6.1 : 0) + 4)); }) : [];
-  const tmpl = 'grid-template-columns:52px minmax(200px,300px) ' + colW.map(w => w + 'px ').join('') + 'minmax(' + (NQ * 30) + 'px,1fr)';
-  const minW = 52 + 240 + colW.reduce((a, w) => a + w, 0) + NQ * 30;
-  const qcells = cls => Array.from({ length: NQ }, (_, q) => '<span class="q' + (q % 4 === 0 ? ' y' : '') + '" ' + (cls || '') + '></span>').join('');
+  const tmpl = 'grid-template-columns:52px minmax(200px,300px) ' + colW.map(w => w + 'px ').join('') + 'minmax(' + (NW * 5) + 'px,1fr)';        // at least 5 px a week, room to drag by one week
+  const minW = 52 + 240 + colW.reduce((a, w) => a + w, 0) + NW * 5;
   const head = '<div class="sg-head" style="' + tmpl + '"><span></span><span class="sg-h">Task categories, tasks and subtasks</span>' +
     (cols ? P.members.map(m => '<span class="sg-h c" title="' + esc(personName(m) + ' · ' + m.short_id) + '"><span class="who"><i>' + esc(shortName(m)) + '</i></span><b>' + esc(m.short_id) + '</b><br>weeks</span>').join('') : '') +
     '<div class="tl" style="grid-template-columns:repeat(' + NQ + ',minmax(0,1fr))">' +
@@ -614,14 +618,14 @@ function viewPlan() {
     const work = P.assignments.filter(a => a.item_id === it.id);
     const named = new Set(work.filter(a => !a.is_team).map(a => a.member_id)), team = work.find(a => a.is_team);
     let s, e;
-    if (leaf) { s = qIndex(it.start_year, it.start_q); e = qIndex(it.end_year, it.end_q); }
-    else { const c = P.computed.items[it.id] || {}; s = c.start ? qIndex(c.start[0], c.start[1]) : null; e = c.end ? qIndex(c.end[0], c.end[1]) : null; }
+    if (leaf) { s = wIndex(it.start_year, it.start_week); e = wIndex(it.end_year, it.end_week); }
+    else { const c = P.computed.items[it.id] || {}; s = c.start ? wIndex(c.start[0], c.start[1]) : null; e = c.end ? wIndex(c.end[0], c.end[1]) : null; }
     const kind = d === 0 ? 'cat' : leaf ? (d === 2 ? 'leaf sub' : 'leaf') : 'parent';
     const chips = work.map(a => {
       const m = a.is_team ? null : memberById(a.member_id), u = m && isColl(m) ? 'all' : Math.min(+a.unfunded || 0, +a.weeks || 0);
       return (a.is_team ? 'team' : (m || {}).short_id) + (a.is_lead ? '★' : '') + ' ' + wk(a.weeks) + 'w' + (u === 'all' ? ' (all unf.)' : u > 0 ? ' (' + wk(u) + ' unf.)' : '');
     }).join(' · ');
-    const bar = s == null || e == null ? '' : '<span class="bar ' + kind + '" style="left:calc(' + (Math.min(s, NQ - 1) / NQ * 100) + '% + 2px);width:calc(' + ((Math.min(e, NQ - 1) - Math.min(s, NQ - 1) + 1) / NQ * 100) + '% - 4px)">' + (!cols && leaf ? esc(chips) : '') + '</span>';
+    const bar = s == null || e == null ? '' : '<span class="bar ' + kind + '" title="' + ywText(s) + ' – ' + ywText(e) + '" style="left:calc(' + (Math.min(s, NW - 1) / NW * 100) + '% + 1px);width:calc(' + ((Math.min(e, NW - 1) - Math.min(s, NW - 1) + 1) / NW * 100) + '% - 2px)">' + (!cols && leaf ? esc(chips) : '') + '</span>';
     const colCells = !cols ? '' : P.members.map(m => {
       if (!leaf) {
         if (d === 0) return '<span></span>';
@@ -637,7 +641,7 @@ function viewPlan() {
     return '<div class="sg-row ' + (d === 0 ? 'cat' : '') + (open ? ' open' : '') + '" style="' + tmpl + '">' +
       '<span class="sg-lab">' + esc(labelOf(it.id)) + '</span>' +
       '<button type="button" class="sg-title" data-openitem="' + it.id + '" aria-expanded="' + open + '" style="padding-left:' + (4 + d * 16) + 'px">' + esc(it.title || '(untitled)') + '</button>' + colCells +
-      '<div class="tl' + (leaf ? ' leaf' : '') + '" data-tl="' + it.id + '" style="grid-template-columns:repeat(' + NQ + ',minmax(0,1fr))">' + qcells() + bar + '</div></div>' +
+      '<div class="tl cal' + (leaf ? ' leaf' : '') + '" data-tl="' + it.id + '" style="' + calStyle(ny) + '">' + bar + '</div></div>' +
       (open ? '<div class="sg-details card stack">' + viewItem(n, nodes) + '</div>' : '');
   }).join('');
   const toggle = P.members.length ? '<div class="row" role="group" aria-label="Where team members are shown" style="margin-left:auto"><span class="muted" style="font-size:11px">Team members shown</span>' +
@@ -646,7 +650,7 @@ function viewPlan() {
     '<div class="scroll"><div style="min-width:' + minW + 'px">' + head +
     (rows || '<p class="muted" style="padding:14px 4px">No task categories yet. Start with a task category (a group of related tasks), then add tasks to it.</p>') + '</div></div>' +
     '<div class="row" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"><button type="button" class="btn" data-act="addCategory">+ Task category</button>' +
-    '<span class="hint" style="margin:0;flex:1;min-width:260px">Drag across a task\'s quarters to draw its bar; drag a bar\'s ends (the cursor becomes ↔) to lengthen or shorten it, or its middle to move it. ' +
+    '<span class="hint" style="margin:0;flex:1;min-width:260px">Drag across a task\'s row to draw its bar, week by week; drag a bar\'s ends (the cursor becomes ↔) to lengthen or shorten it, or its middle to move it. ' +
     (cols ? 'Type weeks straight into a person\'s column (a gray (2) is weeks they get through "team"); ★ makes them the task lead. ' : '') + 'Click a title for its details; Close (or Esc) hides them.</span></div></section>' +
     '<div class="cols" style="margin-top:14px"><div style="flex:2 1 520px;min-width:0">' + viewRipple() + '</div><div style="flex:1 1 300px;min-width:0">' + viewChecks() + '</div></div>';
 }
@@ -687,10 +691,10 @@ function viewItem(n, nodes) {
   }
   const ysel = (field, v) => '<select data-save="item:' + it.id + ':' + field + '" data-version="' + it.version + '" data-type="int" aria-label="' + field.replace('_', ' ') + '"><option value="">—</option>' +
     Array.from({ length: Math.max(ny, v || 0) }, (_, k) => '<option value="' + (k + 1) + '"' + (v === k + 1 ? ' selected' : '') + '>Year ' + (k + 1) + '</option>').join('') + '</select>';
-  const qsel = (field, v) => '<select data-save="item:' + it.id + ':' + field + '" data-version="' + it.version + '" data-type="int" aria-label="' + field.replace('_', ' ') + '"><option value="">—</option>' +
-    [1, 2, 3, 4].map(q => '<option value="' + q + '"' + (v === q ? ' selected' : '') + '>Q' + q + '</option>').join('') + '</select>';
-  html += (d === 1 ? '<div><button type="button" class="btn" data-act="addSub">+ Subtask</button></div>' : '') + '<fieldset><legend>Timeline (or drag its bar on the calendar)</legend><div class="row"><span class="muted">From</span>' + ysel('start_year', it.start_year) + qsel('start_q', it.start_q) +
-    '<span class="muted">to</span>' + ysel('end_year', it.end_year) + qsel('end_q', it.end_q) + '</div></fieldset>';
+  const wbox = (field, v) => '<span class="muted">week</span><input type="text" inputmode="numeric" data-num="dec" data-type="int" style="width:44px" data-save="item:' + it.id + ':' + field + '" data-version="' + it.version +
+    '" value="' + (v || '') + '" placeholder="1–52" aria-label="' + field.replace('_', ' ') + '"><span class="muted" style="min-width:24px">' + (v ? 'Q' + qOf(v) : '') + '</span>';
+  html += (d === 1 ? '<div><button type="button" class="btn" data-act="addSub">+ Subtask</button></div>' : '') + '<fieldset><legend>Timeline (or drag its bar on the calendar)</legend><div class="row"><span class="muted">From</span>' + ysel('start_year', it.start_year) + wbox('start_week', it.start_week) +
+    '<span class="muted">to</span>' + ysel('end_year', it.end_year) + wbox('end_week', it.end_week) + '</div><p class="hint" style="margin:6px 0 0">A year has 52 weeks: Q1 is weeks 1–13, Q2 14–26, Q3 27–39, Q4 40–52.</p></fieldset>';
   const work = P.assignments.filter(a => a.item_id === it.id).sort((a, b) => a.position - b.position || a.id - b.id);
   const named = new Set(work.filter(a => !a.is_team).map(a => a.member_id));
   const unnamed = P.members.filter(m => !named.has(m.id));
@@ -716,7 +720,7 @@ function viewItem(n, nodes) {
     '<p class="hint">Weeks is each person\'s total effort on this item; "of which unfunded" is the part of that total not paid by this proposal. For example, 1.5 weeks with 0.5 unfunded is 1.0 week funded plus 0.5 week unfunded. A collaborator\'s weeks are all unfunded.</p>' +
     '<p class="hint">The green figure is that person\'s effort on this item in FTE, counted over the whole item (weeks ÷ ' + (P.proposal.weeks_per_fte || 52) + '), updated as you type. The panel below the calendar shows how it lands in each year once saved.</p></div>';
 }
-const span = (s, e) => s && e ? 'Year ' + s[0] + ' Q' + s[1] + ' – Year ' + e[0] + ' Q' + e[1] : 'none yet';
+const span = (s, e) => s && e ? 'Year ' + s[0] + ' week ' + s[1] + ' – Year ' + e[0] + ' week ' + e[1] : 'none yet';
 
 function viewRipple() {
   const P = S.P, ny = P.proposal.n_years, c = P.computed;
@@ -781,7 +785,7 @@ function planRoles(m) {
   order.forEach(it => {
     const work = P.assignments.filter(a => a.item_id === it.id);
     const mine = work.find(a => !a.is_team && a.member_id === m.id), team = work.find(a => a.is_team);
-    const entry = a => ({ label: labelOf(it.id), title: it.title, weeks: +a.weeks || 0, span: it.start_year ? span([it.start_year, it.start_q], [it.end_year, it.end_q]) : 'no timeline yet', team: a.is_team });
+    const entry = a => ({ label: labelOf(it.id), title: it.title, weeks: +a.weeks || 0, span: it.start_year ? span([it.start_year, it.start_week], [it.end_year, it.end_week]) : 'no timeline yet', team: a.is_team });
     if (mine) (mine.is_lead ? lead : support).push(entry(mine));
     else if (team) support.push(entry(team));
   });
@@ -954,9 +958,9 @@ const ACTIONS = {
 let DRAG = null;
 function startDrag(ev, tl) {
   if (ev.button !== 0) return;
-  const id = +tl.dataset.tl, it = S.P.items.find(i => i.id === id), NQ = S.P.proposal.n_years * 4, r = tl.getBoundingClientRect();
-  const qAt = x => Math.max(0, Math.min(NQ - 1, Math.floor((x - r.left) / r.width * NQ)));
-  const q = qAt(ev.clientX), s = qIndex(it.start_year, it.start_q), e = qIndex(it.end_year, it.end_q);
+  const id = +tl.dataset.tl, it = S.P.items.find(i => i.id === id), NQ = S.P.proposal.n_years * WEEKS, r = tl.getBoundingClientRect();
+  const qAt = x => Math.max(0, Math.min(NQ - 1, Math.floor((x - r.left) / r.width * NQ)));      // the week under the pointer
+  const q = qAt(ev.clientX), s = wIndex(it.start_year, it.start_week), e = wIndex(it.end_year, it.end_week);
   const mode = barZone(ev, tl) || 'draw';
   let bar = tl.querySelector('.bar');
   if (!bar) { bar = document.createElement('span'); bar.className = 'bar leaf'; tl.appendChild(bar); }
@@ -977,7 +981,8 @@ function hoverBar(ev, tl) {
 }
 function placeBar() {
   const d = DRAG;
-  d.bar.style.left = 'calc(' + (d.s / d.NQ * 100) + '% + 2px)'; d.bar.style.width = 'calc(' + ((d.e - d.s + 1) / d.NQ * 100) + '% - 4px)';
+  d.bar.style.left = 'calc(' + (d.s / d.NQ * 100) + '% + 1px)'; d.bar.style.width = 'calc(' + ((d.e - d.s + 1) / d.NQ * 100) + '% - 2px)';
+  d.bar.textContent = ywText(d.s) + ' – ' + ywText(d.e);              // the exact span while dragging
 }
 function moveDrag(ev) {
   const d = DRAG; if (!d) return;
@@ -990,8 +995,10 @@ function moveDrag(ev) {
 }
 function endDrag() {
   const d = DRAG; DRAG = null;
-  if (!d || (d.s === d.s0 && d.e === d.e0)) return;
-  attempt(() => change('updateItem', d.id, { version: d.it.version, start_year: Math.floor(d.s / 4) + 1, start_q: d.s % 4 + 1, end_year: Math.floor(d.e / 4) + 1, end_q: d.e % 4 + 1 }));
+  if (!d) return;
+  if (d.s === d.s0 && d.e === d.e0) { render(); return; }            // nothing changed: put the bar back as it was
+  const [sy, sw] = yw(d.s), [ey, ew] = yw(d.e);
+  attempt(() => change('updateItem', d.id, { version: d.it.version, start_year: sy, start_week: sw, end_year: ey, end_week: ew }));
 }
 
 function wire() {

@@ -43,6 +43,12 @@
    \ifWorPT@opens\@setminipage\fi                  % the table did not start a paragraph, as far as LaTeX is concerned
    \addvspace\bigskipamount}
 
+% Like \cellcolor, for the schedule's month cells, which have no padding: the color fills the cell and the thin line on
+% its left, so colored months join into one bar, and stops at the cell's right edge (colortbl would otherwise paint past
+% it, over the next line, by the column padding).
+\newcommand\WorPTcellcolor[1]{%
+  \gdef\CT@cell@color{\CT@color{#1}\global\let\CT@cell@color\relax\@tempdimb\arrayrulewidth\@tempdimc\z@}}
+
 % A table set where it stands, at the left margin (the travel and non-labor tables).
 \newenvironment{WorPTinlineTabular}[1]{\noindent\expandafter\tabular\expandafter{#1}}{\endtabular}
 

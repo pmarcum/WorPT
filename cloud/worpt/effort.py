@@ -2,7 +2,8 @@
 
 Rules (see the WorPT design decisions):
   * Effort, people and timelines live only on lowest-level items (goal > task > subtask).
-  * An item's weeks are split across years in proportion to its quarters that fall in each year.
+  * Timelines are in weeks: 52 to a year, 13 to a quarter. An item's weeks of effort are split across years in
+    proportion to its timeline's weeks that fall in each year.
   * Person FTE per year = weeks that year / weeks_per_fte, rounded to a step: 0.01 below 0.1 FTE,
     otherwise the person's FTE accuracy (default 0.05); rounding='nearest' (default) or 'up'.
   * Funded = rounded total - rounded unfunded. All-years figures are sums of rounded yearly values.
@@ -16,6 +17,16 @@ import numpy as np
 
 TEAM = 'team'
 SMALL_FTE, SMALL_STEP, DEFAULT_STEP = 0.1, 0.01, 0.05
+WEEKS_PER_YEAR, WEEKS_PER_QUARTER = 52, 13       # a timeline's calendar (not the same as weeks_per_fte, the weeks in one FTE)
+
+
+def week_index(yw):
+    """(year, week), both counted from 1, as a week counted from 0 over the whole project."""
+    return (yw[0] - 1) * WEEKS_PER_YEAR + yw[1] - 1
+
+
+def year_week(w):
+    return None if w is None else (int(w) // WEEKS_PER_YEAR + 1, int(w) % WEEKS_PER_YEAR + 1)
 
 
 @dataclass
@@ -42,7 +53,7 @@ class Assignment:
 class Item:
     title: str
     children: list = field(default_factory=list)
-    start: tuple | None = None   # (year, quarter), both counted from 1
+    start: tuple | None = None   # (year, week), both counted from 1; week 1 to 52
     end: tuple | None = None
     assignments: list = field(default_factory=list)
 
@@ -93,18 +104,18 @@ def compute(members, goals, n_years, weeks_per_fte=52, rounding='nearest'):
         if d == 0 and not it.children:
             checks.append(Check('fix', lab, 'task category has no tasks'))
 
-    # Year fractions per leaf, from quarter spans.
-    n_q = 4 * n_years
-    qs = np.array([(it.start[0] - 1) * 4 + it.start[1] - 1 if it.start else -1 for _, it in leaves])
-    qe = np.array([(it.end[0] - 1) * 4 + it.end[1] - 1 if it.end else -2 for _, it in leaves])
-    qq = np.arange(n_q)
-    inside = (qq >= qs[:, None]) & (qq <= qe[:, None])
+    # Year fractions per leaf, from the weeks of its timeline that fall in each year.
+    n_w = WEEKS_PER_YEAR * n_years
+    qs = np.array([week_index(it.start) if it.start else -1 for _, it in leaves])
+    qe = np.array([week_index(it.end) if it.end else -2 for _, it in leaves])
+    ww = np.arange(n_w)
+    inside = (ww >= qs[:, None]) & (ww <= qe[:, None])
     span = inside.sum(1)
-    frac = np.divide(inside.reshape(len(leaves), n_years, 4).sum(2), span[:, None], out=np.zeros((len(leaves), n_years)), where=span[:, None] > 0)
+    frac = np.divide(inside.reshape(len(leaves), n_years, WEEKS_PER_YEAR).sum(2), span[:, None], out=np.zeros((len(leaves), n_years)), where=span[:, None] > 0)
     for (lab, it), s, e in zip(leaves, qs, qe):
         if it.start is None or it.end is None: checks.append(Check('fix', lab, 'has no timeline, so its weeks are not counted in any year'))
         elif e < s: checks.append(Check('fix', lab, 'ends before it starts'))
-        elif e >= n_q: checks.append(Check('fix', lab, f'runs past year {n_years}; weeks after that are not counted'))
+        elif e >= n_w: checks.append(Check('fix', lab, f'runs past year {n_years}; weeks after that are not counted'))
 
     # Weeks per person per leaf (total and unfunded), with "team" expanded to unnamed members.
     rows, cols, wk, uf = [], [], [], []
@@ -150,8 +161,7 @@ def compute(members, goals, n_years, weeks_per_fte=52, rounding='nearest'):
             if node['end'] is not None: p['end'] = node['end'] if p['end'] is None else max(p['end'], node['end'])
     for lab, d, it, parent in tree:
         n = by_label[lab]
-        q2yq = lambda q: None if q is None else (int(q) // 4 + 1, int(q) % 4 + 1)
-        items[lab] = dict(title=it.title, depth=d, parent=parent, fte=n['fte'], start=q2yq(n['start']), end=q2yq(n['end']))
+        items[lab] = dict(title=it.title, depth=d, parent=parent, fte=n['fte'], start=year_week(n['start']), end=year_week(n['end']))
     return dict(ids=ids, person_year=person_year, person_total=person_total,
                 project_total=np.round(person_total.sum(0), 10), items=items,
                 leaf_labels=[lab for lab, _ in leaves], year_fraction=frac, weeks=W, unfunded_weeks=U, checks=checks)

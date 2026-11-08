@@ -13,6 +13,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 import pytest
 from worpt.model import Person, Assignment, Item, Proposal, TravelCosts, NonlaborItem
 from worpt import tables
+from worpt.effort import WEEKS_PER_QUARTER
 from worpt.tables import build, TABLES
 
 FIXTURES = pathlib.Path(__file__).parent / 'fixtures'
@@ -25,7 +26,9 @@ def load(folder):
     members = [Person(p['id'], p['role'], p['us'], p['fte_accuracy'], last=p['last'], first=p['first'], middle=p['middle'],
                       prefix=p['prefix'], suffix=p['suffix'], institution=p['institution'], position=p['position'],
                       bio_summary=p['bio_summary'], task_summary=p['task_summary'], trips=p['trips']) for p in d['team']]
-    goals = [Item(g['title'], children=[Item(t['title'], start=tuple(t['start']) if t['start'] else None, end=tuple(t['end']) if t['end'] else None,
+    start = lambda yq: (yq[0], (yq[1] - 1) * WEEKS_PER_QUARTER + 1) if yq else None     # the Sheet's timelines are in quarters:
+    end = lambda yq: (yq[0], yq[1] * WEEKS_PER_QUARTER) if yq else None                  # quarter q is weeks 13q-12 to 13q
+    goals = [Item(g['title'], children=[Item(t['title'], start=start(t['start']), end=end(t['end']),
              assignments=[Assignment(a['person'], a['weeks'], a['unfunded'], a['lead']) for a in t['assignments']])
              for t in g['tasks']]) for g in d['goals']]
     return Proposal(d['title'], d['program'], d['n_years'], members, goals, [NonlaborItem(n['item'], n['amounts']) for n in d['nonlabor']],

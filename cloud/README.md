@@ -10,7 +10,8 @@ generators**, and the **storage and API** the WorPT dashboard uses. The dashboar
 Turns the weeks assigned on work-plan items into FTE:
 
 - Effort, people and timelines live only on lowest-level items (goal > task > subtask; labels A, A1, A1.1).
-- An item's weeks are split across years in proportion to its quarters in each year.
+- Timelines are in weeks (52 to a year, 13 to a quarter); an item's weeks of effort are split across years in proportion
+  to its timeline's weeks in each year. The schedule table shows them in month columns under quarter labels.
 - Person FTE per year = weeks / 52, rounded to the nearest 0.01 below 0.1 FTE, otherwise to the
   nearest 0.05 (or the person's own FTE accuracy).
 - Funded = rounded total − rounded unfunded; all-years figures are sums of the rounded yearly values.
