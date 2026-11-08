@@ -468,6 +468,17 @@ setInterval(async () => {
 }, POLL_MS);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.pid) reloadProposal(); });
 
+// A task's details just opened: scroll the plan (and the page, if need be) so the whole panel shows, rather than running
+// off the bottom of the plan's box, under the section below it. A panel too tall for the box starts just under the header.
+function revealDetails(sc) {
+  const det = sc.querySelector('.sg-details'), row = det && det.previousElementSibling; if (!det || !row) return;
+  const head = sc.querySelector('.sg-head'), v = sc.getBoundingClientRect(), r = row.getBoundingClientRect();
+  const under = r.top - v.top - (head ? head.offsetHeight : 0), over = det.getBoundingClientRect().bottom + 12 - v.bottom;
+  if (over > 0) sc.scrollTop += Math.min(over, under); else if (under < 0) sc.scrollTop += under;
+  const d = det.getBoundingClientRect(), page = d.bottom + 12 - window.innerHeight;
+  if (page > 0) window.scrollBy(0, Math.min(page, row.getBoundingClientRect().top - 70));
+}
+
 // ── drawing (keeps the focus and anything half-typed when the page redraws) ──────────────────────────────────
 function render() {
   const a = document.activeElement, key = a && a.dataset && (a.dataset.save || a.dataset.key);
@@ -486,6 +497,8 @@ function render() {
   }
   S.zoomKeep = null;
   if (sc && planZoom() === 0 && sc.scrollWidth > sc.clientWidth + 1 && !S.refit) { S.refit = true; render(); S.refit = false; }
+  if (sc && S.open !== S.shownOpen && !S.refit) revealDetails(sc);
+  S.shownOpen = S.open;
   if (key) {
     const b = document.querySelector('[data-save="' + CSS.escape(key) + '"],[data-key="' + CSS.escape(key) + '"]');
     if (b) {
