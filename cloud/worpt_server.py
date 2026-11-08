@@ -17,6 +17,7 @@ from flask import Flask, jsonify, request
 from worpt.store import Store, User, WorptError
 from worpt.effort import compute, label_tree
 from worpt.tables import build, paste_in, style, travel_summary, TABLES
+from worpt.about import about
 
 log = logging.getLogger('worpt')
 
@@ -92,7 +93,7 @@ def create_app(db_path=None, credential=None, read_credential=None):
     @app.get('/api/me')
     def me():
         u = user()
-        return ok(email=u.email, access=u.access, profile=store.my_profile(u), proposals=store.list_proposals(u))
+        return ok(email=u.email, access=u.access, profile=store.my_profile(u), proposals=store.list_proposals(u), about=about())
 
     @app.get('/api/people')
     def people(): return ok(people=store.people(user(), request.args.get('q', '')))

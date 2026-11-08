@@ -381,10 +381,7 @@ async function start() {
     $('#who').textContent = S.cfg.email + (S.cfg.access !== 'code' ? ' · ' + S.cfg.access : '');
     // vCORE.DASHBOARD: the Core library version, then the Dashboard web app version (e.g. v2.1)
     $('#versions').textContent = 'WorPT v' + S.cfg.coreLibraryVersion + '.' + S.cfg.webAppVersion;
-    $('#versions').title = 'WorPT v' + S.cfg.coreLibraryVersion + '.' + S.cfg.webAppVersion + ':\n' +
-      'Core library, version ' + S.cfg.coreLibraryVersion + ': the WorPT Apps Script library that does the work for every dashboard\n' +
-      'Dashboard, version ' + S.cfg.webAppVersion + ': your dashboard web app (its Code.gs and deployment)\n' +
-      'This page itself always comes up to date from GitHub.';
+    versionsTitle();
     const notes = [];
     if (S.cfg.latestCoreLibrary > S.cfg.coreLibraryVersion) notes.push('WorPT Core ' + S.cfg.latestCoreLibrary + ' is available (this dashboard uses ' + S.cfg.coreLibraryVersion + '). ' + S.cfg.coreLibraryNotes);
     if (S.cfg.latestWebApp > S.cfg.webAppVersion) notes.push('A new WorPT Dashboard Code.gs (version ' + S.cfg.latestWebApp + ') is available. ' + S.cfg.webAppNotes);
@@ -395,7 +392,19 @@ async function start() {
     if (m && S.proposals.some(p => p.id === m[1])) await openProposal(m[1]); else go('proposals');
   } catch (e) { $('#app').innerHTML = '<p class="empty">' + esc((e && e.message) || e) + '</p>'; }
 }
-async function loadMe() { const r = await api('me'); S.me = r; S.proposals = r.proposals || []; }
+async function loadMe() { const r = await api('me'); S.me = r; S.proposals = r.proposals || []; versionsTitle(); }
+// The version's hover text. The two numbers are the pieces each group updates by hand; the page and the server reach
+// everyone at once, so they have no number: the server says which change it is running, and the page's latest on GitHub.
+function versionsTitle() {
+  const c = S.cfg || {}, a = (S.me && S.me.about) || {}, at = v => v.date + ' (' + v.commit + ')';
+  $('#versions').title = 'WorPT v' + c.coreLibraryVersion + '.' + c.webAppVersion + ':\n' +
+    'Core library, version ' + c.coreLibraryVersion + ': the WorPT Apps Script library that does the work for every dashboard\n' +
+    'Dashboard, version ' + c.webAppVersion + ': your dashboard web app (its Code.gs and deployment)\n\n' +
+    'Updated for everyone at once, so without a version number:\n' +
+    'Page: ' + (a.page ? 'latest change ' + at(a.page) + ', loaded from GitHub' : 'loaded from GitHub (GitHub could not be asked for its date just now)') + '\n' +
+    'Server: ' + (a.server ? 'running the change of ' + at(a.server) : 'running (its version is unknown)') +
+    (a.server_update === true ? '\nGitHub has newer server changes: on the VM, pull, test and restart WorPT' : a.server_update === false ? ', up to date with GitHub' : '');
+}
 async function loadPeople() { try { S.people = (await api('people', '')).people || []; } catch (e) { S.people = []; } }
 
 /** The top bar: "Proposal Work Plans" becomes "← All Proposal Work Plans" while a work plan is open. */
