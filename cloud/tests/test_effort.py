@@ -175,3 +175,32 @@ def test_years_split_by_the_weeks_of_the_timeline():
 def test_a_one_week_timeline_counts():
     r = one_task([Member('a')], [Assignment('a', 1, lead=True)], start=(2, 52), end=(2, 52), n_years=2)
     np.testing.assert_allclose(r['year_fraction'][0], [0, 1]) and not r['checks']
+
+
+def test_more_effort_than_the_timeline_has_weeks_warns():
+    """10 weeks of effort on a 2-week timeline: more than full time on that item (for "team" too, per person)."""
+    r = one_task([Member('a'), Member('b')], [Assignment('a', 10, lead=True), Assignment('team', 3)], start=(1, 15), end=(1, 16))
+    msgs = [(c.level, c.item, c.message) for c in r['checks']]
+    assert ('warn', 'A1', 'a has 10 weeks of effort on a 2-week timeline, more than full time') in msgs
+    assert ('warn', 'A1', 'b has 3 weeks of effort on a 2-week timeline, more than full time') in msgs
+    r = one_task([Member('a')], [Assignment('a', 2, lead=True)], start=(1, 15), end=(1, 16))
+    assert r['checks'] == []                                           # exactly full time is fine
+
+
+def test_overlapping_items_over_full_time_warn():
+    """Two items, each fine alone, overlap in weeks 11-20: 0.6 + 0.6 = 1.2 FTE there."""
+    m = [Member('a', fte_accuracy=0.01)]
+    goals = [Item('G', children=[Item('x', start=(1, 1), end=(1, 20), assignments=[Assignment('a', 12, lead=True)]),
+                                 Item('y', start=(1, 11), end=(1, 30), assignments=[Assignment('a', 12, lead=True)])])]
+    r = compute(m, goals, 2)
+    assert [(c.level, c.item, c.message) for c in r['checks']] == \
+        [('warn', 'a', 'has more than full time in Y1 W11–W20 (up to 1.20 FTE), with the effort spread evenly over each timeline')]
+    goals[0].children[1].start, goals[0].children[1].end = (1, 21), (1, 40)        # no longer overlapping
+    assert compute(m, goals, 2)['checks'] == []
+
+
+def test_more_than_one_fte_in_a_year_warns():
+    r = one_task([Member('a')], [Assignment('a', 60, lead=True)], start=Qs(1, 1), end=Qe(2, 4), n_years=2)   # 30 weeks a year: fine
+    assert r['checks'] == []
+    r = one_task([Member('a')], [Assignment('a', 60, lead=True)], start=(1, 1), end=(1, 52), n_years=2)       # 60 weeks in one year
+    assert ('warn', 'a', 'has more than 1.0 FTE in year 1 (1.15)') in [(c.level, c.item, c.message) for c in r['checks']]

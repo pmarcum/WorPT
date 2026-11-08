@@ -22,6 +22,8 @@ Turns the weeks assigned on work-plan items into FTE:
   gaps whenever someone joins, leaves, changes role or changes last name. PI, Sci-PI and Admin-PI are one person each.
   Each member is shown by a label made from the role (co-I 1, collab 1…), never their name.
 - Tasks and goals roll up from their children. Nothing is dropped silently; problems are returned as `checks`.
+- Over full time is a warning, never refused: more weeks of effort on an item than its timeline has weeks; a person
+  over full time in any week (each item's effort spread evenly over its timeline); more than 1.0 FTE in a year.
 
 Rounding is to the nearest step by default (`rounding='nearest'`); `rounding='up'` always rounds up.
 

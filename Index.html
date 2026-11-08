@@ -136,10 +136,12 @@ legend{font-size:11px;color:var(--muted);padding:0 4px}
 .fte{font-family:var(--mono);font-size:11px;color:var(--accent3);white-space:nowrap}
 .sub{font-family:var(--mono);font-size:10px;color:var(--muted)}
 .rgrid{display:grid;gap:2px;min-width:330px}
-.rgrid .c{display:flex;flex-direction:column;align-items:flex-end;gap:1px;padding:6px 4px;border-top:1px solid var(--line);font-family:var(--mono);font-size:12px;border-radius:4px;transition:background .5s}
+.rgrid .c{display:flex;justify-content:flex-end;align-items:baseline;flex-wrap:wrap;column-gap:6px;padding:6px 4px;border-top:1px solid var(--line);font-family:var(--mono);font-size:12px;border-radius:4px;transition:background .5s}
 .rgrid .c.all{background:rgba(255,255,255,.03);font-weight:600}
 .rgrid .c.lit{background:rgba(126,247,194,.22)}
-.rgrid .n{padding:6px 4px;border-top:1px solid var(--line);min-width:0}
+.rgrid .n{padding:6px 4px;border-top:1px solid var(--line);min-width:0;display:flex;align-items:baseline;gap:8px}
+.rgrid .n .who{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rgrid .c.over>span:first-child{color:#ff7b72;font-weight:700}
 .rgrid .hd{font-family:var(--mono);font-size:10px;color:var(--muted);padding:4px;text-align:right}
 .checks{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
 .checks li{display:flex;gap:8px;align-items:baseline;line-height:1.45}
@@ -782,17 +784,18 @@ function viewRipple() {
   const P = S.P, ny = P.proposal.n_years, c = P.computed;
   const cols = 'grid-template-columns:minmax(100px,1.6fr) repeat(' + (ny + 1) + ',minmax(52px,1fr))';
   const head = '<span class="hd" style="text-align:left">Person</span>' + Array.from({ length: ny }, (_, y) => '<span class="hd">Year ' + (y + 1) + '</span>').join('') + '<span class="hd">All</span>';
-  const cell = (v, mid, y, all) => '<span class="c' + (all ? ' all' : '') + (S.lit[mid + ':' + y] ? ' lit' : '') + '"><span>' + f2(v[0]) + '</span>' + (v[1] > 0 ? '<span class="sub unf">' + f2(v[1]) + ' unf.</span>' : '<span class="sub">—</span>') + '</span>';
+  // a year over full time is in red (not "All", which adds up the years)
+  const cell = (v, mid, y, all) => '<span class="c' + (all ? ' all' : v[0] > 1 + 1e-9 ? ' over' : '') + (S.lit[mid + ':' + y] ? ' lit' : '') + '"' + (!all && v[0] > 1 + 1e-9 ? ' title="More than 1.0 FTE in this year"' : '') + '><span>' + f2(v[0]) + '</span>' + (v[1] > 0 ? '<span class="sub unf">' + f2(v[1]) + ' unf.</span>' : '') + '</span>';
   const rows = P.members.map(m => {
     const r = c.people[m.id] || { per_year: [], total: [0, 0, 0] };
-    return '<span class="n"><span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(personName(m)) + '</span><span class="sub">' + esc(idRole(m)) + '</span></span>' +
+    return '<span class="n"><span class="who">' + esc(personName(m)) + '</span><span class="sub">' + esc(idRole(m)) + '</span></span>' +
       Array.from({ length: ny }, (_, y) => cell(r.per_year[y] || [0, 0, 0], m.id, y)).join('') + cell(r.total, m.id, ny, true);
   }).join('');
   // project total per year = the sum of the people's rounded yearly figures (as in the tables); all years: the engine's total
   const yearSum = y => P.members.reduce((a, m) => a + (((c.people[m.id] || {}).per_year || [])[y] || [0])[0], 0);
   const totals = '<span class="n"><b>Project</b></span>' + Array.from({ length: ny }, (_, y) => '<span class="c"><b>' + f2(yearSum(y)) + '</b></span>').join('') +
     '<span class="c all">' + f2((c.project_total || [0])[0]) + '</span>';
-  return '<div class="card"><h2 class="h2">Effort per person (FTE)</h2><p class="hint" style="margin:0 0 8px">Each cell: total, with the unfunded part below. Cells that just changed light up.</p>' +
+  return '<div class="card"><h2 class="h2">Effort per person (FTE)</h2><p class="hint" style="margin:0 0 8px">Each cell: total, with the unfunded part of it beside it. A year over 1.0 FTE is in red. Cells that just changed light up.</p>' +
     '<div class="scroll"><div class="rgrid" style="' + cols + '">' + head + rows + (P.members.length ? totals : '') + '</div></div>' +
     (P.members.length ? '' : '<p class="hint">No team members yet.</p>') + '</div>';
 }

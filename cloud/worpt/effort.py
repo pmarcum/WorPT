@@ -10,7 +10,7 @@ Rules (see the WorPT design decisions):
   * "team" gives its weeks to every team member not named on that item.
   * Collaborators (role "coll..." or a non-US institution) are always 100% unfunded.
   * Parents roll up from their children: FTE is summed, the timeline spans the children.
-Nothing is dropped silently: anything incomplete is reported in `checks`.
+Nothing is dropped silently: anything incomplete is reported in `checks`, and so is anyone over full time (warnings only).
 """
 from dataclasses import dataclass, field
 import numpy as np
@@ -27,6 +27,12 @@ def week_index(yw):
 
 def year_week(w):
     return None if w is None else (int(w) // WEEKS_PER_YEAR + 1, int(w) % WEEKS_PER_YEAR + 1)
+
+
+def week_span(a, b):
+    """Weeks a to b (counted from 0 over the project) as text: "Y1 W15-W20", or "Y1 W50-Y2 W3"."""
+    (ya, wa), (yb, wb) = year_week(a), year_week(b)
+    return f'Y{ya} W{wa}' + ('' if a == b else f'\u2013W{wb}' if ya == yb else f'\u2013Y{yb} W{wb}')
 
 
 @dataclass
@@ -138,6 +144,11 @@ def compute(members, goals, n_years, weeks_per_fte=52, rounding='nearest'):
     np.add.at(U, (rows, cols), uf)
     U[collab] = W[collab]                      # collaborators: always 100% unfunded
 
+    # More weeks of effort on an item than its timeline has weeks: more than full time on it.
+    length = np.where((qs >= 0) & (qe >= qs), qe - qs + 1, 0)
+    for li, pi in zip(*np.nonzero((W.T > length[:, None]) & (length[:, None] > 0))):
+        checks.append(Check('warn', leaves[li][0], f'{ids[pi]} has {W[pi, li]:g} weeks of effort on a {length[li]}-week timeline, more than full time'))
+
     # Person FTE per year: raw, then rounded; funded = total - unfunded.
     raw_t, raw_u = W @ frac / weeks_per_fte, U @ frac / weeks_per_fte
     rnd = lambda x: mround(x, np.where(x < SMALL_FTE, SMALL_STEP, step[:, None]), rounding)
@@ -146,6 +157,17 @@ def compute(members, goals, n_years, weeks_per_fte=52, rounding='nearest'):
     person_total = np.round(person_year.sum(1), 10)                                       # (P, 3)
     for m, t in zip(members, person_total[:, 0]):
         if t == 0: checks.append(Check('fix', m.id, 'is on no item, so no effort is counted for them'))
+
+    # Over full time: in some weeks, with each item's effort spread evenly over its timeline; and in a year, in FTE.
+    load = W @ np.divide(inside, span[:, None], out=np.zeros(inside.shape), where=span[:, None] > 0)    # (P, weeks)
+    over = load > 1 + 1e-9
+    edges = np.diff(np.pad(over, ((0, 0), (1, 1))).astype(int), axis=1)                             # +1 where a run starts, -1 after it ends
+    for pi in np.nonzero(over.any(1))[0]:
+        runs = list(zip(np.nonzero(edges[pi] == 1)[0], np.nonzero(edges[pi] == -1)[0] - 1))
+        when = ', '.join(week_span(a, b) for a, b in runs[:3]) + (f' and {len(runs) - 3} more stretches' if len(runs) > 3 else '')
+        checks.append(Check('warn', ids[pi], f'has more than full time in {when} (up to {load[pi].max():.2f} FTE), with the effort spread evenly over each timeline'))
+    for pi, ys in ((pi, np.nonzero(fte_t[pi] > 1 + 1e-9)[0]) for pi in range(len(members))):
+        if len(ys): checks.append(Check('warn', ids[pi], 'has more than 1.0 FTE in ' + ', '.join(f'year {y + 1} ({fte_t[pi, y]:.2f})' for y in ys)))
 
     # Item FTE (unrounded) and roll-ups up the tree.
     leaf_fte = np.stack([W.sum(0), U.sum(0), W.sum(0) - U.sum(0)], 1) / weeks_per_fte
