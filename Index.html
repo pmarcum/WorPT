@@ -724,7 +724,7 @@ function viewPlan() {
     }).join('');
     return '<div class="sg-row ' + (d === 0 ? 'cat' : '') + (open ? ' open' : '') + '" style="' + tmpl + '">' +
       '<span class="sg-lab pin"' + pin(-2) + '>' + (iss.row[it.id] ? '<span class="bad"' + tip(iss.row[it.id]) + '>' + esc(labelOf(it.id)) + '</span>' : esc(labelOf(it.id))) + '</span>' +
-      '<button type="button" class="sg-title pin" data-openitem="' + it.id + '" aria-expanded="' + open + '" style="padding-left:' + (4 + d * 16) + 'px' + (zoomed ? ';left:52px' : '') + '">' + esc(it.title || '(untitled)') + '</button>' + colCells +
+      '<button type="button" class="sg-title pin" data-openitem="' + it.id + '" aria-expanded="' + open + '" title="' + esc(it.title || '(untitled)') + '" style="padding-left:' + (4 + d * 16) + 'px' + (zoomed ? ';left:52px' : '') + '">' + esc(it.title || '(untitled)') + '</button>' + colCells +
       '<div class="tl cal' + (leaf ? ' leaf' : '') + '" data-tl="' + it.id + '">' + bar + '</div></div>' +
       (open ? '<div class="sg-details card stack">' + viewItem(n, nodes) + '</div>' : '');
   }).join('');
