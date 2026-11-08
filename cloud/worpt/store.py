@@ -457,14 +457,18 @@ class Store:
     def has_children(self, db, item_id):
         return bool(db.execute('SELECT 1 FROM items WHERE parent_id = ?', (item_id,)).fetchone())
 
-    def renumber(self, db, proposal_id, parent_id):
-        ids = [r[0] for r in db.execute('SELECT id FROM items WHERE proposal_id = ? AND parent_id IS ? ORDER BY position, id', (proposal_id, parent_id))]
+    def renumber(self, db, proposal_id, parent_id, skip=None):
+        """Number the items under parent_id 0, 1, 2… in their order, leaving out item `skip` (one being moved)."""
+        ids = [r[0] for r in db.execute('SELECT id FROM items WHERE proposal_id = ? AND parent_id IS ? AND id IS NOT ? ORDER BY position, id',
+                                        (proposal_id, parent_id, skip))]
         db.executemany('UPDATE items SET position = ? WHERE id = ?', [(k, i) for k, i in enumerate(ids)])
 
-    def place(self, db, proposal_id, parent_id, position):
-        n = db.execute('SELECT count(*) FROM items WHERE proposal_id = ? AND parent_id IS ?', (proposal_id, parent_id)).fetchone()[0]
+    def place(self, db, proposal_id, parent_id, position, skip=None):
+        """Make room at `position` (0 = first; None = last) among the items under parent_id, other than item `skip`."""
+        n = db.execute('SELECT count(*) FROM items WHERE proposal_id = ? AND parent_id IS ? AND id IS NOT ?', (proposal_id, parent_id, skip)).fetchone()[0]
         position = n if position is None else max(0, min(int(position), n))
-        db.execute('UPDATE items SET position = position + 1 WHERE proposal_id = ? AND parent_id IS ? AND position >= ?', (proposal_id, parent_id, position))
+        db.execute('UPDATE items SET position = position + 1 WHERE proposal_id = ? AND parent_id IS ? AND id IS NOT ? AND position >= ?',
+                   (proposal_id, parent_id, skip, position))
         return position
 
     def check_new_parent(self, db, user, proposal_id, parent_id, subtree_height, effort_destination=None, new_item_id=None):
@@ -496,14 +500,20 @@ class Store:
     def move_effort(self, db, user, proposal_id, move, child):
         parent = move['parent']
         for a in move['work']:
-            if move['destination'] == 'new_child':
+            # someone already on the child (an item being moved in can have its own effort): their weeks are added together
+            same = self.one(db, 'SELECT * FROM assignments WHERE item_id = ? AND member_id IS ? AND is_team = ?', child['id'], a['member_id'], a['is_team'])
+            if move['destination'] == 'new_child' and same:
+                self.update_row(db, user, 'assignments', same['id'], same['version'], dict(weeks=same['weeks'] + a['weeks'], unfunded=same['unfunded'] + a['unfunded'],
+                                is_lead=max(same['is_lead'], a['is_lead'])), proposal_id, 'assignment')
+                self.delete_row(db, user, 'assignments', a['id'], proposal_id, 'assignment')
+            elif move['destination'] == 'new_child':
                 db.execute('UPDATE assignments SET item_id = ?, version = version + 1 WHERE id = ?', (child['id'], a['id']))
                 self.log(db, user, proposal_id, 'assignments', a['id'], 'move', a, self.get(db, 'assignments', a['id'], 'assignment'))
             else:
                 self.delete_row(db, user, 'assignments', a['id'], proposal_id, 'assignment')
         timeline = {k: parent[k] for k in TIMELINE}
         self.update_row(db, user, 'items', parent['id'], parent['version'], dict.fromkeys(timeline), proposal_id, 'item')
-        if move['destination'] == 'new_child':
+        if move['destination'] == 'new_child' and child['start_year'] is None and child['end_year'] is None:    # a child with its own timeline keeps it
             child = self.update_row(db, user, 'items', child['id'], child['version'], timeline, proposal_id, 'item')
         return child
 
@@ -538,9 +548,9 @@ class Store:
                 raise WorptError('This item has its own effort or timeline, so it cannot become a task category; task categories carry no effort.', 'invalid')
         move = self.check_new_parent(db, user, pid, parent_id, h, effort_destination) if parent_id != it['parent_id'] else None
         old_parent = it['parent_id']
-        db.execute('UPDATE items SET position = -1 WHERE id = ?', (it['id'],))
-        self.renumber(db, pid, old_parent)
-        pos = self.place(db, pid, parent_id, position)
+        if position is None and parent_id == old_parent: return it                # nowhere new to go
+        self.renumber(db, pid, old_parent, skip=it['id'])                        # take it out of its old place
+        pos = self.place(db, pid, parent_id, position, skip=it['id'])            # position: where it goes among the others
         db.execute('UPDATE items SET parent_id = ?, position = ?, version = version + 1 WHERE id = ?', (parent_id, pos, it['id']))
         self.renumber(db, pid, parent_id)
         moved = self.get(db, 'items', it['id'], 'item')

@@ -372,6 +372,50 @@ def test_moving_items(team):
     assert labels == {'A', 'B', 'B1', 'B1.1'}
 
 
+def test_moving_up_and_down_one_place(team):
+    ann, pid, goal = team['ann'], team['pid'], team['goal']
+    for t in ('T2', 'T3', 'T4'): ann.ok('post', f'/api/proposals/{pid}/items', dict(title=t, parent_id=goal['id']))
+    def order():
+        items = ann.ok('get', f'/api/proposals/{pid}')['items']
+        kids = sorted((i for i in items if i['parent_id'] == goal['id']), key=lambda i: i['position'])
+        assert [i['position'] for i in kids] == list(range(len(kids)))           # always numbered 0, 1, 2… with no gaps
+        return [i['title'] for i in kids], {i['title']: i for i in kids}
+    names, it = order(); assert names == ['Task A1', 'T2', 'T3', 'T4']
+    def move(title, by):
+        i = order()[1][title]; ann.ok('patch', f"/api/items/{i['id']}", dict(version=i['version'], parent_id=goal['id'], position=i['position'] + by))
+        return order()[0]
+    assert move('T3', -1) == ['Task A1', 'T3', 'T2', 'T4']
+    assert move('T3', -1) == ['T3', 'Task A1', 'T2', 'T4']
+    assert move('T3', -1) == ['T3', 'Task A1', 'T2', 'T4']                        # already first
+    assert move('Task A1', 1) == ['T3', 'T2', 'Task A1', 'T4']
+    assert move('Task A1', 1) == ['T3', 'T2', 'T4', 'Task A1']
+    assert move('Task A1', 1) == ['T3', 'T2', 'T4', 'Task A1']                     # already last
+    assert move('T2', 1) == ['T3', 'T4', 'T2', 'Task A1']
+
+
+def test_subtask_up_to_a_task_and_task_down_to_a_subtask(team):
+    ann, pid, goal, task, m = team['ann'], team['pid'], team['goal'], team['task'], team['bob_m']
+    t2 = ann.ok('post', f'/api/proposals/{pid}/items', dict(title='T2', parent_id=goal['id']))['item']
+    sub = ann.ok('post', f'/api/proposals/{pid}/items', dict(title='Sub', parent_id=task['id']))['item']
+    sub = ann.ok('patch', f"/api/items/{sub['id']}", dict(version=sub['version'], start_year=1, start_week=5, end_year=1, end_week=20))['item']
+    ann.ok('post', f"/api/items/{sub['id']}/assignments", dict(member_id=m['id'], weeks=6, is_lead=True))
+    # up a level, right after its old task: its effort and timeline go with it
+    up = ann.ok('patch', f"/api/items/{sub['id']}", dict(version=sub['version'], parent_id=goal['id'], position=1))['item']
+    d = ann.ok('get', f'/api/proposals/{pid}')
+    assert [i['title'] for i in sorted((i for i in d['items'] if i['parent_id'] == goal['id']), key=lambda i: i['position'])] == ['Task A1', 'Sub', 'T2']
+    assert (up['start_week'], up['end_week']) == (5, 20) and [a['item_id'] for a in d['assignments']] == [sub['id']]
+    # down a level, under a task with effort of its own: that effort moves into it, and the same person's weeks add up
+    t2 = ann.ok('patch', f"/api/items/{t2['id']}", dict(version=t2['version'], start_year=1, start_week=1, end_year=1, end_week=30))['item']
+    ann.ok('post', f"/api/items/{t2['id']}/assignments", dict(member_id=m['id'], weeks=4))
+    out = ann.no('patch', f"/api/items/{up['id']}", dict(version=up['version'], parent_id=t2['id']), code='parent_has_effort')
+    down = ann.ok('patch', f"/api/items/{up['id']}", dict(version=up['version'], parent_id=t2['id'], effort_destination='new_child'))['item']
+    d = ann.ok('get', f'/api/proposals/{pid}')
+    assert down['parent_id'] == t2['id'] and (down['start_week'], down['end_week']) == (5, 20)       # keeps its own timeline
+    assert [(a['item_id'], a['weeks'], a['is_lead']) for a in d['assignments']] == [(sub['id'], 10, True)]
+    assert {i['id']: i['start_year'] for i in d['items']}[t2['id']] is None
+    ann.no('patch', f"/api/items/{t2['id']}", dict(version=d and [i for i in d['items'] if i['id'] == t2['id']][0]['version'], parent_id=task['id']), code='too_deep')
+
+
 def test_deleting_an_item_previews_counts(team):
     ann, pid, task, m = team['ann'], team['pid'], team['task'], team['bob_m']
     sub = ann.ok('post', f'/api/proposals/{pid}/items', dict(title='Sub', parent_id=task['id']))['item']
