@@ -78,7 +78,8 @@ label.f input,label.f select,label.f textarea{font-size:13px}
 /* plan */
 .btn.on{border-color:var(--accent);background:rgba(126,184,247,.14);color:var(--accent)}
 .sg-head,.sg-row{display:grid;align-items:center}
-#plan-scroll{container-type:inline-size}
+#plan-scroll{container-type:inline-size;overflow:auto;max-height:max(340px,calc(100vh - 150px))}
+#plan-scroll .sg-head{position:sticky;top:0;z-index:6;background:var(--surface)}
 .zoomed .pin{position:sticky;z-index:2;background:var(--surface);align-self:stretch;display:flex;align-items:center}
 .zoomed .sg-h.pin{align-items:flex-end}
 .zoomed .sg-h.c.pin{flex-direction:column;justify-content:flex-end}
@@ -450,7 +451,7 @@ function render() {
   const a = document.activeElement, key = a && a.dataset && (a.dataset.save || a.dataset.key);
   const typed = a && key && a.matches('input:not([type=checkbox]):not([type=radio]),textarea') ? { value: a.value, s: a.selectionStart, e: a.selectionEnd, dirty: a.value !== a.defaultValue } : null;
   const html = S.view === 'proposal' && S.P ? viewProposal() : S.view === 'people' ? viewPeople() : viewProposals();
-  const was = $('#plan-scroll'), scrollX = was ? was.scrollLeft : 0;
+  const was = $('#plan-scroll'), scrollX = was ? was.scrollLeft : 0, scrollY = was ? was.scrollTop : 0;
   $('#app').innerHTML = html;
   const sc = $('#plan-scroll');
   if (sc) {
@@ -459,6 +460,7 @@ function render() {
       const r = cal.getBoundingClientRect(), v = sc.getBoundingClientRect();
       sc.scrollLeft += (r.left + S.zoomKeep * r.width) - (v.left + v.width / 2);
     } else sc.scrollLeft = scrollX;
+    sc.scrollTop = scrollY;
   }
   S.zoomKeep = null;
   if (sc && planZoom() === 0 && sc.scrollWidth > sc.clientWidth + 1 && !S.refit) { S.refit = true; render(); S.refit = false; }
@@ -616,13 +618,19 @@ const qOf = w => Math.floor((w - 1) / 13) + 1;
 const ywText = i => { const [y, w] = yw(i); return 'Y' + y + ' W' + w; };
 // The calendar's lines, for w whole pixels a week, so each line falls on a pixel: years, quarters, months, weeks.
 // Months follow the schedule table: each quarter's 13 weeks are months of 5, 4 and 4 weeks.
+// w is in CSS pixels but a whole number of screen pixels (see weekPx), and each line is one screen pixel wide, so the
+// lines stay sharp and evenly spaced at any display scaling (125%, 150%...) or browser zoom.
 const calBg = w => {
-  const q = 13 * w, line = (c, at) => c + ' ' + at + 'px ' + (at + 1) + 'px';
-  return '--calbg:repeating-linear-gradient(to right,' + line('#5a5a68', 0) + ',transparent 1px ' + 52 * w + 'px),' +
-    'repeating-linear-gradient(to right,' + line('#454552', 0) + ',transparent 1px ' + q + 'px),' +
-    'repeating-linear-gradient(to right,transparent 0 ' + 5 * w + 'px,' + line('#33333d', 5 * w) + ',transparent ' + (5 * w + 1) + 'px ' + 9 * w + 'px,' + line('#33333d', 9 * w) + ',transparent ' + (9 * w + 1) + 'px ' + q + 'px),' +
-    'repeating-linear-gradient(to right,' + line('#26262d', 0) + ',transparent 1px ' + w + 'px)';
+  const d = 1 / (window.devicePixelRatio || 1), q = 13 * w, px = v => +v.toFixed(4) + 'px';
+  const line = (c, at) => c + ' ' + px(at) + ' ' + px(at + d);
+  return '--calbg:repeating-linear-gradient(to right,' + line('#5a5a68', 0) + ',transparent ' + px(d) + ' ' + px(52 * w) + '),' +
+    'repeating-linear-gradient(to right,' + line('#454552', 0) + ',transparent ' + px(d) + ' ' + px(q) + '),' +
+    'repeating-linear-gradient(to right,transparent 0 ' + px(5 * w) + ',' + line('#33333d', 5 * w) + ',transparent ' + px(5 * w + d) + ' ' + px(9 * w) + ',' +
+    line('#33333d', 9 * w) + ',transparent ' + px(9 * w + d) + ' ' + px(q) + '),' +
+    'repeating-linear-gradient(to right,' + line('#26262d', 0) + ',transparent ' + px(d) + ' ' + px(w) + ')';
 };
+// CSS pixels a week that make a whole number of screen pixels: at least `css`, or (fit) at most `css`
+const weekPx = (css, fit) => { const r = window.devicePixelRatio || 1, n = fit ? Math.floor(css * r) : Math.round(css * r); return Math.max(1, n) / r; };
 function teamView() { try { return localStorage.getItem('worpt_team_view') || 'columns'; } catch (e) { return 'columns'; } }
 // Calendar zoom: pixels per week. The first step fits the window (at least 5 px a week); the others scroll sideways,
 // with the titles and team columns pinned on the left.
@@ -645,7 +653,7 @@ function viewPlan() {
   const colW = cols ? P.members.map(m => { const t = tagLen(m); return Math.max(54, Math.ceil(34 + 14 + (t ? 3 + t * 6.1 : 0) + 4)); }) : [];
   // whole pixels a week: zoomed, the step chosen; fitted, as many as fill the room (at least 5, room to drag by a week)
   const room = ($('#plan-scroll') || {}).clientWidth || (($('#app') || {}).clientWidth || 1200) - 34;
-  const pxw = zoomed ? ZOOMS[zoom] : Math.max(ZOOMS[0], Math.floor((room - 52 - TITLE - colW.reduce((a, w) => a + w, 0)) / NW));
+  const pxw = zoomed ? weekPx(ZOOMS[zoom]) : Math.max(weekPx(ZOOMS[0]), weekPx((room - 52 - TITLE - colW.reduce((a, w) => a + w, 0)) / NW, true));
   const calW = NW * pxw;
   const tmpl = 'grid-template-columns:52px ' + TITLE + 'px ' + colW.map(w => w + 'px ').join('') + calW + 'px';
   const minW = 52 + TITLE + colW.reduce((a, w) => a + w, 0) + calW;
@@ -693,7 +701,7 @@ function viewPlan() {
     '<button type="button" class="btn" data-zoom="-1" aria-label="Zoom out"' + (zoom === 0 ? ' disabled' : '') + '>−</button>' +
     '<button type="button" class="btn' + (zoomed ? '' : ' on') + '" data-zoom="fit" title="Fit the calendar to the window">Fit</button>' +
     '<button type="button" class="btn" data-zoom="1" aria-label="Zoom in"' + (zoom === ZOOMS.length - 1 ? ' disabled' : '') + '>+</button>' +
-    '<span class="muted mono" style="font-size:10px;min-width:62px">' + pxw + ' px/week</span></div>';
+    '<span class="muted mono" style="font-size:10px;min-width:62px">' + +pxw.toFixed(1) + ' px/week</span></div>';
   return '<section class="card" aria-label="Schedule"><div class="row" style="margin-bottom:8px"><h2 class="h2" style="margin:0">Work plan</h2>' + zoomer + toggle + '</div>' +
     '<div class="scroll' + (zoomed ? ' zoomed' : '') + '" id="plan-scroll" style="' + calBg(pxw) + '"><div style="min-width:' + minW + 'px">' + head +
     (rows || '<p class="muted" style="padding:14px 4px">No task categories yet. Start with a task category (a group of related tasks), then add tasks to it.</p>') + '</div></div>' +
@@ -1002,11 +1010,11 @@ const ACTIONS = {
   }),
 };
 
-// Fitted, the calendar follows the window's width.
+// The calendar follows the window: its width (fitted) and its screen pixels (browser zoom).
 let refitTimer = null;
 window.addEventListener('resize', () => {
   clearTimeout(refitTimer);
-  refitTimer = setTimeout(() => { if (S.view === 'proposal' && S.P && planZoom() === 0 && $('#plan-scroll') && !DRAG) render(); }, 150);
+  refitTimer = setTimeout(() => { if (S.view === 'proposal' && S.P && $('#plan-scroll') && !DRAG) render(); }, 150);   // also on browser zoom: screen pixels change
 });
 
 // ── dragging a bar on the calendar (shown live; saved once, when the mouse is let go) ───────────────────────────
