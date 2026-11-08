@@ -683,7 +683,7 @@ function viewPlan() {
     '<button type="button" class="btn" data-zoom="1" aria-label="Zoom in"' + (zoom === ZOOMS.length - 1 ? ' disabled' : '') + '>+</button>' +
     '<span class="muted mono" style="font-size:10px">' + +pxw.toFixed(1) + ' px/week</span></div>';
   const head = '<div class="sg-head" style="' + tmpl + '"><div class="sg-ctl pin"' + pin(-2) + '>' + zoomer + toggle + '<span class="sg-h">Task categories, tasks and subtasks</span></div>' +
-    (cols ? P.members.map((m, i) => '<span class="sg-h c pin"' + pin(i, 3 + P.members.length - i) + ' title="' + esc(personName(m) + ' · ' + m.short_id) + '"><span class="who" style="height:' + whoH + 'px"><i>' + esc(shortName(m)) + '</i></span><b>' + esc(m.short_id) + '</b><br>weeks</span>').join('') : '') +
+    (cols ? P.members.map((m, i) => '<span class="sg-h c pin"' + pin(i, 3 + P.members.length - i) + ' title="' + esc(personName(m)) + '"><span class="who" style="height:' + whoH + 'px"><i>' + esc(shortName(m)) + '</i></span><b>' + esc(m.short_id) + '</b><br>weeks</span>').join('') : '') +
     '<div class="tl" style="grid-template-columns:repeat(' + NQ + ',minmax(0,1fr))">' +
     Array.from({ length: ny }, (_, y) => '<span class="yh">Year ' + (y + 1) + '</span>').join('') +
     Array.from({ length: NQ }, (_, q) => '<span class="qh' + (q % 4 === 0 ? ' y' : '') + '">Q' + (q % 4 + 1) + '</span>').join('') + '</div></div>';
