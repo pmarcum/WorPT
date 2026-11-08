@@ -183,6 +183,7 @@ def test_more_effort_than_the_timeline_has_weeks_warns():
     msgs = [(c.level, c.item, c.message) for c in r['checks']]
     assert ('warn', 'A1', 'a has 10 weeks of effort on a 2-week timeline, more than full time') in msgs
     assert ('warn', 'A1', 'b has 3 weeks of effort on a 2-week timeline, more than full time') in msgs
+    assert {c.person for c in r['checks'] if c.item == 'A1'} == {'a', 'b'}
     r = one_task([Member('a')], [Assignment('a', 2, lead=True)], start=(1, 15), end=(1, 16))
     assert r['checks'] == []                                           # exactly full time is fine
 
@@ -195,6 +196,7 @@ def test_overlapping_items_over_full_time_warn():
     r = compute(m, goals, 2)
     assert [(c.level, c.item, c.message) for c in r['checks']] == \
         [('warn', 'a', 'has more than full time in Y1 W11–W20 (up to 1.20 FTE), with the effort spread evenly over each timeline')]
+    assert (r['checks'][0].person, r['checks'][0].weeks) == ('a', [[10, 19]])          # for marking the plan: who, and which weeks
     goals[0].children[1].start, goals[0].children[1].end = (1, 21), (1, 40)        # no longer overlapping
     assert compute(m, goals, 2)['checks'] == []
 
@@ -204,3 +206,4 @@ def test_more_than_one_fte_in_a_year_warns():
     assert r['checks'] == []
     r = one_task([Member('a')], [Assignment('a', 60, lead=True)], start=(1, 1), end=(1, 52), n_years=2)       # 60 weeks in one year
     assert ('warn', 'a', 'has more than 1.0 FTE in year 1 (1.15)') in [(c.level, c.item, c.message) for c in r['checks']]
+    assert [(c.person, c.weeks) for c in r['checks'] if 'FTE in year' in c.message] == [('a', [[0, 51]])]

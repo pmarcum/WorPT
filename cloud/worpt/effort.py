@@ -69,6 +69,8 @@ class Check:
     level: str           # "fix" (needs attention) or "warn"
     item: str            # label such as "A1.2", or a member id
     message: str
+    person: str = None   # the member id the check is about, when it is about one person
+    weeks: list = None   # the stretches of weeks it is about, [first, last] counted from 0 over the project
 
 
 def mround(x, step, mode='nearest'):
@@ -130,7 +132,7 @@ def compute(members, goals, n_years, weeks_per_fte=52, rounding='nearest'):
         if not any(a.lead for a in it.assignments): checks.append(Check('fix', lab, 'has no task lead'))
         if not it.assignments or not any(a.weeks for a in it.assignments): checks.append(Check('fix', lab, 'has no weeks assigned'))
         for a in it.assignments:
-            if a.unfunded > a.weeks: checks.append(Check('warn', lab, f'{a.person}: unfunded weeks ({a.unfunded:g}) exceed weeks ({a.weeks:g})'))
+            if a.unfunded > a.weeks: checks.append(Check('warn', lab, f'{a.person}: unfunded weeks ({a.unfunded:g}) exceed weeks ({a.weeks:g})', a.person))
             if a.person.lower() == TEAM:
                 who = [pidx[p] for p in ids if p not in named]
             elif a.person in pidx:
@@ -147,7 +149,7 @@ def compute(members, goals, n_years, weeks_per_fte=52, rounding='nearest'):
     # More weeks of effort on an item than its timeline has weeks: more than full time on it.
     length = np.where((qs >= 0) & (qe >= qs), qe - qs + 1, 0)
     for li, pi in zip(*np.nonzero((W.T > length[:, None]) & (length[:, None] > 0))):
-        checks.append(Check('warn', leaves[li][0], f'{ids[pi]} has {W[pi, li]:g} weeks of effort on a {length[li]}-week timeline, more than full time'))
+        checks.append(Check('warn', leaves[li][0], f'{ids[pi]} has {W[pi, li]:g} weeks of effort on a {length[li]}-week timeline, more than full time', ids[pi]))
 
     # Person FTE per year: raw, then rounded; funded = total - unfunded.
     raw_t, raw_u = W @ frac / weeks_per_fte, U @ frac / weeks_per_fte
@@ -165,9 +167,11 @@ def compute(members, goals, n_years, weeks_per_fte=52, rounding='nearest'):
     for pi in np.nonzero(over.any(1))[0]:
         runs = list(zip(np.nonzero(edges[pi] == 1)[0], np.nonzero(edges[pi] == -1)[0] - 1))
         when = ', '.join(week_span(a, b) for a, b in runs[:3]) + (f' and {len(runs) - 3} more stretches' if len(runs) > 3 else '')
-        checks.append(Check('warn', ids[pi], f'has more than full time in {when} (up to {load[pi].max():.2f} FTE), with the effort spread evenly over each timeline'))
+        checks.append(Check('warn', ids[pi], f'has more than full time in {when} (up to {load[pi].max():.2f} FTE), with the effort spread evenly over each timeline',
+                            ids[pi], [[int(a), int(b)] for a, b in runs]))
     for pi, ys in ((pi, np.nonzero(fte_t[pi] > 1 + 1e-9)[0]) for pi in range(len(members))):
-        if len(ys): checks.append(Check('warn', ids[pi], 'has more than 1.0 FTE in ' + ', '.join(f'year {y + 1} ({fte_t[pi, y]:.2f})' for y in ys)))
+        if len(ys): checks.append(Check('warn', ids[pi], 'has more than 1.0 FTE in ' + ', '.join(f'year {y + 1} ({fte_t[pi, y]:.2f})' for y in ys),
+                                        ids[pi], [[int(y) * WEEKS_PER_YEAR, int(y) * WEEKS_PER_YEAR + WEEKS_PER_YEAR - 1] for y in ys]))
 
     # Item FTE (unrounded) and roll-ups up the tree.
     leaf_fte = np.stack([W.sum(0), U.sum(0), W.sum(0) - U.sum(0)], 1) / weeks_per_fte
