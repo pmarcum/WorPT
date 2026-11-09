@@ -35,13 +35,13 @@
 
 %--- the table's columns
 \def\[INSERTFILENAME]Columns{
-  |p{\TaskWidth}||       % title column
-  p{\StartFinishWidth}!{\color{\YearQuarterLineColor}\vrule} % Start/year
-  p{\StartFinishWidth}!{\color{\YearQuarterLineColor}\vrule}!{\color{\YearQuarterLineColor}\vrule} % Start/quarter
-  p{\StartFinishWidth}!{\color{\YearQuarterLineColor}\vrule} % Finish/year
-  p{\StartFinishWidth}|| % Finish/quarter
-  p{\LeadWidth}!{\color{\YearQuarterLineColor}\vrule} % Task Lead column
-  p{\ExpertiseWidth}|    % Expertise column
+  |>{\leavevmode}p{\TaskWidth}||       % title column
+  >{\leavevmode}p{\StartFinishWidth}!{\color{\YearQuarterLineColor}\vrule} % Start/year
+  >{\leavevmode}p{\StartFinishWidth}!{\color{\YearQuarterLineColor}\vrule}!{\color{\YearQuarterLineColor}\vrule} % Start/quarter
+  >{\leavevmode}p{\StartFinishWidth}!{\color{\YearQuarterLineColor}\vrule} % Finish/year
+  >{\leavevmode}p{\StartFinishWidth}|| % Finish/quarter
+  >{\leavevmode}p{\LeadWidth}!{\color{\YearQuarterLineColor}\vrule} % Task Lead column
+  >{\leavevmode}p{\ExpertiseWidth}|    % Expertise column
 }
 
 \newenvironment{[INSERTFILENAME]}{%
