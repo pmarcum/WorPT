@@ -338,32 +338,66 @@ def _assignment(tp, e, weeks):
 
 
 def schedule(c):
+    """The resource-loaded schedule: each task's timeline, and a column per team member marking who leads the task and who
+    works on it (funded, or partly or wholly unfunded), with each member's FTE over the grant at the foot. The Sheet
+    version's template (used to check parity with it) lists assignments as "id weeks" instead; both are filled here."""
     t = template('NOTANONschedule')
+    grid = '[STARTTEAMLEADCELLTEMPLATE]' in t
     m = re.search(r'\\def\\SlicesPerYear\{(\d+)\}', t)        # columns per year: the template says (12, months); the Sheet's had quarters
     n, slices, ntypes = c['n'], int(m.group(1)) if m else 4, 3
+    order = c['order']
     t = jsub(t, r'\[INSERTLATEXFILESUBDIRECTORY\]', c['p'].latex_subdir, every=False)
     for k, v in (('FILENAME', 'NOTANONschedule'), ('NUMBERYEARSLICESPLUSFIVE', n * slices + 5), ('NUMBERYEARSLICESPLUSFOUR', n * slices + 4),
                  ('NUMBERYEARSLICESPLUSTHREE', n * slices + 3), ('NUMBERYEARSLICESPLUSTWO', n * slices + 2),
                  ('NUMBERYEARSLICESPLUSONE', n * slices + 1), ('NUMBERYEARSLICES', n * slices), ('NUMBERFTETYPES', ntypes),
-                 ('NUMBERSLICESPERYEARMINUSTWO', slices - 2), ('NUMBERSLICESPERYEAR', slices), ('LASTYEARPLUSTWO', n + 2), ('LASTYEAR', n)):
+                 ('NUMBERSLICESPERYEARMINUSTWO', slices - 2), ('NUMBERSLICESPERYEAR', slices), ('LASTYEARPLUSTWO', n + 2), ('LASTYEAR', n),
+                 ('NUMBERTEAMMINUSONE', len(order) - 1), ('NUMBERTEAM', len(order)), ('LASTCOLUMN', n * slices + len(order) + 2)):
         t = jsub(t, r'\[INSERT' + k + r'\]', v)
+    blocks = (('year', 'YEARLABEL'), ('slice', 'YEARSLICELABEL'), ('category', 'CATEGORYSECTION'), ('empty', 'UNCOLOREDTIMELINE'),
+              ('task', 'TASKROW'), ('filled', 'COLOREDTIMELINE'), ('id2name', 'IDTONAME'))
+    blocks += ((('lead', 'TEAMLEADCELL'), ('funded', 'TEAMFUNDEDCELL'), ('unfunded', 'TEAMUNFUNDEDCELL'), ('none', 'TEAMEMPTYCELL'),
+                ('label_funded', 'FUNDEDUSTEAMLABEL'), ('label_unfunded', 'UNFUNDEDUSTEAMLABEL'), ('label_international', 'INTERNATIONALTEAMLABEL'),
+                ('fte_funded', 'TEAMFUNDEDFTE'), ('fte_unfunded', 'TEAMUNFUNDEDFTE'), ('fte_zero', 'TEAMZEROFTE')) if grid else
+               (('funded', 'FUNDEDUSTEAMASSIGNMENT'), ('unfunded', 'UNFUNDEDUSTEAMASSIGNMENT'), ('international', 'INTERNATIONALTEAMASSIGNMENT')))
     tp = {}
-    for key, tag in (('year', 'YEARLABEL'), ('slice', 'YEARSLICELABEL'), ('category', 'CATEGORYSECTION'), ('empty', 'UNCOLOREDTIMELINE'),
-                     ('task', 'TASKROW'), ('filled', 'COLOREDTIMELINE'), ('funded', 'FUNDEDUSTEAMASSIGNMENT'),
-                     ('unfunded', 'UNFUNDEDUSTEAMASSIGNMENT'), ('international', 'INTERNATIONALTEAMASSIGNMENT'), ('id2name', 'IDTONAME')):
+    for key, tag in blocks:
         t, tp[key] = extract(t, f'START{tag}TEMPLATE', f'END{tag}TEMPLATE')
     t = jrep(t, '[INSERTYEARLABELLIST]', ''.join(jrep(tp['year'], '[INSERTYEARNUMBER]', y) for y in range(1, n + 1)))
     m = re.search(r'\\def\\SlicesPerLabel\{(\d+)\}', t)        # a label may span several columns (a quarter over its months)
     span = int(m.group(1)) if m else 1
     def slice_label(k):
         out = jrep(jrep(tp['slice'], '[INSERTSLICENUMBER]', k), '[INSERTSLICESPERLABEL]', span)
-        return jrep(out, '[INSERTLABELRULE]', '' if k == slices // span else '\\QuarterRule')
+        return jrep(out, '[INSERTLABELRULE]', '@{}|' if k == slices // span else '@{\\QuarterRule}')   # the year line ends a year
     t = jrep(t, '[INSERTYEARSLICELABELLIST]', ''.join(slice_label(k) for y in range(n) for k in range(1, slices // span + 1)))
     def timeline(row):
         if not row['start'] or not row['end']: return tp['empty'] * (n * slices)
         slice_of = lambda w: (w // WEEKS_PER_YEAR) * slices + (w % WEEKS_PER_YEAR) * slices // WEEKS_PER_YEAR   # the slice a week falls in
         q0, q1 = slice_of(week_index(row['start'])), slice_of(week_index(row['end']))
         return ''.join(tp['filled'] if q0 <= q <= q1 else tp['empty'] for q in range(n * slices))
+    if grid:
+        r, members = c['r'], {pid: c['people'][pid]['m'] for pid in order}
+        leaf = {lab: k for k, lab in enumerate(r['leaf_labels'])}
+        idx = {pid: c['people'][pid]['idx'] for pid in order}
+        def kind(pid):
+            return 'international' if not members[pid].us else 'unfunded' if members[pid].collaborator else 'funded'
+        t = jrep(t, '[INSERTTEAMLABELLIST]', ''.join(jrep(tp['label_' + kind(pid)], '[TEAMID]', pid) for pid in order))
+        def team_cells(row):
+            """Lead, funded, unfunded (some or all of the person's weeks on it unfunded) or none, for each member in order."""
+            on = set()
+            for e in ([row['lead']] if row['lead'] else []) + row['experts']:
+                on |= {u.id for u in e['unnamed']} if e['id'] == TEAM else {e['id']}
+            lead = row['lead']['id'] if row['lead'] and row['lead']['id'] != TEAM else None
+            k = leaf.get(row['label'])
+            unfunded = lambda pid: members[pid].collaborator or (k is not None and r['unfunded_weeks'][idx[pid], k] > 0)
+            return ''.join(tp['lead'] if pid == lead else tp['none'] if pid not in on else tp['unfunded'] if unfunded(pid) else tp['funded']
+                           for pid in order)
+        foot = {kind: [c['people'][pid]['total'][j] for pid in order] for kind, j in (('funded', 2), ('unfunded', 1))}
+        for kind, values in foot.items():
+            t = jrep(t, f'[INSERTTEAM{kind.upper()}FTELIST]',
+                     ''.join(jrep(tp['fte_' + (kind if float(v) else 'zero')], '[INSERTFTE]', v) for v in values))
+        t = jrep(jrep(t, '[INSERTFTEFUNDEDTOTAL]', fixed(r['project_total'][2], 2)), '[INSERTFTEUNFUNDEDTOTAL]', fixed(r['project_total'][1], 2))
+        totals = [fixed(r['project_total'][j], 2) for j in (1, 2)] + [row['fte'][0] for row in c['rows'] if row['kind'] != 'goal']
+        t = jrep(t, '[INSERTWIDESTFTE]', max(totals, key=len))
     sections, section, tasks = [], None, []
     def close():
         if section is not None and tasks: sections.append(jrep(section, '[INSERTTASKSUNDERTHISCATEGORY]', '\n'.join(tasks)))
@@ -372,19 +406,23 @@ def schedule(c):
             close(); tasks = []
             section = jrep(jrep(tp['category'], '[INSERTCATEGORYLABEL]', row['label']), '[INSERTCATEGORYTITLE]', row['short'])
             section = jrep(section, '[INSERTEMPTYYEARSLICESLIST]', tp['empty'] * (n * slices))
+            if grid: section = jrep(section, '[INSERTEMPTYTEAMCELLSLIST]', tp['none'] * len(order))
             continue
         s = jrep(jrep(tp['task'], '[INSERTTASKLABEL]', row['label']), '[INSERTTASKTITLE]', row['short'])
         s = jrep(s, '[INSERTYEARSLICESLIST]', timeline(row))
-        people = ([_assignment(tp, row['lead'], general(row['lead']['weeks']))] if row['lead'] else []) + [
-            _assignment(tp, e, general(e['weeks'] * len(e['unnamed']) if e['id'] == TEAM else e['weeks'])) for e in row['experts']]   # FIX-2
-        s = jrep(s, '[INSERTASSIGNMENTLISTFORTHISTASK]', '\\TaskAssignmentDelimiter'.join(people))
-        for k, v in zip(('[INSERTFTETOTAL]', '[INSERTFTEUNFUNDED]', '[INSERTFTEFUNDED]'), row['fte']):
-            s = jrep(s, k, v)
+        if grid:
+            s = jrep(jrep(s, '[INSERTTEAMCELLSFORTHISTASK]', team_cells(row)), '[INSERTFTETOTAL]', row['fte'][0])
+        else:
+            people = ([_assignment(tp, row['lead'], general(row['lead']['weeks']))] if row['lead'] else []) + [
+                _assignment(tp, e, general(e['weeks'] * len(e['unnamed']) if e['id'] == TEAM else e['weeks'])) for e in row['experts']]   # FIX-2
+            s = jrep(s, '[INSERTASSIGNMENTLISTFORTHISTASK]', '\\TaskAssignmentDelimiter'.join(people))
+            for k, v in zip(('[INSERTFTETOTAL]', '[INSERTFTEUNFUNDED]', '[INSERTFTEFUNDED]'), row['fte']):
+                s = jrep(s, k, v)
         tasks.append(s)
     close()
     t = jrep(t, '[INSERTLISTOFCATEGORYSECTIONS]', '\n'.join(sections))
     names = [jrep(jrep(tp['id2name'], '[INSERTTEAMID]', pid), '[INSERTTEAMNAME]', c['people'][pid]['m'].first + '~' + c['people'][pid]['m'].last)
-             for pid in c['order']]
+             for pid in order]
     return jrep(t, '[INSERTIDTONAMELIST]', ', '.join(names))
 
 

@@ -11,7 +11,7 @@
 <td>
 <details>
 <summary><b>NOTANONschedule</b> (description)</summary>
-<b>NOTANONschedule</b> is resource-loaded project schedule showing project tasks, milestones with associated timelines, and team member roles. The table provides the work effort involved for each task, divided into effort directly funded by this proposal, unfunded, and total.  Institutional affiliation (U.S. or international) is also indicated.  The information in this table is taken primarily from the TASKS page in the WorPT spreadsheet.
+<b>NOTANONschedule</b> is a resource-loaded project schedule showing project tasks with their timelines, and a column for each team member marking who leads each task and who works on it (funded by this grant, or partly or wholly unfunded). The table gives each task's total work effort, and each team member's funded and unfunded effort over the whole grant. Institutional affiliation (U.S. or international) is also indicated. The information in this table comes from the work plan in WorPT.
 </details>
 </td>
 </tr>
@@ -53,8 +53,7 @@ Refer to <b>Customizations</b> section below to add personal preferences in the 
 \input{NOTANONschedule} % reset file parameters
 
 \begin{NOTANONschedule}
-\caption{Resource-loaded project schedule, where:
-{\TotalFteUnfundedHeaderIcon\hspace{-0.3em}$=$\hspace{0.05em}}Not funded by this grant, {\TotalFteFundedHeaderIcon\hspace{-0.3em}$=$\hspace{0.05em}}funded by this grant, {\TotalFteSumHeaderIcon\hspace{0.1em}$=$\hspace{0.05em}}funded $+$ unfunded; Tasks are listed (left side), with duration of task activity indicated in blue-colored timelines, in months, under quarter-year labels (1,2,3,4). Task assignments identify specific team members responsible for implementation with associated work weeks, where color indicates institutional affiliation (blue$=$funded/U.S., black$=$not funded/U.S., red=international). "Total FTE" (right side) are integrated work-weeks converted into FTE per task (1~FTE$=$12~months), displayed as "total",  "unfunded by this grant", and "funded by this grant", resp.  Assignment identities: \RevealIdentities.}
+\caption{Resource-loaded project schedule. Tasks are listed (left side), with duration of task activity indicated in blue-colored timelines, in months, under quarter-year labels (1,2,3,4). Each team member has a column (label color: blue$=$funded/U.S., black$=$not funded/U.S., red$=$international), marked for each task they work on: \TeamLeadKey$=$task lead, \TeamFundedKey$=$funded by this grant, \TeamUnfundedKey$=$partly or wholly not funded by this grant. The bottom rows give each team member's funded and unfunded effort over the whole grant in FTE (1~FTE$=$12~months); ``Total FTE'' (right side) is each task's effort, funded and unfunded.}
 \label{tab:NOTANONschedule}
 \end{NOTANONschedule}
 %:::::::::::::::::: end NOTANONschedule ::::::::::::::::::::
@@ -100,15 +99,9 @@ Without this line, the table is set in landscape mode only when it needs to be: 
 <td><pre><code>
 \def\MinTitleWidth{<mark>1.5in</mark>}   % narrowest title column before switching to landscape mode
 \def\TimelineWidth{<mark>0.6ex</mark>}   % skinny timeline columns width (one per month)
-\def\SumFteWidth{<mark>5ex</mark>}       % Total FTE/Sum column width
-\def\UnfundedFteWidth{<mark>5ex</mark>}  % Total FTE/Unfunded column width
-\def\FundedFteWidth{<mark>5ex</mark>}    % Total FTE/Funded column width
+\def\TeamCellPadding{<mark>1pt</mark>}   % room beside the sideways label and numbers in a team member's column
 </code></pre>
-The table is always as wide as the page's text. The task assignments column is as wide as its longest line (assignments are never split over two lines), and the title column gets the width that is left. A title too long for it is cut short at a word, with "...": give the task a short title in WorPT to choose what shows. The month columns are made wider than <code>\TimelineWidth</code> if the timeline's labels need it.
-<details>
-<summary>reference image</summary>
-<img src="https://lh3.googleusercontent.com/d/1dXDf4XkJcMxWQ1Q5zYmiN1Z0QKpHpFLV" width=70%>
-</details>
+The table is always as wide as the page's text. Each team member's column is just wide enough for its label and the numbers at its foot, both printed sideways (plus <code>\TeamCellPadding</code>); a smaller font for them makes the columns narrower. The Total FTE column is as wide as its numbers, with its label sideways. The title column gets the width that is left. A title too long for it is cut short at a word, with "...": give the task a short title in WorPT to choose what shows. The month columns are made wider than <code>\TimelineWidth</code> if the timeline's labels need it.
 </td>
 </tr>
 
@@ -116,17 +109,12 @@ The table is always as wide as the page's text. The task assignments column is a
 <td><b>Column label font adjustments</b></td>
 <td><pre><code>
 \def\TaskTimelineHeaderFontsize{<mark>\scriptsize</mark>}   % Task Timeline label text size
-\def\TaskAssignmentsHeaderFontsize{<mark>\scriptsize</mark>}% Task Assignments label text size
-\def\TotalFteHeaderFontsize{<mark>\scriptsize</mark>}       % Totaled FTEs label text size
+\def\TeamHeaderFontsize{<mark>\scriptsize</mark>}           % Team label text size
+\def\TotalFteHeaderFontsize{<mark>\scriptsize</mark>}       % Total FTE label text size (printed sideways)
 \def\YearHeaderFontsize{<mark>\scriptsize</mark>}           % "YEAR1", "YEAR2"... label text size
 \def\TaskTitleHeaderFontsize{<mark>\normalsize</mark>}      % "TASK TITLES" column label text size
 \def\YearSliceHeaderFontsize{<mark>\scriptsize</mark>}      % "1", "2"... year-quarter label text size
-\def\IdWksHeaderFontsize{<mark>\normalsize</mark>}          % "id wks" text size  
 </code></pre>
-<details>
-<summary>reference image</summary>
-<img src="https://lh3.googleusercontent.com/d/1Og1zQoUqQuLJB8sbMlIiaDNviE-RBah6" width=70%>
-</details>
 </td>
 </tr>
     
@@ -166,8 +154,9 @@ redefine as:<br>
 <tr>
 <td><b>Vertical line colors</b></td>
 <td><pre><code>
-\def\TimelineVerticalLineColor{<mark>lightgray</mark>} % vertical line in timeline section
-\def\TotalFteVerticalLineColor{<mark>lightgray</mark>} % vertical line in total fte section
+\def\TimelineVerticalLineColor{<mark>lightgray</mark>}   % lines between quarters in the timeline
+\def\TimelineMonthLineColor{<mark>lightgray!45</mark>}   % lines between months, fainter
+\def\TeamVerticalLineColor{<mark>lightgray</mark>}       % lines between team members
 </code></pre>
 <details>
 <summary>reference image</summary>
@@ -187,68 +176,50 @@ redefine as:<br>
 </tr>
 
 <tr>
-<td><b>Institutional affiliation and funded vs unfunded formatting</b></td>
+<td><b>Team members' column labels: institution and funding</b></td>
 <td><pre><code>
-\def\FundedUsTeam#1{<mark>\small \color{blue}</mark>{#1}}    % funded US team members ID, \#weeks format
-\def\UnfundedUsTeam#1{<mark>\small \color{black}</mark>{#1}} % UNfunded US team members ID, \#weeks fomat
-\def\InternationalTeam#1{<mark>\small \color{red}</mark>{#1}}% international team members ID, \#weeks format
+\def\FundedUsTeam#1{<mark>\small \color{blue}</mark>{#1}}    % funded US team member's label
+\def\UnfundedUsTeam#1{<mark>\small \color{black}</mark>{#1}} % unfunded US team member's label
+\def\InternationalTeam#1{<mark>\small \color{red}</mark>{#1}}% international team member's label
 </code></pre>
-<details>
-<summary>reference image</summary>
-<img src="https://lh3.googleusercontent.com/d/1cio03IIIDCGoOO5_4htjm2LV6q0JmEe4" width=40%>
-</details>
+The labels are printed sideways, above each team member's column.
 </td>
 </tr>
 
 <tr>
-<td><b>FTE values in rightmost columns</b></td>
+<td><b>Marks for who leads and who works on each task</b></td>
 <td><pre><code>
-\def\FteTotalFormat#1{<mark>\small</mark>{#1}}               % Total FTE/sum value format
-\def\FteUnfundedFormat#1{<mark>\small</mark>{#1}}            % Total FTE/unfunded value format
-\def\FteFundedFormat#1{<mark>\small \color{blue}</mark>{#1}} % Total FTE/funded value format
+\def\TeamLeadColor{<mark>black</mark>}       % task lead: a solid mark
+\def\TeamFundedColor{<mark>gray!65</mark>}   % works on the task, funded by this grant: a solid mark
+\def\TeamUnfundedColor{<mark>gray!80</mark>} % works on the task, some or all of it not funded by this grant: an open box
+\def\TeamOutline{<mark>0.6pt</mark>}         % the open box's line
 </code></pre>
-<details>
-<summary>reference image</summary>
-<img src="https://lh3.googleusercontent.com/d/1aqfgM6GA6TCNEcAKQ-pyegkXKijkH889" width=40%>
-</details>
+A task lead is marked in the lead color whether or not their work on it is funded. The caption shows the three marks with <code>\TeamLeadKey</code>, <code>\TeamFundedKey</code> and <code>\TeamUnfundedKey</code>.
 </td>
 </tr>
 
 <tr>
-<td><b>Team member identify table caption formatting</b></td>
+<td><b>FTE values</b></td>
 <td><pre><code>
-\def\RevealIdentityFormat#1#2{<mark>\textbf</mark>{#1}<mark>: </mark>#2} % \#1=ID, \#2=Name
+\def\FteTotalFormat#1{<mark>\small</mark>{#1}}                       % each task's Total FTE (right)
+\def\TeamFundedFteFormat#1{<mark>\scriptsize\color{blue}</mark>{#1}} % a team member's funded FTE (foot)
+\def\TeamUnfundedFteFormat#1{<mark>\scriptsize</mark>{#1}}           % a team member's unfunded FTE (foot)
+\def\TeamZeroFteFormat#1{<mark>\scriptsize\color{lightgray}</mark>{#1}} % a team member's FTE when it is zero
+\def\TeamFundedFteLabel{<mark>\scriptsize\textbf{Funded FTE}</mark>}     % label of the foot's funded row
+\def\TeamUnfundedFteLabel{<mark>\scriptsize\textbf{Unfunded FTE}</mark>} % label of the foot's unfunded row
 </code></pre>
-<details>
-<summary>reference image</summary>
-<img src="https://lh3.googleusercontent.com/d/1nrSrK1mSC0hJRuNJs6Vxf4jZlveQ48BL" width=50%>
-</details>
+The two rows at the foot give each team member's funded and unfunded effort over the whole grant, printed sideways; their Total FTE cells give the whole team's.
 </td>
 </tr>
 
 <tr>
-<td><b>Symbol preferences for FTE types</b></td>
-<td><pre><code>
-\def\TotalFteSumHeaderIcon{<mark>\textbf{\large{$\Sigma$}}</mark>}       % FTE sum symbol
-\def\TotalFteUnfundedHeaderIcon{<mark>\noDollarIcon{-0.4}{0.4mm}{0.2}{0.15}</mark>} % "FTE unfunded symbol
-\def\TotalFteFundedHeaderIcon{<mark>\dollarIcon{-0.4}{0.2}{0.015}</mark>}% FTE funded symbol
+<td><b>Team members' names in the caption (optional)</b></td>
+<td>
+The suggested caption leaves the team members' names out: their labels are roles (PI, Sci-PI, co-I 1...), which keeps the
+table anonymous. To name them, add <code>Team member identities: \RevealIdentities.</code> to your caption; each is set as
+<pre><code>
+\def\RevealIdentityFormat#1#2{<mark>\textbf</mark>{#1}<mark>: </mark>#2} % \#1=label, \#2=name
 </code></pre>
-<details>
-<summary>reference image</summary>
-<img src="https://lh3.googleusercontent.com/d/1kdg5LRFovZQT9oI7B-eGPh5RJ9KARgmg" width=50%>
-</details>
-</td>
-</tr>
-
-<tr>
-<td><b>Delimiter of team members under TASK ASSIGNMENTS</b></td>
-<td><pre><code>
-\def\TaskAssignmentDelimiter{;\hspace{3pt}} % delimiter used in TASK ASSIGNMENTS
-</code></pre>
-<details>
-<summary>reference image</summary>
-<img src="https://lh3.googleusercontent.com/d/1AwZgBxEbQJB6sw5vg68fL2uH0bFsj5Ht" width=30%>
-</details>
 </td>
 </tr>
 
@@ -257,7 +228,7 @@ redefine as:<br>
 <td>
 For more control over the table's layout (removing or adding vertical lines, changing column alignment, etc.), copy the
 ENTIRE code below into your document after the table's <code>\input</code> line, and change it there.<br>
-<u>IMPORTANT</u> keep the number of columns, <code>\NumberYears</code>, <code>\WorPTtitleWidth</code> and <code>\WorPTmonthWidth</code> (WorPT works these widths out).
+<u>IMPORTANT</u> keep the number of columns, <code>\NumberYears</code>, <code>\NumberTeamMinusOne</code>, <code>\WorPTtitleWidth</code>, <code>\WorPTmonthWidth</code>, <code>\WorPTteamWidth</code> and <code>\WorPTfteWidth</code> (WorPT works these out).
 <pre><code>
 \def\NOTANONscheduleColumns{%
 <mark>|>{\raggedright\arraybackslash\leavevmode}p{\WorPTtitleWidth}</mark>% title column
@@ -266,14 +237,13 @@ ENTIRE code below into your document after the table's <code>\input</code> line,
 <mark>p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\QuarterRule}</mark>%
 <mark>p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\QuarterRule}</mark>%
 <mark>p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{}|}</mark>%
-<mark>l</mark>%                                                         task assignment column
-<mark>|>{\leavevmode}p{\SumFteWidth}!{\color{\TotalFteVerticalLineColor}\vrule}</mark>%       total fte, sum column
-<mark>>{\leavevmode}p{\UnfundedFteWidth}!{\color{\TotalFteVerticalLineColor}\vrule}</mark>%   total fte, unfunded column
-<mark>>{\leavevmode}p{\FundedFteWidth}|</mark>%                                                total fte, funded column
+<mark>@{}*{\NumberTeamMinusOne}{>{\centering\arraybackslash\leavevmode}p{\WorPTteamWidth}@{\TeamRule}}</mark>% team: a column per member
+<mark>>{\centering\arraybackslash\leavevmode}p{\WorPTteamWidth}@{}</mark>%
+<mark>|>{\centering\arraybackslash\leavevmode}p{\WorPTfteWidth}|</mark>%    total fte column
 }
 </code></pre>
-(aastex and revtex misread a repeat inside a repeat, or a repeat that starts with <code>|</code> then <code>@</code>: keep the timeline written this way.)</td>
-</tr>
+(aastex and revtex misread a repeat inside a repeat, or a repeat that starts with <code>|</code> then <code>@</code>: keep the timeline and team columns written this way.)</td>
+
 </table>
 </details>
 

@@ -117,7 +117,8 @@ def test_wide_tables_fit_the_page_with_one_line_titles(name, cls, years, tmp_pat
     P = load(CASES[0])
     for g in P.goals:
         g.title = 'A rather long task category title that goes on and on ' + g.title
-        for t in g.children: t.title = 'Calibrate the photometric zero points of every field against the reference catalog and more'
+        for t in g.children: t.title = ('Calibrate the photometric zero points of every field against the reference catalog, then '
+                                        'check them night by night and more')
     P = dataclasses.replace(P, n_years=years)
     shutil.copy(TEMPLATE_DIR / 'worpt.sty', tmp_path)
     (tmp_path / f'{name}.tex').write_text(build(P, [name])[name])
@@ -128,7 +129,7 @@ def test_wide_tables_fit_the_page_with_one_line_titles(name, cls, years, tmp_pat
     assert 'Overfull \\hbox' not in log and 'worpt Warning' not in log, (cls, years)
     if shutil.which('pdftotext'):
         text = subprocess.run(['pdftotext', 'doc.pdf', '-'], cwd=tmp_path, capture_output=True, text=True).stdout
-        assert 'Calibrate' in text and 'reference catalog and more' not in text      # cut short
+        assert 'Calibrate' in text and 'night by night and more' not in text         # cut short
 
 
 @pytest.mark.parametrize('cls', ['article', '{aastex631}', '{aastex702}', 'revtex4-2'])
