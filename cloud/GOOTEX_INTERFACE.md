@@ -168,7 +168,7 @@ in its readme, placed in their own document, never by editing the files (the nex
    https://github.com/pmarcum/WorPT/tree/main/latexTableTemplates
    (`worpt.sty` itself: https://github.com/pmarcum/WorPT/tree/main/latexTableTemplates/WorPTpackages)
 
-The tables compile in article, report, revtex4-2 and aastex631 (one or two columns), and alongside the
+The tables compile in article, report, revtex4-2, aastex631 and aastex702 (AASTeX 7.0.2; one or two columns), and alongside the
 older FU style files. aastex631 needs the revtex4-1 class installed with TeX; without it aastex631
 can't compile anything, WorPT or not.
 

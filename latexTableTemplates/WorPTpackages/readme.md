@@ -17,7 +17,7 @@
 <ul>
 <li>It loads only the packages the tables need: array, multirow, xcolor, colortbl, rotating (for tables in landscape mode), and tikz with fontawesome (for the schedule table's icons). A package your document has already loaded is not loaded again.</li>
 <li>It defines the named colors the tables use (Blue, NavyBlue, Red, Black, White and mediumelectricblue), with the values xcolor's <code>[dvipsnames]</code> option gives them. A color your document already defines keeps its own value. To use other dvipsnames colors in your table settings, load xcolor with <code>[dvipsnames]</code> before worpt.</li>
-<li>It works with aastex631, revtex, article and report, in one or two columns.</li>
+<li>It works with AASTeX 7 (aastex702) and aastex631, revtex, article and report, in one or two columns.</li>
 <li>It changes nothing else about how your document looks.</li>
 </ul>
 </details>

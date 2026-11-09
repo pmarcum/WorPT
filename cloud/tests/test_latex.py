@@ -12,7 +12,7 @@ from worpt.tables import build, paste_in, TABLES, TEMPLATE_DIR
 from test_parity_tables import load, CASES
 
 TEMPLATES = sorted(TEMPLATE_DIR.glob('*/main.tex'))
-CLASSES = ['article', 'report', '[twocolumn]{aastex631}', '{aastex631}', 'revtex4-2']
+CLASSES = ['article', 'report', '[twocolumn]{aastex631}', '{aastex631}', '[twocolumn]{aastex702}', '{aastex702}', 'revtex4-2']
 pytestmark = pytest.mark.skipif(not shutil.which('pdflatex'), reason='pdflatex is not installed')
 
 
@@ -55,6 +55,12 @@ def test_tables_compile_with_worpt_sty_alone(folder, cls, tmp_path):
     log = (tmp_path / 'doc.log').read_text(errors='replace')
     errors = [l for l in log.splitlines() if l.startswith('!')]
     assert not errors and (tmp_path / 'doc.pdf').exists(), f'{cls}: {errors[:5]}'
+    # A class can take a column specification it doesn't understand without an error and print parts of it instead
+    # (aastex and revtex can't repeat inside a repeat): no such text may show in the tables.
+    if shutil.which('pdftotext'):
+        text = subprocess.run(['pdftotext', 'doc.pdf', '-'], cwd=tmp_path, capture_output=True, text=True).stdout
+        leaked = re.findall(r'\S*(?:\d(?:ex|pt|in|mm|cm)@|@[pcl]\d|\*\d+p)\S*', text)
+        assert not leaked, f'{cls}: column specification printed in the table: {leaked[:5]}'
 
 
 @pytest.mark.parametrize('path', TEMPLATES, ids=[p.parent.name for p in TEMPLATES])

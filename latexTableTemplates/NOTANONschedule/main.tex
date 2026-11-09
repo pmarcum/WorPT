@@ -89,9 +89,13 @@
 %--- the table's columns
 \def\[INSERTFILENAME]Columns{
 |>{\raggedright\arraybackslash}p{\TitleWidth}        % title column
-*{\NumberYears}{|@{}                                 % timeline: a column per month; faint lines between months, light ones between quarters
-*{3}{p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{\QuarterRule}}p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{}}
-|>{\raggedright\arraybackslash}p{\AssignmentsWidth}  % task assignment column
+|*{\NumberYears}{@{}%                                % timeline: a column per month; faint lines between months, light ones between quarters
+p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{\QuarterRule}%
+p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{\QuarterRule}%
+p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{\QuarterRule}%
+p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{}|}%
+>{\raggedright\arraybackslash}p{\AssignmentsWidth}   % task assignment column
+% (Written this way for aastex and revtex, which misread a repeat inside a repeat, or a repeat that starts with | followed by @.)
 |p{\SumFteWidth}!{\color{\TotalFteVerticalLineColor}\vrule}       % total fte, sum column
 p{\UnfundedFteWidth}!{\color{\TotalFteVerticalLineColor}\vrule}   % total fte, unfunded column
 p{\FundedFteWidth}|     % total fte, funded column
