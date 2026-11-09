@@ -5,7 +5,7 @@ from worpt import about as A
 
 
 def head():
-    return subprocess.run(['git', '-C', str(A.REPO), 'log', '-1', '--format=%H %cs'], capture_output=True, text=True).stdout.split()
+    return subprocess.run(['git', '-C', str(A.REPO), 'log', '-1', '--format=%H %cI'], capture_output=True, text=True).stdout.split()
 
 
 def test_the_server_knows_the_commit_it_started_from():
@@ -15,11 +15,11 @@ def test_the_server_knows_the_commit_it_started_from():
 
 def test_page_and_server_versions_from_github(monkeypatch):
     sha, date = head()
-    gh = {'Index.html': dict(commit='abc1234', sha='abc1234' + '0' * 33, date='2026-11-09'), 'cloud': dict(commit=sha[:7], sha=sha, date=date)}
+    gh = {'Index.html': dict(commit='abc1234', sha='abc1234' + '0' * 33, date='2026-11-09T01:48:00Z'), 'cloud': dict(commit=sha[:7], sha=sha, date=date)}
     asked = []
     monkeypatch.setattr(A, 'latest_commit', lambda owner, repo, path: asked.append((owner, repo, path)) or gh[path])
     monkeypatch.setattr(A, '_github_repo', lambda: ('someone', 'WorPT'))
-    assert A.about() == dict(server=dict(commit=sha[:7], date=date), page=dict(commit='abc1234', date='2026-11-09'), server_update=False)
+    assert A.about() == dict(server=dict(commit=sha[:7], date=date), page=dict(commit='abc1234', date='2026-11-09T01:48:00Z'), server_update=False)
     assert asked == [('someone', 'WorPT', 'Index.html'), ('someone', 'WorPT', 'cloud')]
     A.about(); assert len(asked) == 2                                     # asked again only after 10 minutes
 

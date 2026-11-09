@@ -6,6 +6,9 @@
   changed Index.html.
 - Whether GitHub has server changes this server isn't running yet (pulled and restarted on the VM).
 
+Dates are the commit's full time with its time zone (ISO 8601), so the page can show each in the viewer's own time zone:
+git gives the committer's zone and GitHub gives UTC, and the same commit must not show two different dates.
+
 GitHub is asked at most once every 10 minutes, with a short timeout; if it can't be reached, only the server's own
 commit is given.
 """
@@ -23,7 +26,7 @@ def _git(*args):
 
 def _running():
     try:
-        r = _git('log', '-1', '--format=%H %cs')
+        r = _git('log', '-1', '--format=%H %cI')
         sha, date = r.stdout.split() if r.returncode == 0 else (None, None)
     except (OSError, subprocess.SubprocessError, ValueError):
         sha, date = None, None
@@ -45,7 +48,7 @@ def latest_commit(owner, repo, path):
     req = urllib.request.Request(f'https://api.github.com/repos/{owner}/{repo}/commits?path={path}&per_page=1',
                                  headers={'Accept': 'application/vnd.github+json', 'User-Agent': 'WorPT'})
     with urllib.request.urlopen(req, timeout=TIMEOUT) as f: c = json.load(f)[0]
-    return dict(commit=c['sha'][:7], sha=c['sha'], date=c['commit']['committer']['date'][:10])
+    return dict(commit=c['sha'][:7], sha=c['sha'], date=c['commit']['committer']['date'])
 
 
 def _has(sha):

@@ -396,7 +396,9 @@ async function loadMe() { const r = await api('me'); S.me = r; S.proposals = r.p
 // The version's hover text. The two numbers are the pieces each group updates by hand; the page and the server reach
 // everyone at once, so they have no number: the server says which change it is running, and the page's latest on GitHub.
 function versionsTitle() {
-  const c = S.cfg || {}, a = (S.me && S.me.about) || {}, at = v => v.date + ' (' + v.commit + ')';
+  // dates come as full times; each is shown as the date where the viewer is (en-CA writes it 2026-11-08)
+  const day = t => { const d = new Date(t); return isNaN(d) ? String(t).slice(0, 10) : d.toLocaleDateString('en-CA'); };
+  const c = S.cfg || {}, a = (S.me && S.me.about) || {}, at = v => day(v.date) + ' (' + v.commit + ')';
   $('#versions').title = 'WorPT v' + c.coreLibraryVersion + '.' + c.webAppVersion + ':\n' +
     'Core library, version ' + c.coreLibraryVersion + ': the WorPT Apps Script library that does the work for every dashboard\n' +
     'Dashboard, version ' + c.webAppVersion + ': your dashboard web app (its Code.gs and deployment)\n\n' +
