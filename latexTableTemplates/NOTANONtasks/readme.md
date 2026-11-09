@@ -100,6 +100,7 @@ NOTE: you can PICK AND CHOOSE the lines you want to paste into your document; yo
 \def\LeadWidth{<mark>1.2in</mark>}            % middle ("Lead") column width
 \def\ExpertiseWidth{<mark>1.8in</mark>}       % rightmost ("Expertise") column width
 </code></pre>
+Each task's label and title stay on one line: a title too long for the "Tasks" column is cut short at a word, with "...". Give the task a short title in WorPT to choose what shows.
 <details>
 <summary>reference image</summary>
 <img src="https://lh3.googleusercontent.com/d/1Lc84Ce7q9vDGbn-PSkLpHm3Bk-018GLC" width=50%>

@@ -753,7 +753,7 @@ function viewPlan() {
     }).join('');
     return '<div class="sg-row ' + (d === 0 ? 'cat' : '') + (open ? ' open' : '') + '" style="' + tmpl + '">' +
       '<span class="sg-lab pin"' + pin(-2) + '>' + (iss.row[it.id] ? '<span class="bad"' + tip(iss.row[it.id]) + '>' + esc(labelOf(it.id)) + '</span>' : esc(labelOf(it.id))) + '</span>' +
-      '<button type="button" class="sg-title pin" data-openitem="' + it.id + '" aria-expanded="' + open + '" title="' + esc(it.title || '(untitled)') + '" style="padding-left:' + (4 + d * 16) + 'px' + (zoomed ? ';left:52px' : '') + '">' + esc(it.title || '(untitled)') + '</button>' + colCells +
+      '<button type="button" class="sg-title pin" data-openitem="' + it.id + '" aria-expanded="' + open + '" title="' + esc(it.title || '(untitled)') + '" style="padding-left:' + (4 + d * 16) + 'px' + (zoomed ? ';left:52px' : '') + '">' + esc(it.short_title || it.title || '(untitled)') + '</button>' + colCells +
       '<div class="tl cal' + (leaf ? ' leaf' : '') + '" data-tl="' + it.id + '">' + bar + '</div></div>' +
       (open ? '<div class="sg-details card stack">' + viewItem(n, nodes) + '</div>' : '');
   }).join('');
@@ -820,7 +820,9 @@ function viewItem(n, nodes) {
       group(d === 2 ? 'Move under task' : 'Make it a subtask of', underTask) + group(d === 2 ? 'Make it a task in' : 'Move to task category', inCategory) + '</select>' : '') +
     '<button type="button" class="btn danger" data-act="deleteItem">Delete…</button>' +
     '<button type="button" class="btn" data-act="closeDetails" aria-label="Close these details">Close ✕</button></span></div>' +
-    '<label class="f">Title<input data-save="item:' + it.id + ':title" data-version="' + it.version + '" value="' + esc(it.title) + '" maxlength="500"></label>';
+    '<div class="row" style="gap:10px;align-items:flex-start;flex-wrap:wrap"><label class="f" style="flex:2 1 300px">Title<input data-save="item:' + it.id + ':title" data-version="' + it.version + '" value="' + esc(it.title) + '" maxlength="500"></label>' +
+    '<label class="f" style="flex:1 1 200px"><span>Short title <span class="muted">(optional)</span></span><input data-save="item:' + it.id + ':short_title" data-version="' + it.version + '" value="' + esc(it.short_title || '') + '" maxlength="200" placeholder="' + esc(it.title || '') + '"></label></div>' +
+    '<p class="hint" style="margin:-4px 0 0">The schedule and task management tables keep each title to one line: they show the short title when there is one, otherwise the title, cut short with "…" if it is too long for the line. The plan shows it too; hover to see the full title.</p>';
   if (d === 0) return html + '<p class="muted" style="margin:0;line-height:1.5">A task category groups related tasks. It has no timeline or people of its own; its line on the calendar and its numbers come from its tasks (' + (+itemWeeks(it.id).toFixed(1)) + ' weeks in all).</p>' +
     '<div><button type="button" class="btn" data-act="addTask">+ Task in this category</button></div>';
   if (!leaf) {

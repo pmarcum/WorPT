@@ -14,12 +14,14 @@
 % ___________________________________________
 %       Default formatting preferences
 % ___________________________________________
-\LandScapefalse             % default is that the landscape mode is OFF
+\LandScapefalse             % landscape mode OFF, unless the table needs it (see MinTitleWidth); \LandScapetrue always uses it
 
 %--- table column widths
-\def\TitleWidth{4.1in}      % Title column width
-\def\TimelineWidth{0.6ex}   % skinny timeline columns width (one column per month)
-\def\AssignmentsWidth{24ex} % Task assignments column width
+% The table is as wide as the page's text. The task assignments column is as wide as its longest line; the title column
+% gets the width that is left, and a title too long for it is cut short with "...". If less than MinTitleWidth is left,
+% the table is set in landscape mode, which is wider.
+\def\MinTitleWidth{1.5in}   % narrowest title column before switching to landscape mode
+\def\TimelineWidth{0.6ex}   % skinny timeline columns width (one column per month; wider if its labels need it)
 \def\SumFteWidth{5ex}       % Total FTE/Sum column width
 \def\UnfundedFteWidth{5ex}  % Total FTE/Unfunded column width
 \def\FundedFteWidth{5ex}    % Total FTE/Funded column width
@@ -28,9 +30,6 @@
 %---- table compactness controls
 \def\SpaceBetweenRows{0.8}    % vertical compactness of rows
 \def\SpaceBetweenColumns{1pt} % spacing between columns
-
-%--- control to nudge table to the left or right
-\def\NudgeTable{1.5\textwidth}   % adjust to help center table
 
 %---- vertical line colors
 \def\TimelineVerticalLineColor{lightgray}       % lines between quarters
@@ -88,30 +87,67 @@
 
 %--- the table's columns
 \def\[INSERTFILENAME]Columns{
-|>{\raggedright\arraybackslash\leavevmode}p{\TitleWidth}        % title column
+|>{\raggedright\arraybackslash\leavevmode}p{\WorPTtitleWidth} % title column: the width left over
 |*{\NumberYears}{@{}%                                % timeline: a column per month; faint lines between months, light ones between quarters
-p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{\QuarterRule}%
-p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{\QuarterRule}%
-p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{\QuarterRule}%
-p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{}|}%
->{\raggedright\arraybackslash\leavevmode}p{\AssignmentsWidth}   % task assignment column
+p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\QuarterRule}%
+p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\QuarterRule}%
+p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\QuarterRule}%
+p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{}|}%
+l                                                    % task assignment column: one line each, as wide as the longest
 % (Written this way for aastex and revtex, which misread a repeat inside a repeat, or a repeat that starts with | followed by @.)
 |>{\leavevmode}p{\SumFteWidth}!{\color{\TotalFteVerticalLineColor}\vrule}       % total fte, sum column
 >{\leavevmode}p{\UnfundedFteWidth}!{\color{\TotalFteVerticalLineColor}\vrule}   % total fte, unfunded column
 >{\leavevmode}p{\FundedFteWidth}|     % total fte, funded column
 }
 
+%--- the widths: month columns wide enough for the timeline's labels (so the last month of a year is not stretched to
+% fit them), then the rest of the table measured without its titles, and the title column given what is left of the page
+\def\[INSERTFILENAME]AtLeast#1{\ifdim\WorPTmonthWidth<#1\global\WorPTmonthWidth=#1\fi}
+\def\[INSERTFILENAME]Layout{%
+  \begingroup
+  \csname @floatboxreset\endcsname  % measured as set in a table: some classes (aastex) use a smaller font there
+  \renewcommand{\arraystretch}{\SpaceBetweenRows}\setlength{\tabcolsep}{\SpaceBetweenColumns}%
+  \global\WorPTmonthWidth=\TimelineWidth\relax
+  \setbox0\hbox{\TaskTimelineHeaderFontsize{TIMELINE}}\setbox2\hbox{\TaskTimelineHeaderFontsize{TASK}}%
+  \ifdim\wd2>\wd0 \setbox0\box2 \fi
+  \[INSERTFILENAME]AtLeast{\dimexpr(\wd0+2\tabcolsep-\numexpr12*\NumberYears-1\relax\arrayrulewidth)/\numexpr12*\NumberYears\relax\relax}%
+  \setbox0\hbox{\YearHeaderFontsize{YR\NumberYears}}%
+  \[INSERTFILENAME]AtLeast{\dimexpr(\wd0+2\tabcolsep-11\arrayrulewidth)/12\relax}%
+  \setbox0\hbox{\YearSliceHeaderFontsize{4}}%
+  \[INSERTFILENAME]AtLeast{\dimexpr(\wd0-2\arrayrulewidth)/3\relax}%
+  \global\WorPTtitleWidth=0pt \WorPTmeasuringtrue
+  \sbox\WorPTmeasureBox{\expandafter\tabular\expandafter{\[INSERTFILENAME]Columns}\[INSERTFILENAME]Body\endtabular}%
+  \ifLandScape\global\WorPTlandscapetrue\else\global\WorPTlandscapefalse\fi
+  \WorPTstraySpace{\[INSERTFILENAME]Columns}\setbox\WorPTmeasureBox\hbox to\dimexpr\wd\WorPTmeasureBox-\WorPTstray\relax{}%
+  \global\WorPTtitleWidth=\dimexpr\textwidth-\wd\WorPTmeasureBox\relax
+  \ifdim\WorPTtitleWidth<\MinTitleWidth\relax\global\WorPTlandscapetrue\fi
+  \ifWorPTlandscape\global\WorPTtitleWidth=\dimexpr\textheight-\wd\WorPTmeasureBox\relax\fi
+  \ifdim\WorPTtitleWidth<\MinTitleWidth\relax
+    \global\WorPTtitleWidth=\MinTitleWidth\relax
+    \PackageWarningNoLine{worpt}{The schedule table is wider than the page even in landscape mode}%
+  \fi
+  \endgroup}
+
 \newenvironment{[INSERTFILENAME]}{%
-\ifLandScape
+\[INSERTFILENAME]Layout
+\ifWorPTlandscape
   \begin{sidewaystable*}
 \else
   \begin{table*}[h!]     % \begin{table} needed to make bottom table caption have same width as table
 \fi
 \renewcommand{\arraystretch}{\SpaceBetweenRows} % controls vertical row separation/spacing
 \setlength{\tabcolsep}{\SpaceBetweenColumns}    % controls horizontal column separation/spacing
-\centerline{
-\begin{minipage}{\NudgeTable}                   % increase to allow a wide table to spill into margin
-\begin{WorPTtabular}{\[INSERTFILENAME]Columns}
+\begin{WorPTtabular}{\[INSERTFILENAME]Columns}\[INSERTFILENAME]Body\end{WorPTtabular}}
+{%
+\ifWorPTlandscape
+  \end{sidewaystable*}
+\else
+  \end{table*}
+\fi
+}
+
+%--- the table itself: measured once without its titles, then set
+\def\[INSERTFILENAME]Body{%
 
 % ------------------------- First line of headers
 \cline{2-[INSERTNUMBERYEARSLICESPLUSONE]}                               
@@ -142,7 +178,7 @@ p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{}
 [ENDYEARLABELTEMPLATE]
 
 % -------------------------  Forth line of headers
-\multicolumn{1}{|l|}{\TaskTitleHeaderFontsize{TASK TITLES}} % title column
+\multicolumn{1}{|>{\leavevmode}p{\WorPTtitleWidth}|}{\WorPTunlessMeasuring{\TaskTitleHeaderFontsize{TASK TITLES}}} % title column
 [INSERTYEARSLICELABELLIST] &                                % quarter labels (1,2,3,4 1,2,3,4...), each over its months
 \multicolumn{1}{c|}{\IdWksHeaderFontsize{id~\#wks}} &       % task assignments (ID,\#weeks)
 {\TotalFteSumHeaderIcon} &                                  % Col1 Total funded+unfunded FTE
@@ -165,7 +201,7 @@ p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{}
 % COMMENT: The category sections are put together as a single string delimited by end of line character and then 
 % COMMENT: replace the INSERTLISTOFCATEGORYSECTIONS above, constructing the full table
 [STARTCATEGORYSECTIONTEMPLATE]
-\TaskCategoryLabel{[INSERTCATEGORYLABEL]}{[INSERTCATEGORYTITLE]} % category identification
+\WorPTfitTitle\TaskCategoryLabel{[INSERTCATEGORYLABEL]}{[INSERTCATEGORYTITLE]} % category identification
 [INSERTEMPTYYEARSLICESLIST] &  % empty year slices
 {} &                           % empty assignments
 {} & {} & {}\\                 % empty total fte
@@ -185,7 +221,7 @@ p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{}
 % COMMENT: INSERTTASKSUNDERTHISCATEGORY above in the CATEGORYSECTIONTEMPLATE above.
 [STARTTASKROWTEMPLATE]
 % begin task
-\TaskTitleLabel{[INSERTTASKLABEL]}{[INSERTTASKTITLE]} % title of this task
+\WorPTfitTitle\TaskTitleLabel{[INSERTTASKLABEL]}{[INSERTTASKTITLE]} % title of this task
 [INSERTYEARSLICESLIST] &  % timeline for this task
 {[INSERTASSIGNMENTLISTFORTHISTASK]} &  % assignments for this task
 \FteTotalFormat{[INSERTFTETOTAL]} & \FteUnfundedFormat{[INSERTFTEUNFUNDED]} & \FteFundedFormat{[INSERTFTEFUNDED]}\\
@@ -217,14 +253,6 @@ p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{\MonthRule}p{\TimelineWidth}@{}
 \InternationalTeam{[TEAMID]}\,\InternationalTeam{[NUMBERWEEKS]} 
 [ENDINTERNATIONALTEAMASSIGNMENTTEMPLATE]
 
-\end{WorPTtabular}
-\end{minipage}}}
-{%
-\ifLandScape
-  \end{sidewaystable*}
-\else
-  \end{table*}
-\fi
 }
 
 % COMMENT: The caption for this table requires variables (just as the isANONtravel did). The below template defines

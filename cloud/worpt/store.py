@@ -61,7 +61,7 @@ EDITABLE = dict(
     people=('email', 'first', 'middle', 'last', 'prefix', 'suffix', 'institution', 'position', 'us', 'expertise', 'pronoun'),
     proposals=('title', 'program', 'n_years', 'rounding', 'travel'),
     members=('role', 'is_lead', 'fte_accuracy', 'bio_summary', 'task_summary', 'trips'),     # short_id follows the role
-    items=('title', 'start_year', 'start_week', 'end_year', 'end_week'),
+    items=('title', 'short_title', 'start_year', 'start_week', 'end_year', 'end_week'),
     assignments=('member_id', 'is_team', 'is_lead', 'weeks', 'unfunded'),
     nonlabor=('item', 'amounts'))
 JSON_COLS = {'travel', 'trips', 'amounts'}
@@ -70,7 +70,7 @@ PRONOUNS = ('', 'he', 'she', 'they')
 AUTO_SNAPSHOT_DAYS = 60          # automatic snapshots are kept this long; named ones until someone deletes them
 # Columns added after the first release, so an existing database gains them when the server starts.
 ADDED_COLUMNS = [('people', 'expertise', "TEXT NOT NULL DEFAULT ''"), ('people', 'pronoun', "TEXT NOT NULL DEFAULT ''"),
-                 ('items', 'start_week', 'INTEGER'), ('items', 'end_week', 'INTEGER')]
+                 ('items', 'start_week', 'INTEGER'), ('items', 'end_week', 'INTEGER'), ('items', 'short_title', "TEXT NOT NULL DEFAULT ''")]
 TIMELINE = ('start_year', 'start_week', 'end_year', 'end_week')
 
 
@@ -529,7 +529,8 @@ class Store:
                     if f.get(k) is not None and int(f[k]) < 1: raise WorptError('Years are counted from 1.', 'invalid')
                 for k in ('start_week', 'end_week'):
                     if f.get(k) is not None and not 1 <= int(f[k]) <= WEEKS_PER_YEAR: raise WorptError(f'Weeks are 1 to {WEEKS_PER_YEAR}.', 'invalid')
-            if 'title' in f: f['title'] = (f['title'] or '').strip()
+            for k in ('title', 'short_title'):
+                if k in f: f[k] = (f[k] or '').strip()
             out = self.update_row(db, user, 'items', item_id, version, f, it['proposal_id'], 'item')
             if 'parent_id' in fields or 'position' in fields:
                 out = self.move_item(db, user, out, fields.get('parent_id', it['parent_id']), fields.get('position'), fields.get('effort_destination'))
@@ -745,8 +746,9 @@ class Store:
                 ready = [i for i in pending if i['parent_id'] is None or i['parent_id'] in item_id]
                 if not ready: break
                 for i in ready:
-                    cur = db.execute('INSERT INTO items (proposal_id, parent_id, position, title, start_year, start_week, end_year, end_week) VALUES (?,?,?,?,?,?,?,?)',
-                                     (pid, item_id.get(i['parent_id']), i['position'], i['title'], i['start_year'], i['start_week'], i['end_year'], i['end_week']))
+                    cur = db.execute('INSERT INTO items (proposal_id, parent_id, position, title, short_title, start_year, start_week, end_year, end_week) VALUES (?,?,?,?,?,?,?,?,?)',
+                                     (pid, item_id.get(i['parent_id']), i['position'], i['title'], i.get('short_title', ''),   # snapshots before short titles have none
+                                      i['start_year'], i['start_week'], i['end_year'], i['end_week']))
                     item_id[i['id']] = cur.lastrowid
                     pending.remove(i)
             for a in data['assignments']:
@@ -767,7 +769,7 @@ class Store:
         members = [Person(m['short_id'], m['role'], m['us'], m['fte_accuracy'], last=m['last'], first=m['first'], middle=m['middle'],
                           prefix=m['prefix'], suffix=m['suffix'], institution=m['institution'], position=m['position'],
                           bio_summary=m['bio_summary'], task_summary=m['task_summary'], trips=m['trips']) for m in data['members']]
-        nodes = {i['id']: Item(i['title'], start=(i['start_year'], i['start_week']) if i['start_year'] and i['start_week'] else None,
+        nodes = {i['id']: Item(i['title'], short_title=i.get('short_title', ''), start=(i['start_year'], i['start_week']) if i['start_year'] and i['start_week'] else None,
                                end=(i['end_year'], i['end_week']) if i['end_year'] and i['end_week'] else None) for i in data['items']}
         for a in data['assignments']:
             nodes[a['item_id']].assignments.append(Assignment('team' if a['is_team'] else short[a['member_id']], a['weeks'], a['unfunded'], a['is_lead']))

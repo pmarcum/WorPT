@@ -32,6 +32,7 @@
 \def\SectionFontColor{Black}            % category label font color
 \def\SectionFontstyle#1{\textbf{#1}} % boldface category labels
 \def\VerticalLineColor{gray!40}  % color of line between "Lead" and "Expertise"
+\def\TaskTitleFormat#1#2{#1: #2}  % a task's label and title, kept to one line (a long title is cut short with "...")
 
 %--- the table's columns
 \def\[INSERTFILENAME]Columns{
@@ -70,7 +71,7 @@
 % COMMENT: The below is a template for a task row in the table that falls under a 
 % COMMENT: category.  The template for a category is above, for the task is below
 [STARTTASKENTRYTEMPLATE]
-[INSERTID]: {[INSERTTITLE]} & [INSERTLEAD] & [INSERTEXPERTS]\\ \hline
+\WorPTfitTitle\TaskTitleFormat{[INSERTID]}{[INSERTTITLE]} & [INSERTLEAD] & [INSERTEXPERTS]\\ \hline
 [ENDTASKENTRYTEMPLATE]
 
 \end{WorPTtabular}

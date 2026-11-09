@@ -69,3 +69,27 @@ def test_templates_leave_the_document_alone(path):
     s = path.read_text()
     if path.parent.name not in TABLES: pytest.skip('not made by the server')
     assert '\\newcolumntype' not in s and 'longtable' not in s and 'TaskAddCounter' not in s
+
+
+@pytest.mark.parametrize('years', [1, 5])
+@pytest.mark.parametrize('cls', ['article', '{aastex631}', '{aastex702}', 'revtex4-2'])
+def test_schedule_fits_the_page_with_one_line_rows(cls, years, tmp_path):
+    """The schedule is as wide as the text (in landscape mode when it must be), long titles are cut short with "...",
+    and nothing runs past the edge."""
+    if not works(cls): pytest.skip(f'{cls} does not work on this machine, even without WorPT')
+    import dataclasses
+    P = load(CASES[0])
+    for g in P.goals:
+        g.title = 'A rather long task category title that goes on and on ' + g.title
+        for t in g.children: t.title = 'Calibrate the photometric zero points of every field against the reference catalog and more'
+    P = dataclasses.replace(P, n_years=years)
+    shutil.copy(TEMPLATE_DIR / 'worpt.sty', tmp_path)
+    (tmp_path / 'NOTANONschedule.tex').write_text(build(P, ['NOTANONschedule'])['NOTANONschedule'])
+    (tmp_path / 'doc.tex').write_text(documentclass(cls) + '\n' + paste_in('worpt') + '\\begin{document}\n' + paste_in('NOTANONschedule') + '\n\\end{document}\n')
+    subprocess.run(['pdflatex', '-interaction=nonstopmode', 'doc.tex'], cwd=tmp_path, capture_output=True, timeout=300)
+    log = (tmp_path / 'doc.log').read_text(errors='replace')
+    assert not [l for l in log.splitlines() if l.startswith('!')], cls
+    assert 'Overfull \\hbox' not in log and 'worpt Warning' not in log, (cls, years)
+    if shutil.which('pdftotext'):
+        text = subprocess.run(['pdftotext', 'doc.pdf', '-'], cwd=tmp_path, capture_output=True, text=True).stdout
+        assert 'Calibrate' in text and 'reference catalog and more' not in text      # cut short

@@ -36,6 +36,12 @@ def _expand(repl, match, before, after):
     return ''.join(out)
 
 
+def one_line(title):
+    """A title for a table that keeps its rows to one line, where LaTeX may cut it short between words (worpt.sty's
+    \\WorPTfitTitle): math ($...$ or \\(...\\)) is braced so it is never cut in the middle."""
+    return re.sub(r'(\$[^$]*\$|\\\(.*?\\\))', r'{\1}', title)
+
+
 def jrep(s, old, new):
     """JavaScript s.replace('old', new): first occurrence only."""
     i = s.find(old)
@@ -159,7 +165,8 @@ def prepare(p):
     leaf_idx = {lab: k for k, lab in enumerate(r['leaf_labels'])}
     rows = []
     for lab, depth, it, parent in label_tree(p.goals):
-        row = dict(kind=('goal', 'task', 'subtask')[min(depth, 2)], label=lab, title=it.title, has_children=bool(it.children),
+        row = dict(kind=('goal', 'task', 'subtask')[min(depth, 2)], label=lab, title=it.title, short=one_line(it.short_title or it.title),
+                   has_children=bool(it.children),
                    start=r['items'][lab]['start'], end=r['items'][lab]['end'], fte=[fixed(v, 2) for v in r['items'][lab]['fte']],
                    lead=None, experts=[])
         if depth and not it.children:
@@ -208,12 +215,12 @@ def tasks_named(c):
     out = []
     for row in c['rows']:
         if row['kind'] == 'goal':
-            out.append(jsub(jsub(cat, r'\[INSERTID\]', row['label']), r'\[INSERTTITLE\]', row['title']))
+            out.append(jsub(jsub(cat, r'\[INSERTID\]', row['label']), r'\[INSERTTITLE\]', row['short']))
         else:
             lead = _lastname(c, row['lead']) if row['lead'] else ''
             experts = ', '.join(_lastname(c, e) for e in row['experts'])
             s = jsub(task, r'\[INSERTID\]', row['label'])
-            out.append(jsub(jsub(jsub(s, r'\[INSERTTITLE\]', row['title']), r'\[INSERTLEAD\]', lead), r'\[INSERTEXPERTS\]', experts))
+            out.append(jsub(jsub(jsub(s, r'\[INSERTTITLE\]', row['short']), r'\[INSERTLEAD\]', lead), r'\[INSERTEXPERTS\]', experts))
     return jrep(t, '[INSERTTABLECONTENTS]', '\n'.join(out))
 
 
@@ -363,10 +370,10 @@ def schedule(c):
     for row in c['rows']:
         if row['kind'] == 'goal':
             close(); tasks = []
-            section = jrep(jrep(tp['category'], '[INSERTCATEGORYLABEL]', row['label']), '[INSERTCATEGORYTITLE]', row['title'])
+            section = jrep(jrep(tp['category'], '[INSERTCATEGORYLABEL]', row['label']), '[INSERTCATEGORYTITLE]', row['short'])
             section = jrep(section, '[INSERTEMPTYYEARSLICESLIST]', tp['empty'] * (n * slices))
             continue
-        s = jrep(jrep(tp['task'], '[INSERTTASKLABEL]', row['label']), '[INSERTTASKTITLE]', row['title'])
+        s = jrep(jrep(tp['task'], '[INSERTTASKLABEL]', row['label']), '[INSERTTASKTITLE]', row['short'])
         s = jrep(s, '[INSERTYEARSLICESLIST]', timeline(row))
         people = ([_assignment(tp, row['lead'], general(row['lead']['weeks']))] if row['lead'] else []) + [
             _assignment(tp, e, general(e['weeks'] * len(e['unnamed']) if e['id'] == TEAM else e['weeks'])) for e in row['experts']]   # FIX-2

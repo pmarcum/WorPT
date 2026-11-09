@@ -38,7 +38,8 @@
 \newenvironment{WorPTtabular}[1]{%
   \par\penalty\z@\vskip\bigskipamount
   \if@minipage\WorPT@openstrue\else\WorPT@opensfalse\fi
-  \noindent\hb@xt@\linewidth\bgroup\hfil\expandafter\tabular\expandafter{#1}}%
+  \WorPTstraySpace{#1}%
+  \noindent\hb@xt@\linewidth\bgroup\hfil\kern-\WorPTstray\expandafter\tabular\expandafter{#1}}%
   {\endtabular\hfil\egroup\par
    \ifWorPT@opens\@setminipage\fi                  % the table did not start a paragraph, as far as LaTeX is concerned
    \addvspace\bigskipamount}
@@ -49,8 +50,44 @@
 \newcommand\WorPTcellcolor[1]{%
   \gdef\CT@cell@color{\CT@color{#1}\global\let\CT@cell@color\relax\@tempdimb\arrayrulewidth\@tempdimc\z@}}
 
+% A title kept to one line in a paragraph column: \WorPTfitTitle{<format command>}{<label>}{<title>} sets
+% <format command>{<label>}{<title>} (such as \TaskTitleLabel{A1}{Calibrate...}) and, if that is wider than the column,
+% drops words from the end of the title until it fits, followed by \WorPTmore ("..."). Whole words only; each try is
+% measured as it will be set, colors and all. While a table is being measured (\ifWorPTmeasuring), titles are left out,
+% so the measured width is the rest of the table.
+\newif\ifWorPTmeasuring
+\providecommand\WorPTmore{\,\dots}
+\newcommand\WorPTunlessMeasuring[1]{\ifWorPTmeasuring\else#1\fi}
+\newcommand\WorPTfitTitle[3]{\ifWorPTmeasuring\else\WorPT@fit{#1}{#2}{#3}\fi}
+\newtoks\WorPT@kept \newtoks\WorPT@try
+\def\WorPT@fit#1#2#3{%
+  \setbox\z@\hbox{#1{#2}{#3}}%
+  \ifdim\wd\z@>\linewidth
+    \WorPT@kept{}\WorPT@words{#1}{#2}#3 \@nil
+    #1{#2}{\the\WorPT@kept\WorPTmore}%
+  \else #1{#2}{#3}\fi}
+\def\WorPT@words#1#2#3 #4\@nil{% #3: the next word; #4: the words after it
+  \edef\WorPT@empty{\the\WorPT@kept}%
+  \ifx\WorPT@empty\@empty \WorPT@try{#3}\else \WorPT@try\expandafter{\the\WorPT@kept\space#3}\fi
+  \setbox\z@\hbox{#1{#2}{\the\WorPT@try\WorPTmore}}%
+  \ifdim\wd\z@>\linewidth \else
+    \WorPT@kept\WorPT@try
+    \def\WorPT@rest{#4}\ifx\WorPT@rest\@empty\else \WorPT@words{#1}{#2}#4\@nil\fi
+  \fi}
+\newdimen\WorPTtitleWidth   % the schedule's title column: the page's width less the rest of the table
+\newdimen\WorPTmonthWidth   % the schedule's month columns
+\newsavebox\WorPTmeasureBox
+\newif\ifWorPTlandscape
+
 % A table set where it stands, at the left margin (the travel and non-labor tables).
-\newenvironment{WorPTinlineTabular}[1]{\noindent\expandafter\tabular\expandafter{#1}}{\endtabular}
+\newenvironment{WorPTinlineTabular}[1]{\WorPTstraySpace{#1}\noindent\kern-\WorPTstray\expandafter\tabular\expandafter{#1}}{\endtabular}
+
+% Some classes (aastex, which builds its tables with revtex's code) put a few spaces in front of every table, one or two
+% per column, which push it to the right and make it wider than its columns. \WorPTstraySpace{<command holding the
+% column specification>} measures them, as the width of an empty table with those columns, into \WorPTstray, so the
+% tables above can take them back. In other classes it is zero.
+\newdimen\WorPTstray
+\newcommand\WorPTstraySpace[1]{{\setbox\z@\hbox{\expandafter\tabular\expandafter{#1}\endtabular}\global\WorPTstray\wd\z@}}
 
 % The schedule table's column-header icons: not funded (a red-circled, struck-through dollar sign) and
 % funded (a dollar sign on green). #1 raises the icon by that many lines; it takes no room in the line.

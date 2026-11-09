@@ -59,6 +59,7 @@ class Assignment:
 class Item:
     title: str
     children: list = field(default_factory=list)
+    short_title: str = ''        # what the schedule and task management tables show, when given (else the title)
     start: tuple | None = None   # (year, week), both counted from 1; week 1 to 52
     end: tuple | None = None
     assignments: list = field(default_factory=list)

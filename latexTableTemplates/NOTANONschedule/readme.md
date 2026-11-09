@@ -87,6 +87,7 @@ You can just comment out your added lines and recompile the document, if you wan
 <td><pre><code>
 \LandScapetrue          % will put the table in landscape mode
 </code></pre>
+Without this line, the table is set in landscape mode only when it needs to be: when the title column would be narrower than <code>\MinTitleWidth</code> (below).
 <details>
 <summary>reference image</summary>
 <img src="https://lh3.googleusercontent.com/d/16SbKRxlDHWshgzt-tQNsjqqSOJeCXWm1" width=15%>
@@ -97,13 +98,13 @@ You can just comment out your added lines and recompile the document, if you wan
 <tr>
 <td><b>Column width adjustments</b></td>
 <td><pre><code>
-\def\TitleWidth{<mark>4.1in</mark>}      % Title column width
-\def\TimelineWidth{<mark>1ex</mark>}     % skinny timeline columns width
-\def\AssignmentsWidth{<mark>24ex</mark>} % Task assignments column width
+\def\MinTitleWidth{<mark>1.5in</mark>}   % narrowest title column before switching to landscape mode
+\def\TimelineWidth{<mark>0.6ex</mark>}   % skinny timeline columns width (one per month)
 \def\SumFteWidth{<mark>5ex</mark>}       % Total FTE/Sum column width
 \def\UnfundedFteWidth{<mark>5ex</mark>}  % Total FTE/Unfunded column width
 \def\FundedFteWidth{<mark>5ex</mark>}    % Total FTE/Funded column width
 </code></pre>
+The table is always as wide as the page's text. The task assignments column is as wide as its longest line (assignments are never split over two lines), and the title column gets the width that is left. A title too long for it is cut short at a word, with "...": give the task a short title in WorPT to choose what shows. The month columns are made wider than <code>\TimelineWidth</code> if the timeline's labels need it.
 <details>
 <summary>reference image</summary>
 <img src="https://lh3.googleusercontent.com/d/1dXDf4XkJcMxWQ1Q5zYmiN1Z0QKpHpFLV" width=70%>
@@ -139,18 +140,6 @@ You can just comment out your added lines and recompile the document, if you wan
 <summary>reference image</summary>
 <img src="https://lh3.googleusercontent.com/d/1wgKhN-aCTVc2Vi6bJ8FAyoZrK3f8SNfA" width=65%>
 </details></td>
-</tr>
-
-<tr>
-<td><b>Nudge table to left or right</b></td>
-<td><pre><code>
-\def\NudgeTable{<mark>1.5\textwidth</mark>} % larger value nudges table to left
-</code></pre>
-<details>
-<summary>reference image</summary>
-<img src="https://lh3.googleusercontent.com/d/1sgYYaDtI7YJF_sMnKDn7jXHWfZtgNBJX" width=65%>
-</details>
-</td>
 </tr>
 
 <tr>
@@ -264,27 +253,26 @@ redefine as:<br>
 </tr>
 
 <tr>
-<td><b>Table preamble - full control!</b></td>
+<td><b>Table columns - full control</b></td>
 <td>
-Use table preamble for more control over table layout (removing/adding vertical lines, changing column alignment, etc).<br>
-Copy/paste the ENTIRE below code in order to change default table preamble.<br>
-<u>IMPORTANT</u> Most of table preamble can be changed EXCEPT <i>do <b>NOT</b> change "T", \NumberYears and \SlicesPerYearMinusTwo variables, and preserve the number of columns (eg, make sure that any 'p' that is removed is replaced by another alignment code). The helper definitions of "L", "V" and "W" may be changed or removed.</i>
+For more control over the table's layout (removing or adding vertical lines, changing column alignment, etc.), copy the
+ENTIRE code below into your document after the table's <code>\input</code> line, and change it there.<br>
+<u>IMPORTANT</u> keep the number of columns, <code>\NumberYears</code>, <code>\WorPTtitleWidth</code> and <code>\WorPTmonthWidth</code> (WorPT works these widths out).
 <pre><code>
-%--- table preamble definition bundled into the "T" variable
-<mark>\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}</mark>      % title, assignment columns
-<mark>\newcolumntype{V}{!{\color{\TimelineVerticalLineColor}\vrule}}</mark> % vertical lines in timeline
-<mark>\newcolumntype{W}{!{\color{\TotalFteVerticalLineColor}\vrule}}</mark> % vertical lines in FTE
-%
-\newcolumntype{T}{
-<mark>|L{\TitleWidth}</mark>         % title column
-*{\NumberYears}{        % timeline columns
-<mark>|p{\TimelineWidth}V</mark>*{\SlicesPerYearMinusTwo}<mark>{p{\TimelineWidth}V}p{\TimelineWidth}}</mark> 
-<mark>|L{\AssignmentsWidth}</mark>   % task assignment column
-<mark>|p{\SumFteWidth}W</mark>       % total fte, sum column
-<mark>p{\UnfundedFteWidth}W</mark>   % total fte, unfunded column
-<mark>p{\FundedFteWidth}|</mark>     % total fte, funded column
+\def\NOTANONscheduleColumns{%
+<mark>|>{\raggedright\arraybackslash\leavevmode}p{\WorPTtitleWidth}</mark>% title column
+<mark>|*{\NumberYears}{@{}</mark>%                                      timeline: a column per month
+<mark>p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\QuarterRule}</mark>%
+<mark>p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\QuarterRule}</mark>%
+<mark>p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\QuarterRule}</mark>%
+<mark>p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{}|}</mark>%
+<mark>l</mark>%                                                         task assignment column
+<mark>|>{\leavevmode}p{\SumFteWidth}!{\color{\TotalFteVerticalLineColor}\vrule}</mark>%       total fte, sum column
+<mark>>{\leavevmode}p{\UnfundedFteWidth}!{\color{\TotalFteVerticalLineColor}\vrule}</mark>%   total fte, unfunded column
+<mark>>{\leavevmode}p{\FundedFteWidth}|</mark>%                                                total fte, funded column
 }
-</code></pre></td>
+</code></pre>
+(aastex and revtex misread a repeat inside a repeat, or a repeat that starts with <code>|</code> then <code>@</code>: keep the timeline written this way.)</td>
 </tr>
 </table>
 </details>

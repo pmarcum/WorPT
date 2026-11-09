@@ -671,3 +671,29 @@ def test_deleting_a_snapshot(team):
     ann.ok('delete', f"/api/snapshots/{s['id']}")
     assert 'temp' not in [x['name'] for x in ann.ok('get', f'/api/proposals/{pid}/snapshots')['snapshots']]
     team['dan'].no('get', f'/api/proposals/{pid}/snapshots', code='not_found')
+
+
+def test_short_titles_go_in_the_one_line_tables(team, tmp_path):
+    """A short title, when given, is what the schedule and the task management table show; the other tables keep the
+    full title. It is kept in snapshots, and snapshots saved before short titles existed restore without one."""
+    ann, pid, task = team['ann'], team['pid'], timed(team['ann'], team['task'])
+    ann.ok('post', f"/api/items/{task['id']}/assignments", dict(member_id=team['bob_m']['id'], weeks=2, is_lead=True))
+    task = next(i for i in ann.ok('get', f'/api/proposals/{pid}')['items'] if i['id'] == task['id'])
+    assert task['short_title'] == ''
+    task = ann.ok('patch', f"/api/items/{task['id']}", dict(version=task['version'], title='Calibrate the zero points of every field', short_title='  Calibrate fields  '))['item']
+    assert task['short_title'] == 'Calibrate fields'
+    tex = lambda name: ann.ok('get', f'/api/proposals/{pid}/tables/{name}')['latex']
+    assert '{Calibrate fields}' in tex('NOTANONschedule') and 'every field' not in tex('NOTANONschedule')
+    assert '{Calibrate fields}' in tex('NOTANONtasks')
+    assert 'Calibrate the zero points of every field' in tex('isANONtasks')
+    snap = ann.ok('post', f'/api/proposals/{pid}/snapshots', dict(name='with short'))['snapshot']
+    ann.ok('patch', f"/api/items/{task['id']}", dict(version=task['version'], short_title=''))
+    ann.ok('post', f"/api/snapshots/{snap['id']}/restore")
+    assert [i['short_title'] for i in ann.ok('get', f'/api/proposals/{pid}')['items'] if i['title'].startswith('Calibrate')] == ['Calibrate fields']
+    import sqlite3                                                      # a snapshot from before short titles
+    with sqlite3.connect(tmp_path / 'worpt.db') as c:
+        data = json.loads(c.execute('SELECT data FROM snapshots WHERE id = ?', (snap['id'],)).fetchone()[0])
+        for i in data['items']: i.pop('short_title')
+        c.execute('UPDATE snapshots SET data = ? WHERE id = ?', (json.dumps(data), snap['id']))
+    ann.ok('post', f"/api/snapshots/{snap['id']}/restore")
+    assert {i['short_title'] for i in ann.ok('get', f'/api/proposals/{pid}')['items']} == {''}
