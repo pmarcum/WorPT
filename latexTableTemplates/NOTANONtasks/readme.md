@@ -86,6 +86,7 @@ NOTE: you can PICK AND CHOOSE the lines you want to paste into your document; yo
 <td><pre><code>
 \LandScapetrue          % will put the table in landscape mode
 </code></pre>
+Without this line, the table is set in landscape mode only when it needs to be: when the "Tasks" column would be narrower than <code>\MinTitleWidth</code> (below).
 <details>
 <summary>reference image</summary>
 <img src="https://lh3.googleusercontent.com/d/16SbKRxlDHWshgzt-tQNsjqqSOJeCXWm1" width=15%>
@@ -96,11 +97,12 @@ NOTE: you can PICK AND CHOOSE the lines you want to paste into your document; yo
 <tr>
 <td><b>Column width adjustments</b></td>
 <td><pre><code>
-\def\TaskWidth{<mark>3.9in</mark>}            % leftmost ("Tasks") column width
+\def\MinTitleWidth{<mark>1.5in</mark>}        % narrowest "Tasks" column before switching to landscape mode
 \def\LeadWidth{<mark>1.2in</mark>}            % middle ("Lead") column width
 \def\ExpertiseWidth{<mark>1.8in</mark>}       % rightmost ("Expertise") column width
+\def\TaskWidth{<mark>3.9in</mark>}            % leftmost ("Tasks") column width (leave this line out to use what is left)
 </code></pre>
-Each task's label and title stay on one line: a title too long for the "Tasks" column is cut short at a word, with "...". Give the task a short title in WorPT to choose what shows.
+The table is always as wide as the page's text; in a two-column document it spans both columns. The "Tasks" column gets the width the other columns leave, unless you give it a width here. Each task's label and title stay on one line: a title too long for the "Tasks" column is cut short at a word, with "...", and so does a category's, in its banner across the table. Give the task or category a short title in WorPT to choose what shows.
 <details>
 <summary>reference image</summary>
 <img src="https://lh3.googleusercontent.com/d/1Lc84Ce7q9vDGbn-PSkLpHm3Bk-018GLC" width=50%>
@@ -121,18 +123,6 @@ Each task's label and title stay on one line: a title too long for the "Tasks" c
 </td>
 </tr>
 
-<tr>
-<td><b>Nudge table to left or right</b></td>
-<td><pre><code>
-\def\NudgeTable{<mark>1.5\textwidth</mark>} % larger value nudges table to left
-</code></pre>
-<details>
-<summary>reference image</summary>
-<img src="https://lh3.googleusercontent.com/d/19tDKpSmX3NA0sf9neZBASfN-yIYY9LTI" width=50%>
-</details>
-</td>
-</tr>
-   
 <tr>
 <td><b>Column label color and font style</b></td>
 <td>
@@ -177,19 +167,16 @@ be turned into plain test by removing the "\textbf", eg {{#1}}
 </tr>
 
 <tr>
-<td><b>Table preamble - full control!</b></td>
+<td><b>Table columns - full control</b></td>
 <td>
-Use table preamble for more control over table layout (removing/adding vertical lines, changing column alignment, etc).<br>
-Copy/paste the ENTIRE below code in order to change default table preamble.<br>
-<u>IMPORTANT</u> Most of table preamble can be changed EXCEPT <i>do <b>NOT</b> change "T" variable, and preserve the number of columns</i>
-(eg, make sure that any 'p' that is removed is replaced by another alignment code). You may retain the parameters below (like \TaskWidth) and
-define them separately as the above customization options show, or replace them entirely with hard-coded numbers. 
-   
+For more control over the table's layout (removing or adding vertical lines, changing column alignment, etc.), copy the
+ENTIRE code below into your document after the table's <code>\input</code> line, and change it there.<br>
+<u>IMPORTANT</u> keep the number of columns (any <code>p</code> that is removed must be replaced by another column type). You may keep the width settings (like <code>\TaskWidth</code>) and set them as shown above, or write widths in their place.
 <pre><code>
-\newcolumntype{T}{
-  <mark>|p</mark>{<mark>\TaskWidth</mark>}<mark>||</mark>                                 % title column
-  <mark>p</mark>{<mark>\LeadWidth</mark>}<mark>!{\color{\VerticalLineColor}\vrule}</mark> % task lead column
-  <mark>p</mark>{<mark>\ExpertiseWidth</mark>}<mark>|</mark>                              % expertise column
+\def\NOTANONtasksColumns{
+  <mark>|>{\leavevmode}p{\TaskWidth}||</mark>                                % title column
+  <mark>>{\leavevmode}p{\LeadWidth}!{\color{\VerticalLineColor}\vrule}</mark>% line bet Lead/Expertise
+  <mark>>{\leavevmode}p{\ExpertiseWidth}|</mark>                             % Expertise column
 }
 </code></pre></td>
 </tr>

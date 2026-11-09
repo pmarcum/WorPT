@@ -9,20 +9,21 @@
 % ___________________________________________
 %       Default formatting preferences
 % ___________________________________________
-\LandScapefalse                  % default is that the landscape mode is OFF
+\LandScapefalse                  % landscape mode OFF, unless the table needs it (see MinTitleWidth); \LandScapetrue always uses it
 
-%---- column widths and table orientation controls
-\def\TaskWidth{3.7in}            % width of leftmost ("Tasks") column
+%---- column widths
+% The table is as wide as the page's text (in a two-column document it spans both columns). The "Lead" and "Expertise"
+% columns have the widths below; the "Tasks" column gets the width that is left, and a title too long for it is cut
+% short with "...". If less than MinTitleWidth is left, the table is set in landscape mode, which is wider.
+\def\MinTitleWidth{1.5in}        % narrowest "Tasks" column before switching to landscape mode
 \def\LeadWidth{1.1in}            % width of middle ("Lead") column
 \def\ExpertiseWidth{1.7in}       % width of rightmost ("Expertise") column
+\def\TaskWidth{\WorPTtitleWidth} % width of leftmost ("Tasks") column: what is left (or give a width, such as 3.7in)
 
 
 %---- table compactness controls
 \def\SpaceBetweenRows{1}         % vertical compactness of rows
 \def\SpaceBetweenColumns{1pt}    % spacing between columns
-
-%--- control to nudge table to the left or right
-\def\NudgeTable{1.2\textwidth}   % adjust to help center table
 
 %--- aesthetic preferences
 \def\HeaderColor{Blue}           % column heading color
@@ -33,6 +34,7 @@
 \def\SectionFontstyle#1{\textbf{#1}} % boldface category labels
 \def\VerticalLineColor{gray!40}  % color of line between "Lead" and "Expertise"
 \def\TaskTitleFormat#1#2{#1: #2}  % a task's label and title, kept to one line (a long title is cut short with "...")
+\def\CategoryTitleFormat#1#2{\SectionFontstyle{Task #1: #2}} % a category's label and title, kept to one line the same way
 
 %--- the table's columns
 \def\[INSERTFILENAME]Columns{
@@ -41,16 +43,36 @@
   >{\leavevmode}p{\ExpertiseWidth}|                             % Expertise column
 }
 
+%--- the widths: the rest of the table measured with an empty "Tasks" column, and the "Tasks" column given what is left
+\def\[INSERTFILENAME]Layout{%
+  \begingroup
+  \csname @floatboxreset\endcsname  % measured as set in a table: some classes (aastex) use a smaller font there
+  \renewcommand{\arraystretch}{\SpaceBetweenRows}\setlength{\tabcolsep}{\SpaceBetweenColumns}%
+  \let\WorPTsavedTaskWidth\TaskWidth\def\TaskWidth{0pt}%
+  \sbox\WorPTmeasureBox{\expandafter\tabular\expandafter{\[INSERTFILENAME]Columns}&&\\\endtabular}%
+  \WorPTstraySpace{\[INSERTFILENAME]Columns}%
+  \ifLandScape\global\WorPTlandscapetrue\else\global\WorPTlandscapefalse\fi
+  \global\WorPTtitleWidth=\dimexpr\textwidth-\wd\WorPTmeasureBox+\WorPTstray\relax
+  \ifdim\WorPTtitleWidth<\MinTitleWidth\relax\global\WorPTlandscapetrue\fi
+  \ifWorPTlandscape\global\WorPTtitleWidth=\dimexpr\textheight-\wd\WorPTmeasureBox+\WorPTstray\relax\fi
+  \ifdim\WorPTtitleWidth<\MinTitleWidth\relax
+    \global\WorPTtitleWidth=\MinTitleWidth\relax
+    \PackageWarningNoLine{worpt}{The tasks table is wider than the page even in landscape mode}%
+  \fi
+  \let\TaskWidth\WorPTsavedTaskWidth
+  \sbox\WorPTmeasureBox{\expandafter\tabular\expandafter{\[INSERTFILENAME]Columns}&&\\\endtabular}% the whole table, for its banners:
+  \global\WorPTspanWidth=\dimexpr\wd\WorPTmeasureBox-\WorPTstray-2\arrayrulewidth-2\tabcolsep\relax% inside the outer lines
+  \endgroup}
+
 \newenvironment{[INSERTFILENAME]}{%
-\ifLandScape
-  \begin{sidewaystable}
+\[INSERTFILENAME]Layout
+\ifWorPTlandscape
+  \begin{sidewaystable*}
 \else
-  \begin{table}[h]
+  \begin{table*}[h]
 \fi
-\centerline{
 \renewcommand{\arraystretch}{\SpaceBetweenRows}  % changes vertical space bet/ rows
 \setlength{\tabcolsep}{\SpaceBetweenColumns}     % changes horizontal spacing bet/ columns
-\begin{minipage}{\NudgeTable}     % increase to allow wide table spill into margin
 \begin{WorPTtabular}{\[INSERTFILENAME]Columns}
 %--- make colorized top banner labels, the column headers
 \hline
@@ -65,7 +87,7 @@
 % COMMENT: Below this row, all the related tasks will be listed (the template for those
 % COMMENT: tasks is the template following this one)
 [STARTCATEGORYENTRYTEMPLATE]
-\multicolumn{3}{|c|}{\cellcolor{\SectionColor}\color{\SectionFontColor}\SectionFontstyle{Task [INSERTID]: [INSERTTITLE]}}\\ \hline
+\multicolumn{3}{|c|}{\cellcolor{\SectionColor}\color{\SectionFontColor}\linewidth\WorPTspanWidth\WorPTfitTitle\CategoryTitleFormat{[INSERTID]}{[INSERTTITLE]}}\\ \hline
 [ENDCATEGORYENTRYTEMPLATE]
 
 % COMMENT: The below is a template for a task row in the table that falls under a 
@@ -74,14 +96,11 @@
 \WorPTfitTitle\TaskTitleFormat{[INSERTID]}{[INSERTTITLE]} & [INSERTLEAD] & [INSERTEXPERTS]\\ \hline
 [ENDTASKENTRYTEMPLATE]
 
-\end{WorPTtabular}
-\end{minipage}
-}
-}
+\end{WorPTtabular}}
 {%
-\ifLandScape
- \end{sidewaystable}
+\ifWorPTlandscape
+  \end{sidewaystable*}
 \else
- \end{table}
+  \end{table*}
 \fi
 }

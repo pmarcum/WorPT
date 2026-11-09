@@ -17,15 +17,14 @@
 %---- required input from user
 \def\ProgramID{HST-xx-xxxxx (Cycle XX)} % user needs to fill in details
 
-%---- column widths and table orientation controls
+%---- column widths
+% The table is as wide as the page's text (in a two-column document it spans both columns): the Role column gets the
+% width the other columns leave.
 \def\ContributorWidth{1.8in}      % Contributor column width
 \def\PositionWidth{1.3in}         % Position column width
-\def\RoleWidth{2.5in}             % Role column width
 \def\FundedMemberWidth{0.22in}    % Funded(?) column width
 \def\FteWidth{0.42in}             % FTE column width
-
-%--- control to nudge table to the left or right
-\def\NudgeTable{1.2\textwidth}   % adjust to help center table
+\def\RoleWidth{\WorPTtitleWidth}  % Role column width: what is left (or give a width, such as 2.5in)
 
 
 %---- table compactness controls
@@ -51,12 +50,26 @@
   p{\FteWidth}|                                            % FTE column
 }
 
+%--- the widths: the rest of the table measured with an empty Role column, and the Role column given what is left
+\def\[INSERTFILENAME]Layout{%
+  \begingroup
+  \csname @floatboxreset\endcsname  % measured as set in a table: some classes (aastex) use a smaller font there
+  \renewcommand{\arraystretch}{\SpaceBetweenRows}\setlength{\tabcolsep}{\SpaceBetweenColumns}%
+  \def\RoleWidth{0pt}%
+  \sbox\WorPTmeasureBox{\expandafter\tabular\expandafter{\[INSERTFILENAME]Columns}&&&&\\\endtabular}%
+  \WorPTstraySpace{\[INSERTFILENAME]Columns}%
+  \global\WorPTtitleWidth=\dimexpr\textwidth-\wd\WorPTmeasureBox+\WorPTstray\relax
+  \ifdim\WorPTtitleWidth<0.5in   % (only on a page too narrow for the other columns)
+    \global\WorPTtitleWidth=0.5in
+    \PackageWarningNoLine{worpt}{The HST table is wider than the page}%
+  \fi
+  \endgroup}
+
 \newenvironment{[INSERTFILENAME]}{%
-\begin{table}
-\centerline{
+\[INSERTFILENAME]Layout
+\begin{table*}
 \renewcommand{\arraystretch}{\SpaceBetweenRows}  % changes vertical space bet/ rows
 \setlength{\tabcolsep}{\SpaceBetweenColumns}     % changes horizontal spacing bet/ columns
-\begin{minipage}{\NudgeTable}     % increase to nudge table to left
 \begin{WorPTtabular}{\[INSERTFILENAME]Columns}
 
 %--- put the required program number and PI(s) at the top
@@ -80,8 +93,7 @@
 [INSERTNAME] & [INSERTJOB] & [INSERTDESC] & [INSERTFUNDING] & [INSERTFTE]\\ \hline
 [ENDROWTEMPLATE]
 
-\end{WorPTtabular}
-\end{minipage}}}
+\end{WorPTtabular}}
 {%
-\end{table}
+\end{table*}
 }

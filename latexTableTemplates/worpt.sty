@@ -39,7 +39,7 @@
   \par\penalty\z@\vskip\bigskipamount
   \if@minipage\WorPT@openstrue\else\WorPT@opensfalse\fi
   \WorPTstraySpace{#1}%
-  \noindent\hb@xt@\linewidth\bgroup\hfil\kern-\WorPTstray\expandafter\tabular\expandafter{#1}}%
+  \noindent\hb@xt@\linewidth\bgroup\hfil\kern-\WorPTstray\WorPTcolorPadding\expandafter\tabular\expandafter{#1}}%
   {\endtabular\hfil\egroup\par
    \ifWorPT@opens\@setminipage\fi                  % the table did not start a paragraph, as far as LaTeX is concerned
    \addvspace\bigskipamount}
@@ -76,11 +76,17 @@
   \fi}
 \newdimen\WorPTtitleWidth   % the schedule's title column: the page's width less the rest of the table
 \newdimen\WorPTmonthWidth   % the schedule's month columns
+\newdimen\WorPTspanWidth    % the text width of a banner across a whole table (the tasks table's category rows)
 \newsavebox\WorPTmeasureBox
 \newif\ifWorPTlandscape
 
 % A table set where it stands, at the left margin (the travel and non-labor tables).
-\newenvironment{WorPTinlineTabular}[1]{\WorPTstraySpace{#1}\noindent\kern-\WorPTstray\expandafter\tabular\expandafter{#1}}{\endtabular}
+\newenvironment{WorPTinlineTabular}[1]{\WorPTstraySpace{#1}\noindent\kern-\WorPTstray\WorPTcolorPadding\expandafter\tabular\expandafter{#1}}{\endtabular}
+
+% A colored cell is colored out to its lines, padding and all: colortbl colors \col@sep beyond the text on each side,
+% which LaTeX's tables set to \tabcolsep, but aastex's (revtex's) tables leave as it was, so their colored cells stopped
+% short of the lines by the padding. (In other classes this changes nothing.)
+\newcommand\WorPTcolorPadding{\col@sep\tabcolsep}
 
 % Some classes (aastex, which builds its tables with revtex's code) put a few spaces in front of every table, one or two
 % per column, which push it to the right and make it wider than its columns. \WorPTstraySpace{<command holding the

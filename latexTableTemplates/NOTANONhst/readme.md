@@ -85,10 +85,11 @@ You can just comment out your added lines and recompile the document, if you wan
 <td><pre><code>
 \def\ContributorWidth{<mark>1.8in</mark>}      % Contributor column width
 \def\PositionWidth{<mark>1.3in</mark>}         % Position column width
-\def\RoleWidth{<mark>2.5in</mark>}             % Role column width
 \def\FundedMemberWidth{<mark>0.22in</mark>}    % Funded(?) column width
 \def\FteWidth{<mark>0.42in</mark>}             % FTE column width
+\def\RoleWidth{<mark>2.5in</mark>}             % Role column width (leave this line out to use what is left)
 </code></pre>
+The table is always as wide as the page's text; in a two-column document it spans both columns. The Role column gets the width the other columns leave, unless you give it a width here.
 <details>
 <summary>reference image</summary>
 <img src="https://lh3.googleusercontent.com/d/1VFoxre2-539OyEXfklTvudu-PYBlPuaJ" width=70%>
@@ -105,18 +106,6 @@ You can just comment out your added lines and recompile the document, if you wan
 <details>
 <summary>reference image</summary>
 <img src="https://lh3.googleusercontent.com/d/1XhVrw4lR70_WbosdIZ7x-mowtJRTPVqs" width=50%>
-</details>
-</td>
-</tr>
-
-<tr>
-<td><b>Nudge table to left or right</b></td>
-<td><pre><code>
-\def\NudgeTable{<mark>1.2\textwidth</mark>} % larger value nudges table to left
-</code></pre>
-<details>
-<summary>reference image</summary>
-<img src="https://lh3.googleusercontent.com/d/16KK8AuYbxc5C0dy9qPh2Pazoq_XdEWD2" width=50%>
 </details>
 </td>
 </tr>
@@ -139,21 +128,19 @@ For fontstyle changes, the "\textbf" can be changed to "\emph" for italics, or c
 </tr>
 
 <tr>
-<td><b>Table preamble - full control!</b></td>
+<td><b>Table columns - full control</b></td>
 <td>
-Use table preamble for more control over table layout (removing/adding vertical lines, changing column alignment, etc). Copy/paste the ENTIRE below code in order to change default table preamble.<br>
-<u>IMPORTANT</u> Most of table preamble can be changed EXCEPT <i>do <b>NOT</b> change "T" variable, and preserve the number of columns</i> (eg, make sure that any 'p' that is removed is replaced by another alignment code). You may retain the parameters below (like \ContributorWidth) and define them separately as the above customization options show, or replace them entirely with hard-coded numbers. You can also change the column user-definition of "L" if desired.
+For more control over the table's layout (removing or adding vertical lines, changing column alignment, etc.), copy the
+ENTIRE code below into your document after the table's <code>\input</code> line, and change it there.<br>
+<u>IMPORTANT</u> keep the number of columns (any <code>p</code> that is removed must be replaced by another column type). You may keep the width settings (like <code>\ContributorWidth</code>) and set them as shown above, or write widths in their place.
 <pre><code>
-% define column type to help readability of table preamble
-<mark>\newcolumntype{L}[1]{>{\raggedright\let\newline\\\arraybackslash\hspace{0pt}}p{#1}}</mark>
-%
-\newcolumntype{T}{                                       % start of table preamble
-<mark>|L{\ContributorWidth}!{\color{\VerticalLineColor}\vrule}</mark> % Contributor
-<mark>L{\PositionWidth}!{\color{\VerticalLineColor}\vrule}</mark>     % Position
-<mark>L{\RoleWidth}!{\color{\VerticalLineColor}\vrule}</mark>         % Role
-<mark>p{\FundedMemberWidth}!{\color{\VerticalLineColor}\vrule}</mark> % Funded(?)
-<mark>p{\FteWidth}|</mark>                                            % FTE
-}                                                        % end of table preamble
+\def\NOTANONhstColumns{
+<mark>|>{\raggedright\let\newline\\\arraybackslash\hspace{0pt}}p{\ContributorWidth}!{\color{\VerticalLineColor}\vrule}</mark> % Contributor column
+<mark>>{\raggedright\let\newline\\\arraybackslash\hspace{0pt}}p{\PositionWidth}!{\color{\VerticalLineColor}\vrule}</mark>     % Position column
+<mark>>{\raggedright\let\newline\\\arraybackslash\hspace{0pt}}p{\RoleWidth}!{\color{\VerticalLineColor}\vrule}</mark>         % Role column
+<mark>p{\FundedMemberWidth}!{\color{\VerticalLineColor}\vrule}</mark> % Funded(?) column
+<mark>p{\FteWidth}|</mark>                                            % FTE column
+}
 </code></pre></td>
 </tr>
 
