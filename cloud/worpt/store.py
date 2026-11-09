@@ -79,7 +79,7 @@ def weeks_from_quarters(item):
     if 'start_week' in item: return item
     q0, q1 = item.pop('start_q', None), item.pop('end_q', None)
     return dict(item, start_week=None if q0 is None else (q0 - 1) * WEEKS_PER_QUARTER + 1, end_week=None if q1 is None else q1 * WEEKS_PER_QUARTER)
-ROLE_WORDS = {'co-i': 'co-I', 'coi': 'co-I', 'coll': 'collab', 'gst': 'grad', 'pd': 'postdoc', 'ust': 'undergrad'}
+ROLE_WORDS = {'co-i': 'co-I', 'coi': 'co-I', 'coll': 'collab'}       # how a numbered role's label starts; others keep their code (pd, gst, ust)
 # Roles WorPT numbers by itself (co-I(1), co-I(2)...): what may be typed or chosen, and the code it is stored as.
 NUMBERED_ROLES = {'co-i': 'co-I', 'coi': 'co-I', 'co-investigator': 'co-I', 'coll': 'coll', 'collab': 'coll', 'collaborator': 'coll',
                   'gst': 'gst', 'grad': 'gst', 'grad student': 'gst', 'graduate student': 'gst', 'pd': 'pd', 'postdoc': 'pd',
@@ -99,8 +99,8 @@ def canonical_role(text):
 
 def role_label(role):
     """A member's label, which also stands for them in the tables, comes from their role and never their name, so
-    proposals can stay anonymous: PI -> PI, co-I(1) -> co-I 1, coll(2) -> collab 2, gst(1) -> grad 1, pd(1) -> postdoc 1,
-    ust(1) -> undergrad 1."""
+    proposals can stay anonymous, and is kept short for the tables: PI -> PI, co-I(1) -> co-I 1, coll(2) -> collab 2,
+    pd(1) -> pd 1, gst(1) -> gst 1, ust(1) -> ust 1."""
     m = re.fullmatch(r'\s*([A-Za-z][A-Za-z-]*)\s*\(\s*(\d+)\s*\)\s*', role or '')
     return f'{ROLE_WORDS.get(m.group(1).lower(), m.group(1))} {m.group(2)}' if m else (role or '').strip()
 

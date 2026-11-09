@@ -196,7 +196,7 @@ def test_labels_come_from_roles_never_from_names(team):
     ann, pid, p = team['ann'], team['pid'], team['people']
     labels = {m['role']: m['short_id'] for m in ann.ok('get', f'/api/proposals/{pid}')['members']}
     assert labels == {'PI': 'PI', 'co-I(1)': 'co-I 1'}                    # what the client sent as short_id is ignored
-    for role, label in [('coll(2)', 'collab 1'), ('Grad student', 'grad 1'), ('pd(3)', 'postdoc 1'), ('Undergrad student', 'undergrad 1'),
+    for role, label in [('coll(2)', 'collab 1'), ('Grad student', 'gst 1'), ('pd(3)', 'pd 1'), ('Undergrad student', 'ust 1'),
                         ('sci-pi', 'Sci-PI')]:
         m = ann.ok('patch', f"/api/members/{team['bob_m']['id']}", dict(version=ann.ok('get', f'/api/proposals/{pid}')['members'][1]['version'], role=role))['member']
         assert m['short_id'] == label, (role, m)
@@ -280,6 +280,27 @@ def test_an_older_database_is_brought_up_to_date(tmp_path):
     assert timeline == {'Goal': (None,) * 4, 'Task': (1, 14, 2, 39), 'Undated': (None,) * 4}     # Q2 of year 1 to Q3 of year 2, in weeks
     assert 'start_q' not in out['items'][0]
     with sqlite3.connect(db) as c: assert 'start_q' not in {r[1] for r in c.execute('PRAGMA table_info(items)')}
+
+
+def test_older_labels_are_shortened_when_the_server_starts(tmp_path):
+    """Labels made before November 9, 2026 ("postdoc 1", "grad 1"...) become the short ones ("pd 1", "gst 1") at startup,
+    and the people keep their tasks (assignments point to the member, not the label)."""
+    import sqlite3
+    db = tmp_path / 'w.db'
+    api = Api(create_app(str(db), KEY, READ).test_client(), 'ann@x.org', 'core')
+    p = {n: api.ok('post', '/api/people', dict(first=n, last=n + 'son', email=f'{n}@x.org'))['person'] for n in ('ann', 'bob', 'cat')}
+    pid = api.ok('post', '/api/proposals', dict(title='T', program='NASA/ADAP', n_years=1, leads=[dict(person_id=p['ann']['id'], role='PI')]))['proposal']['id']
+    for n, role in (('bob', 'pd'), ('cat', 'gst')): api.ok('post', f'/api/proposals/{pid}/members', dict(person_id=p[n]['id'], role=role))
+    goal = api.ok('post', f'/api/proposals/{pid}/items', dict(title='Goal'))['item']
+    task = api.ok('post', f'/api/proposals/{pid}/items', dict(title='Task', parent_id=goal['id']))['item']
+    bob = next(m for m in api.ok('get', f'/api/proposals/{pid}')['members'] if m['person_id'] == p['bob']['id'])
+    api.ok('post', f"/api/items/{task['id']}/assignments", dict(member_id=bob['id'], weeks=2))
+    with sqlite3.connect(db) as c:                                      # as an older server labeled them
+        c.execute("UPDATE members SET short_id = 'postdoc 1' WHERE role = 'pd(1)'"); c.execute("UPDATE members SET short_id = 'grad 1' WHERE role = 'gst(1)'")
+    api = Api(create_app(str(db), KEY, READ).test_client(), 'ann@x.org', 'core')
+    assert {m['short_id'] for m in api.ok('get', f'/api/proposals/{pid}')['members']} == {'PI', 'pd 1', 'gst 1'}
+    sched = api.ok('get', f'/api/proposals/{pid}/tables/NOTANONschedule')['latex']
+    assert '\\FundedUsTeam{pd 1}' in sched and 'TeamMark{\\TeamFundedColor}' in sched.split('% begin task')[1]   # still on the task
 
 
 def test_a_proposal_always_keeps_a_lead(team):
