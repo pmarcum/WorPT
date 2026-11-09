@@ -719,3 +719,28 @@ def test_short_titles_go_in_the_one_line_tables(team, tmp_path):
         c.execute('UPDATE snapshots SET data = ? WHERE id = ?', (json.dumps(data), snap['id']))
     ann.ok('post', f"/api/snapshots/{snap['id']}/restore")
     assert {i['short_title'] for i in ann.ok('get', f'/api/proposals/{pid}')['items']} == {''}
+
+
+def test_items_have_a_description_for_the_team_only(team, tmp_path):
+    """A description (what the item stands for and involves) can go on any item, a category included. Its paragraphs are
+    kept; it is never printed in a table; it is kept in snapshots, and older snapshots restore without one."""
+    ann, pid, goal, task = team['ann'], team['pid'], team['goal'], team['task']
+    assert task['description'] == ''
+    text = '  Calibrate every field against the reference catalog.\r\n\r\nIncludes the bright-star fields, done by hand.  '
+    task = ann.ok('patch', f"/api/items/{task['id']}", dict(version=task['version'], description=text))['item']
+    assert task['description'] == 'Calibrate every field against the reference catalog.\n\nIncludes the bright-star fields, done by hand.'
+    goal = ann.ok('patch', f"/api/items/{goal['id']}", dict(version=goal['version'], description='The whole calibration effort.'))['item']
+    assert goal['description'] == 'The whole calibration effort.'
+    every = ann.ok('get', f'/api/proposals/{pid}/tables?files=1')
+    assert 'reference catalog' not in json.dumps(every) and 'calibration effort' not in json.dumps(every)
+    snap = ann.ok('post', f'/api/proposals/{pid}/snapshots', dict(name='described'))['snapshot']
+    ann.ok('patch', f"/api/items/{task['id']}", dict(version=task['version'], description=''))
+    ann.ok('post', f"/api/snapshots/{snap['id']}/restore")
+    assert sorted(i['description'] for i in ann.ok('get', f'/api/proposals/{pid}')['items']) == sorted([goal['description'], task['description']])
+    import sqlite3                                                      # a snapshot from before descriptions
+    with sqlite3.connect(tmp_path / 'worpt.db') as c:
+        data = json.loads(c.execute('SELECT data FROM snapshots WHERE id = ?', (snap['id'],)).fetchone()[0])
+        for i in data['items']: i.pop('description')
+        c.execute('UPDATE snapshots SET data = ? WHERE id = ?', (json.dumps(data), snap['id']))
+    ann.ok('post', f"/api/snapshots/{snap['id']}/restore")
+    assert {i['description'] for i in ann.ok('get', f'/api/proposals/{pid}')['items']} == {''}

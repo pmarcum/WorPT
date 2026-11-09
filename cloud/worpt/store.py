@@ -61,7 +61,7 @@ EDITABLE = dict(
     people=('email', 'first', 'middle', 'last', 'prefix', 'suffix', 'institution', 'position', 'us', 'expertise', 'pronoun'),
     proposals=('title', 'program', 'n_years', 'rounding', 'travel'),
     members=('role', 'is_lead', 'fte_accuracy', 'bio_summary', 'task_summary', 'trips'),     # short_id follows the role
-    items=('title', 'short_title', 'start_year', 'start_week', 'end_year', 'end_week'),
+    items=('title', 'short_title', 'description', 'start_year', 'start_week', 'end_year', 'end_week'),
     assignments=('member_id', 'is_team', 'is_lead', 'weeks', 'unfunded'),
     nonlabor=('item', 'amounts'))
 JSON_COLS = {'travel', 'trips', 'amounts'}
@@ -70,7 +70,8 @@ PRONOUNS = ('', 'he', 'she', 'they')
 AUTO_SNAPSHOT_DAYS = 60          # automatic snapshots are kept this long; named ones until someone deletes them
 # Columns added after the first release, so an existing database gains them when the server starts.
 ADDED_COLUMNS = [('people', 'expertise', "TEXT NOT NULL DEFAULT ''"), ('people', 'pronoun', "TEXT NOT NULL DEFAULT ''"),
-                 ('items', 'start_week', 'INTEGER'), ('items', 'end_week', 'INTEGER'), ('items', 'short_title', "TEXT NOT NULL DEFAULT ''")]
+                 ('items', 'start_week', 'INTEGER'), ('items', 'end_week', 'INTEGER'), ('items', 'short_title', "TEXT NOT NULL DEFAULT ''"),
+                 ('items', 'description', "TEXT NOT NULL DEFAULT ''")]   # a note on what the item stands for; shown in the dashboard only
 TIMELINE = ('start_year', 'start_week', 'end_year', 'end_week')
 
 
@@ -533,6 +534,7 @@ class Store:
                     if f.get(k) is not None and not 1 <= int(f[k]) <= WEEKS_PER_YEAR: raise WorptError(f'Weeks are 1 to {WEEKS_PER_YEAR}.', 'invalid')
             for k in ('title', 'short_title'):
                 if k in f: f[k] = (f[k] or '').strip()
+            if 'description' in f: f['description'] = (f['description'] or '').replace('\r\n', '\n').strip()   # its paragraphs kept
             out = self.update_row(db, user, 'items', item_id, version, f, it['proposal_id'], 'item')
             if 'parent_id' in fields or 'position' in fields:
                 out = self.move_item(db, user, out, fields.get('parent_id', it['parent_id']), fields.get('position'), fields.get('effort_destination'))
@@ -748,9 +750,10 @@ class Store:
                 ready = [i for i in pending if i['parent_id'] is None or i['parent_id'] in item_id]
                 if not ready: break
                 for i in ready:
-                    cur = db.execute('INSERT INTO items (proposal_id, parent_id, position, title, short_title, start_year, start_week, end_year, end_week) VALUES (?,?,?,?,?,?,?,?,?)',
-                                     (pid, item_id.get(i['parent_id']), i['position'], i['title'], i.get('short_title', ''),   # snapshots before short titles have none
-                                      i['start_year'], i['start_week'], i['end_year'], i['end_week']))
+                    cur = db.execute('INSERT INTO items (proposal_id, parent_id, position, title, short_title, description, start_year, start_week, end_year, end_week) '
+                                     'VALUES (?,?,?,?,?,?,?,?,?,?)',
+                                     (pid, item_id.get(i['parent_id']), i['position'], i['title'], i.get('short_title', ''),   # older snapshots have
+                                      i.get('description', ''), i['start_year'], i['start_week'], i['end_year'], i['end_week']))  # neither of these
                     item_id[i['id']] = cur.lastrowid
                     pending.remove(i)
             for a in data['assignments']:
