@@ -79,10 +79,11 @@ def weeks_from_quarters(item):
     if 'start_week' in item: return item
     q0, q1 = item.pop('start_q', None), item.pop('end_q', None)
     return dict(item, start_week=None if q0 is None else (q0 - 1) * WEEKS_PER_QUARTER + 1, end_week=None if q1 is None else q1 * WEEKS_PER_QUARTER)
-ROLE_WORDS = {'co-i': 'co-I', 'coi': 'co-I', 'coll': 'collab', 'gst': 'grad', 'pd': 'postdoc'}
+ROLE_WORDS = {'co-i': 'co-I', 'coi': 'co-I', 'coll': 'collab', 'gst': 'grad', 'pd': 'postdoc', 'ust': 'undergrad'}
 # Roles WorPT numbers by itself (co-I(1), co-I(2)...): what may be typed or chosen, and the code it is stored as.
 NUMBERED_ROLES = {'co-i': 'co-I', 'coi': 'co-I', 'co-investigator': 'co-I', 'coll': 'coll', 'collab': 'coll', 'collaborator': 'coll',
-                  'gst': 'gst', 'grad': 'gst', 'grad student': 'gst', 'graduate student': 'gst', 'pd': 'pd', 'postdoc': 'pd'}
+                  'gst': 'gst', 'grad': 'gst', 'grad student': 'gst', 'graduate student': 'gst', 'pd': 'pd', 'postdoc': 'pd',
+                  'ust': 'ust', 'undergrad': 'ust', 'undergrad student': 'ust', 'undergraduate': 'ust', 'undergraduate student': 'ust'}
 SINGLE_ROLES = {'pi': 'PI', 'sci-pi': 'Sci-PI', 'admin-pi': 'Admin-PI'}          # one person each, no number
 
 
@@ -98,7 +99,8 @@ def canonical_role(text):
 
 def role_label(role):
     """A member's label, which also stands for them in the tables, comes from their role and never their name, so
-    proposals can stay anonymous: PI -> PI, co-I(1) -> co-I 1, coll(2) -> collab 2, gst(1) -> grad 1, pd(1) -> postdoc 1."""
+    proposals can stay anonymous: PI -> PI, co-I(1) -> co-I 1, coll(2) -> collab 2, gst(1) -> grad 1, pd(1) -> postdoc 1,
+    ust(1) -> undergrad 1."""
     m = re.fullmatch(r'\s*([A-Za-z][A-Za-z-]*)\s*\(\s*(\d+)\s*\)\s*', role or '')
     return f'{ROLE_WORDS.get(m.group(1).lower(), m.group(1))} {m.group(2)}' if m else (role or '').strip()
 
@@ -357,8 +359,8 @@ class Store:
 
     # ------------------------------------------------ team members
     def renumber_roles(self, db, user, proposal_id, edit=None, write=None):
-        """Number the numbered roles 1, 2, ... within each kind, in the tables' order (PI, Science PI, Admin PI, then by
-        last name), so the numbers never leave gaps; labels follow.
+        """Number the numbered roles 1, 2, ... within each kind, in the tables' order (by kind of role, then by last name;
+        see tables.team_order), so the numbers never leave gaps; labels follow.
         edit: a member being added (id None) or changed, as dict(id, role, last); write(role) then saves that member with
         its final role, between freeing the labels that change and giving the others theirs, so labels never clash."""
         rows = self.all(db, 'SELECT m.*, p.last FROM members m JOIN people p ON p.id = m.person_id WHERE m.proposal_id = ? ORDER BY m.id', proposal_id)

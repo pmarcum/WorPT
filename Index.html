@@ -250,13 +250,14 @@ const shortName = p => p ? ([p.first, p.last ? p.last[0] + '.' : ''].filter(Bool
 const wk = x => String(+(+x || 0).toFixed(2));        // weeks as typed: 1, 0.5, 1.25
 // a member's label comes from their role (PI, co-I 1, collab 1…), never their name, so proposals can stay anonymous
 const idRole = m => m.short_id;
-// Roles are chosen from a list; WorPT numbers co-Is, collaborators, grad students and postdocs by itself (co-I 1, co-I 2…).
-const ROLES = [['PI', 'PI'], ['Sci-PI', 'Sci-PI (science PI)'], ['Admin-PI', 'Admin-PI (administrative PI)'], ['co-I', 'co-I'],
-  ['coll', 'Collaborator'], ['gst', 'Grad student'], ['pd', 'Postdoc'], ['other', 'Other…']];
+// Roles are chosen from a list; WorPT numbers co-Is, postdocs, grad and undergrad students, and collaborators by itself (co-I 1, co-I 2…).
+const ROLES = [['PI', 'PI'], ['Admin-PI', 'Admin-PI (administrative PI)'], ['Sci-PI', 'Sci-PI (science PI)'], ['co-I', 'co-I'],
+  ['pd', 'Postdoc'], ['gst', 'Grad student'], ['ust', 'Undergrad student'], ['coll', 'Collaborator'], ['other', 'Other…']];
 const roleKind = role => {
   const b = String(role || '').replace(/\(\s*\d+\s*\)\s*$/, '').trim().toLowerCase();
   return { pi: 'PI', 'sci-pi': 'Sci-PI', 'admin-pi': 'Admin-PI', 'co-i': 'co-I', coi: 'co-I', 'co-investigator': 'co-I', coll: 'coll', collab: 'coll',
-    collaborator: 'coll', gst: 'gst', grad: 'gst', 'grad student': 'gst', 'graduate student': 'gst', pd: 'pd', postdoc: 'pd' }[b] || (b ? 'other' : '');
+    collaborator: 'coll', gst: 'gst', grad: 'gst', 'grad student': 'gst', 'graduate student': 'gst', pd: 'pd', postdoc: 'pd',
+    ust: 'ust', undergrad: 'ust', 'undergrad student': 'ust', undergraduate: 'ust', 'undergraduate student': 'ust' }[b] || (b ? 'other' : '');
 };
 /** A role list with an "Other…" box. key: "member:<id>" (saves itself) or a form's name (read with pickedRole). */
 function rolePicker(key, role, attrs, blank) {
@@ -454,9 +455,18 @@ async function reloadProposal() {
 }
 
 /** A fresh copy of the proposal arrived: work out what changed in the ripple panel, then redraw. */
-// The dashboard lists the team as PI, Admin-PI, Sci-PI, then by last name (then first name).
-const ROLE_RANK = { pi: 0, 'admin-pi': 1, 'sci-pi': 2 };
-const teamOrder = (a, b) => (ROLE_RANK[(a.role || '').toLowerCase()] ?? 3) - (ROLE_RANK[(b.role || '').toLowerCase()] ?? 3) ||
+// The team's order, as in the tables: PI, Admin-PI, Sci-PI, co-Is, postdocs, grad students, undergrads, anyone with another
+// role, collaborators; within each by last name (then first name). A role's kind is its short form without a number
+// (co-I(2) -> co-I): the one-person roles are matched whole, the numbered ones by how they start.
+const SINGLE_RANKS = { pi: 0, 'principal-investigator': 0, 'admin-pi': 1, 'administrative-pi': 1, 'sci-pi': 2, 'science-pi': 2 };
+const NUMBERED_RANKS = [['co-i', 3], ['coi', 3], ['pd', 4], ['postdoc', 4], ['gst', 5], ['grad', 5], ['ust', 6], ['undergrad', 6], ['coll', 8]];
+const roleRank = role => {
+  const b = String(role || '').replace(/\(\s*\d+\s*\)\s*$/, '').trim().toLowerCase().replace(/[\s_]+/g, '-');
+  if (b in SINGLE_RANKS) return SINGLE_RANKS[b];
+  const hit = NUMBERED_RANKS.find(([s]) => b.startsWith(s));
+  return hit ? hit[1] : 7;
+};
+const teamOrder = (a, b) => roleRank(a.role) - roleRank(b.role) ||
   (a.last || '').localeCompare(b.last || '', 'en', { sensitivity: 'base' }) || (a.first || '').localeCompare(b.first || '', 'en', { sensitivity: 'base' }) || a.id - b.id;
 
 function applyProposal(r) {
@@ -925,7 +935,7 @@ function viewTeam() {
     '<label class="row" style="gap:6px;align-self:flex-end;padding-bottom:8px"><input type="checkbox" id="am-lead"> full editor</label>' +
     '<button type="button" class="btn primary" style="align-self:flex-end" data-act="addMember">Add</button>' +
     '<button type="button" class="btn" style="align-self:flex-end" data-act="newPerson">New person…</button></div>' +
-    '<p class="hint">WorPT numbers co-Is, collaborators, grad students and postdocs by itself (co-I 1, co-I 2…), in order of last name, as in the tables, and closes the gap when someone leaves. The PI, Sci-PI and Admin-PI are one person each. People at non-US institutions are always collaborators. Each person is shown by their role, never their name, so the plan and tables can stay anonymous.</p></fieldset>' : '';
+    '<p class="hint">WorPT numbers co-Is, postdocs, grad and undergrad students, and collaborators by itself (co-I 1, co-I 2…), in order of last name, as in the tables, and closes the gap when someone leaves. The PI, Sci-PI and Admin-PI are one person each. People at non-US institutions are always collaborators. Each person is shown by their role, never their name, so the plan and tables can stay anonymous.</p></fieldset>' : '';
   return '<div class="card"><h2 class="h2">Team</h2>' + (can ? '' : '<p class="hint" style="margin:0 0 8px">Only this work plan\'s full editors (and admins) change the team; you can see it here.</p>') +
     '<div class="scroll"><table class="t"><thead><tr><th>Person</th><th>Role</th><th>Full editor</th><th>FTE accuracy</th><th>Team summary, and their part in the plan</th>' + (hst ? '<th>HST role text</th>' : '') + '<th></th></tr></thead><tbody>' +
     (rows || '<tr><td colspan="7" class="muted">No one yet.</td></tr>') + '</tbody></table></div>' + add + '</div>';

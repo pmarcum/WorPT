@@ -3,7 +3,7 @@ import pathlib, re, sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from worpt.model import Person, Assignment, Item, Proposal, TravelCosts, NonlaborItem
 from worpt import tables
-from worpt.tables import build, jrep, jsub, fixed, dollars, general, TABLES
+from worpt.tables import build, jrep, jsub, fixed, dollars, general, team_order, TABLES
 from test_parity_tables import SHEET_TEMPLATES
 
 
@@ -147,3 +147,11 @@ def test_schedule_sets_tasks_with_subtasks_apart():
     assert [len(timeline(rows[k])) for k in ('A1.1', 'A1.2', 'A1')] == [3, 3, 7]    # months 1-3 and 5-7; the parent spans 1-7
     category = tex.split('\\TaskCategoryLabel{A}')[1].split('% begin task')[0]
     assert '\\FteCategoryFormat{' + fixed(7 / 52, 2) + '}' in category
+
+
+def test_team_order_by_kind_of_role_then_last_name():
+    """PI, Admin PI, Science PI, co-Is, postdocs, grad students, undergrads, anyone with another role, collaborators."""
+    m = [person('c2', 'coll(2)', 'Able'), person('u1', 'ust(1)', 'Young'), person('o', 'Consultant', 'Baker'), person('s', 'Sci-PI', 'Zed'),
+         person('g1', 'gst(1)', 'Moss'), person('a', 'Admin-PI', 'Yu'), person('c1', 'co-I(2)', 'Cole'), person('p1', 'pd(1)', 'Abel'),
+         person('c0', 'co-I(1)', 'Adams'), person('pi', 'PI', 'Zimmer'), person('k1', 'coll(1)', 'Aaron')]
+    assert [x.id for x in team_order(m)] == ['pi', 'a', 's', 'c0', 'c1', 'p1', 'g1', 'u1', 'o', 'k1', 'c2']

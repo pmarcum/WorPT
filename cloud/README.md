@@ -17,8 +17,9 @@ Turns the weeks assigned on work-plan items into FTE:
 - Funded = rounded total − rounded unfunded; all-years figures are sums of the rounded yearly values.
 - `team` gives its weeks to every team member not named on the item.
 - Collaborators (a `coll…` role, or anyone at a non-US institution) are always 100% unfunded.
-- Roles are chosen, not numbered by hand: co-I, collaborator (`coll`), grad student (`gst`) and postdoc (`pd`) are
-  numbered 1, 2, … by the server in the tables' order (PI, Sci-PI, Admin-PI, then by last name), and renumbered with no
+- Roles are chosen, not numbered by hand: co-I, postdoc (`pd`), grad student (`gst`), undergrad student (`ust`) and
+  collaborator (`coll`) are numbered 1, 2, … by the server in the tables' order (PI, Admin-PI, Sci-PI, co-Is, postdocs,
+  grad students, undergrads, anyone with another role, collaborators; within each, by last name), and renumbered with no
   gaps whenever someone joins, leaves, changes role or changes last name. PI, Sci-PI and Admin-PI are one person each.
   Each member is shown by a label made from the role (co-I 1, collab 1…), never their name.
 - Tasks and goals roll up from their children. Nothing is dropped silently; problems are returned as `checks`.

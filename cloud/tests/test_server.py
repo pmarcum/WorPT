@@ -196,7 +196,8 @@ def test_labels_come_from_roles_never_from_names(team):
     ann, pid, p = team['ann'], team['pid'], team['people']
     labels = {m['role']: m['short_id'] for m in ann.ok('get', f'/api/proposals/{pid}')['members']}
     assert labels == {'PI': 'PI', 'co-I(1)': 'co-I 1'}                    # what the client sent as short_id is ignored
-    for role, label in [('coll(2)', 'collab 1'), ('Grad student', 'grad 1'), ('pd(3)', 'postdoc 1'), ('sci-pi', 'Sci-PI')]:
+    for role, label in [('coll(2)', 'collab 1'), ('Grad student', 'grad 1'), ('pd(3)', 'postdoc 1'), ('Undergrad student', 'undergrad 1'),
+                        ('sci-pi', 'Sci-PI')]:
         m = ann.ok('patch', f"/api/members/{team['bob_m']['id']}", dict(version=ann.ok('get', f'/api/proposals/{pid}')['members'][1]['version'], role=role))['member']
         assert m['short_id'] == label, (role, m)
     assert 'Sci-PI' in ann.ok('get', f'/api/proposals/{pid}/tables/NOTANONschedule')['latex']

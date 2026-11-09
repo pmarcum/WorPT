@@ -122,13 +122,26 @@ def full_role(role):
     return ''
 
 
+# The team's order, by kind of role (PI, Admin PI, Science PI, co-Is, postdocs, grad students, undergrads, anyone with
+# another role, collaborators). A role's kind is its short form without a number (co-I(2) -> co-I): the one-person roles
+# are matched whole (so a typed "Pipeline lead" is not the PI), the numbered ones by how they start.
+SINGLE_RANKS = {'pi': 0, 'principal-investigator': 0, 'admin-pi': 1, 'administrative-pi': 1, 'sci-pi': 2, 'science-pi': 2}
+NUMBERED_RANKS = (('co-i', 3), ('coi', 3), ('pd', 4), ('postdoc', 4), ('gst', 5), ('grad', 5), ('ust', 6), ('undergrad', 6), ('coll', 8))
+OTHER_RANK = 7
+
+
+def role_rank(role):
+    base = re.sub(r'[\s_]+', '-', re.sub(r'\(\s*\d+\s*\)\s*$', '', role or '').strip().lower())
+    if base in SINGLE_RANKS: return SINGLE_RANKS[base]
+    return next((rank for start, rank in NUMBERED_RANKS if base.startswith(start)), OTHER_RANK)
+
+
 def team_order(members):
-    """The team in the tables' order: PI, Science PI, Admin PI, then by last name (ties keep their order).
-    members: objects or dicts with role and last."""
+    """The team in the tables' order: PI, Admin PI, Science PI, co-Is, postdocs, grad students, undergrads, anyone with
+    another role, then collaborators; within each, by last name (ties keep their order). WorPT numbers co-Is and the
+    rest in this same order, so co-I 1 comes before co-I 2. members: objects or dicts with role and last."""
     get = lambda m, k: m[k] if isinstance(m, dict) else getattr(m, k)
-    key = lambda m: ('AAAA' if get(m, 'role').lower().startswith('pi') else 'AAAB' if get(m, 'role').lower().startswith('sci')
-                     else 'AAAC' if get(m, 'role').lower().startswith('admin') else '') + get(m, 'last')
-    return sorted(members, key=key)
+    return sorted(members, key=lambda m: (role_rank(get(m, 'role')), get(m, 'last')))
 
 
 def numbered_roles(members):
