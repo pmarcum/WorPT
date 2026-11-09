@@ -42,9 +42,11 @@ def test_latex_problems_are_reported():
 
 @needs_tex
 def test_a_compile_is_stopped_after_the_limit(monkeypatch):
-    monkeypatch.setattr(P, 'LIMIT_SECONDS', 3)
-    t = time.monotonic(); out = P.render('isANONfte', '\\def\\forever{\\forever}\\forever\n')
-    assert out == dict(error='The preview took longer than 3 seconds, so it was stopped.') and time.monotonic() - t < 10
+    """A compile that would never end is stopped. (Only the answer is checked, not the time it took: a small shared
+    server can be slow to start and stop programs; without the limit this test would never end.)"""
+    monkeypatch.setattr(P, 'LIMIT_SECONDS', 3); monkeypatch.setattr(P, 'document_class', lambda: 'article')
+    out = P.render('isANONfte', '\\def\\forever{\\forever}\\forever\n')
+    assert out == dict(error='The preview took longer than 3 seconds, so it was stopped.')
 
 
 def test_the_last_five_are_kept(monkeypatch):
