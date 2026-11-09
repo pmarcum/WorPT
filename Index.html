@@ -167,6 +167,9 @@ table.t th{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-tran
 table.t td{padding:6px;border-top:1px solid var(--line);vertical-align:top}
 table.t td.num{text-align:right;font-family:var(--mono)}
 .scroll{overflow-x:auto}
+.pv{background:#fff;border-radius:6px;padding:14px;margin-bottom:6px;overflow:auto;text-align:center}
+.pv img{display:block;margin:0 auto 10px;max-width:100%;height:auto}
+.pv-msg{padding:22px 14px;border:1px dashed var(--border);border-radius:6px;margin-bottom:6px}
 pre.latex{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px;overflow:auto;max-height:65vh;font-size:11.5px;line-height:1.45;white-space:pre}
 .tlist button{display:block;width:100%;text-align:left;padding:8px 10px;min-height:34px;border-radius:5px;border:1px solid transparent;background:transparent;cursor:pointer}
 .tlist button[aria-current=true]{background:rgba(126,184,247,.10);border-color:#2a3a50}
@@ -981,17 +984,59 @@ function viewBudget() {
 function viewTables() {
   const list = Object.keys(TABLE_NAMES).map(k => '<button type="button" data-table="' + k + '" aria-current="' + (S.table === k) + '"><span>' + esc(TABLE_NAMES[k][0]) + '</span><span class="sub">' + esc(TABLE_NAMES[k][1]) + (k === 'worpt' ? '' : ' · ' + k) + '</span></button>').join('');
   const out = S.tableOut;
-  const right = !S.table ? '<p class="muted">Choose a table to see its LaTeX.</p>' : !out ? '<p class="muted">Making the table…</p>' :
+  const right = !S.table ? '<p class="muted">Choose a table to see it and its LaTeX.</p>' : !out ? '<p class="muted">Making the table and its preview…</p>' :
     '<div class="row" style="margin-bottom:8px"><b>' + esc(TABLE_NAMES[S.table][0]) + '</b><span class="sub">' + esc(S.table) + (S.table === 'worpt' ? '.sty' : '.tex') + '</span><button type="button" class="btn primary" style="margin-left:auto" data-act="copyTable">Copy LaTeX</button></div>' +
     (out.checks && out.checks.length ? '<ul class="checks" style="margin-bottom:8px">' + out.checks.map(k => '<li><span class="where ' + esc(k.level) + '">' + esc(k.item) + '</span><span>' + esc(k.message) + '</span></li>').join('') + '</ul>' : '') +
-    '<pre class="latex" id="latex">' + esc(out.latex) + '</pre>';
-  return '<div class="cols"><div class="card tlist" style="flex:1 1 240px;max-width:320px">' + list + '<p class="hint">These are the tables gooTeX will pull in, and worpt.sty, which each document loads once (last in its preamble). A rendered preview comes later.</p></div>' +
+    viewPreview(out) + '<pre class="latex" id="latex">' + esc(out.latex) + '</pre>';
+  return '<div class="cols"><div class="card tlist" style="flex:1 1 240px;max-width:320px">' + list + '<p class="hint">These are the tables gooTeX will pull in, and worpt.sty, which each document loads once (last in its preamble).</p></div>' +
     '<div class="card" style="flex:3 1 520px;min-width:0">' + right + '</div></div>';
 }
 async function loadTable(name, quiet) {
   S.table = name; if (!quiet) { S.tableOut = null; render(); }
-  try { S.tableOut = await api('table', S.pid, name); } catch (e) { showError(e); S.tableOut = { latex: '', checks: [] }; }
-  if (S.tab === 'tables' && S.table === name) render();
+  let out;
+  try { out = await api('table', S.pid, name); } catch (e) { showError(e); out = { latex: '', checks: [] }; }
+  const pv = out.preview;
+  if (pv && pv.pages) {                                                // the picture, trimmed, before it is shown
+    try { pv.images = await Promise.all(pv.pages.map(trimmedPage)); } catch (e) { pv.error = 'The preview picture could not be shown.'; }
+  }
+  if (S.table !== name) return;                                       // another table was chosen meanwhile
+  S.tableOut = out;
+  if (S.tab === 'tables') render();
+}
+// The table's picture, made by the server at twice screen resolution: shown at its true size (half its pixels), with
+// the white page around the table trimmed off. The text under it says which document class it was made in.
+function viewPreview(out) {
+  const pv = out.preview;
+  if (S.table === 'worpt' || !pv) return '';
+  if (pv.error) return '<div class="pv-msg muted">No preview: ' + esc(pv.error) + '</div>';
+  return '<div class="pv" aria-label="Preview of the table">' + pv.images.map(m => '<img alt="The table, as LaTeX sets it" src="' + m.src + '" style="width:' + (m.w / 2) + 'px">').join('') + '</div>' +
+    '<p class="hint" style="margin:0 0 10px">Made in ' + esc(pv.document_class) + ' with the table\'s default settings (settings lines in your document can change its look), in ' + pv.seconds + ' s. The LaTeX is below.</p>';
+}
+const trimCache = new Map();
+function trimmedPage(b64) {
+  const k = b64.length + ':' + b64.slice(-200);
+  if (trimCache.has(k)) return Promise.resolve(trimCache.get(k));
+  return new Promise((done, fail) => {
+    const img = new Image();
+    img.onerror = fail;
+    img.onload = () => {
+      const W = img.naturalWidth, H = img.naturalHeight, c = document.createElement('canvas'); c.width = W; c.height = H;
+      const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+      const px = g.getImageData(0, 0, W, H).data; let x0 = W, y0 = H, x1 = -1, y1 = -1;
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {                // the box around everything not white
+        const i = (y * W + x) * 4;
+        if (px[i] < 245 || px[i + 1] < 245 || px[i + 2] < 245) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      }
+      if (x1 < 0) { x0 = 0; y0 = 0; x1 = W - 1; y1 = H - 1; }
+      const pad = 16; x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(W - 1, x1 + pad); y1 = Math.min(H - 1, y1 + pad);
+      const t = document.createElement('canvas'); t.width = x1 - x0 + 1; t.height = y1 - y0 + 1;
+      t.getContext('2d').drawImage(c, x0, y0, t.width, t.height, 0, 0, t.width, t.height);
+      const m = { src: t.toDataURL('image/png'), w: t.width, h: t.height };
+      if (trimCache.size > 20) trimCache.clear();
+      trimCache.set(k, m); done(m);
+    };
+    img.src = 'data:image/png;base64,' + b64;
+  });
 }
 
 // ── snapshots ────────────────────────────────────────────────────────────────────────────────────────────────

@@ -86,6 +86,11 @@ Rules the server applies to every change:
 - Refusals are HTTP 200 with `{"status": "error", "code": ..., "message": ...}`.
 - `GET /api/proposals/<id>/changed` returns the number of the proposal's newest change; the dashboard asks
   every 10 seconds while it is visible and reloads only when the number grows.
+- `GET /api/proposals/<id>/tables/<name>` with the dashboard's key also returns `preview`: the table compiled on its
+  own (`worpt/preview.py`), with its default settings, in the newest AASTeX class that compiles on the server (else
+  article), as PNG pages; or an `error` for people. One compile at a time, 60 seconds at most; the last 5 are kept in
+  memory. Needs pdflatex and pdftocairo. gooTeX's read-only key gets no preview. A newly installed AASTeX is used
+  after WorPT's next restart.
 - `GET /api/me` also says what is running (`about`): the commit the server was started from, the latest change
   to the page (Index.html) on GitHub, and whether GitHub has server changes not yet pulled and restarted on the VM.
   For the last two, the server asks GitHub's API (api.github.com) at most once every 10 minutes; if GitHub can't

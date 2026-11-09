@@ -18,6 +18,7 @@ from worpt.store import Store, User, WorptError
 from worpt.effort import compute, label_tree
 from worpt.tables import build, paste_in, style, travel_summary, TABLES
 from worpt.about import about
+from worpt import preview
 
 log = logging.getLogger('worpt')
 
@@ -220,6 +221,8 @@ def create_app(db_path=None, credential=None, read_credential=None):
         data = work_plan(pid)
         if name == 'worpt': return ok(name=name, latex=style(), block=paste_in(name), checks=[])
         out = build(store.model(pid, data)[0], [name])
-        return ok(name=name, latex=out[name], block=paste_in(name), checks=checks_of(out))
+        # the dashboard (full key) also gets a picture of the table; gooTeX (read-only key) only needs the LaTeX
+        extra = dict(preview=preview.render(name, out[name])) if key() == 'full' else {}
+        return ok(name=name, latex=out[name], block=paste_in(name), checks=checks_of(out), **extra)
 
     return app
