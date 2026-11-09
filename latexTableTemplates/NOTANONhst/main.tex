@@ -17,9 +17,13 @@
 %---- required input from user
 \def\ProgramID{HST-xx-xxxxx (Cycle XX)} % user needs to fill in details
 
+\newif\ifLandScape                 % establish a boolean variable
+\LandScapefalse                    % landscape mode OFF, unless the table needs it (see MinTitleWidth); \LandScapetrue always uses it
+
 %---- column widths
 % The table is as wide as the page's text (in a two-column document it spans both columns): the Role column gets the
-% width the other columns leave.
+% width the other columns leave. If less than MinTitleWidth is left, the table is set in landscape mode, which is wider.
+\def\MinTitleWidth{1in}           % narrowest Role column before switching to landscape mode
 \def\ContributorWidth{1.8in}      % Contributor column width
 \def\PositionWidth{1.3in}         % Position column width
 \def\FundedMemberWidth{0.22in}    % Funded(?) column width
@@ -58,16 +62,23 @@
   \def\RoleWidth{0pt}%
   \sbox\WorPTmeasureBox{\expandafter\tabular\expandafter{\[INSERTFILENAME]Columns}&&&&\\\endtabular}%
   \WorPTstraySpace{\[INSERTFILENAME]Columns}%
+  \ifLandScape\global\WorPTlandscapetrue\else\global\WorPTlandscapefalse\fi
   \global\WorPTtitleWidth=\dimexpr\textwidth-\wd\WorPTmeasureBox+\WorPTstray\relax
-  \ifdim\WorPTtitleWidth<0.5in   % (only on a page too narrow for the other columns)
-    \global\WorPTtitleWidth=0.5in
-    \PackageWarningNoLine{worpt}{The HST table is wider than the page}%
+  \ifdim\WorPTtitleWidth<\MinTitleWidth\relax\global\WorPTlandscapetrue\fi
+  \ifWorPTlandscape\global\WorPTtitleWidth=\dimexpr\textheight-\wd\WorPTmeasureBox+\WorPTstray\relax\fi
+  \ifdim\WorPTtitleWidth<\MinTitleWidth\relax
+    \global\WorPTtitleWidth=\MinTitleWidth\relax
+    \PackageWarningNoLine{worpt}{The HST table is wider than the page even in landscape mode}%
   \fi
   \endgroup}
 
 \newenvironment{[INSERTFILENAME]}{%
 \[INSERTFILENAME]Layout
-\begin{table*}
+\ifWorPTlandscape
+  \begin{sidewaystable*}
+\else
+  \begin{table*}
+\fi
 \renewcommand{\arraystretch}{\SpaceBetweenRows}  % changes vertical space bet/ rows
 \setlength{\tabcolsep}{\SpaceBetweenColumns}     % changes horizontal spacing bet/ columns
 \begin{WorPTtabular}{\[INSERTFILENAME]Columns}
@@ -95,5 +106,9 @@
 
 \end{WorPTtabular}}
 {%
-\end{table*}
+\ifWorPTlandscape
+  \end{sidewaystable*}
+\else
+  \end{table*}
+\fi
 }

@@ -9,9 +9,15 @@
 %       Default formatting preferences
 % ___________________________________________
 
+\newif\ifLandScape                       % establish a boolean variable
+\LandScapefalse                           % landscape mode OFF, unless the table needs it (see below); \LandScapetrue always uses it
+
 %---- table compactness controls
+% If the table is wider than the page's text, the spacing between columns is made smaller, just enough for it to fit,
+% but not below MinSpaceBetweenColumns; if it still does not fit, the table is set in landscape mode.
 \def\SpaceBetweenRows{1.0}               % vertical compactness of rows
-\def\SpaceBetweenColumns{5pt}            % spacing between columns
+\def\SpaceBetweenColumns{5pt}            % spacing between columns (the most it gets)
+\def\MinSpaceBetweenColumns{1pt}         % the least spacing between columns before switching to landscape mode
 
 %--- aesthetic preferences
 \def\BannerFontstyle#1{\textbf{#1}}       % Bold-face for top banner "Travel Cost Details
@@ -48,13 +54,57 @@
  ll|
 }
 
+%--- the spacing between columns: the table measured with the spacing set above and with none (its width grows evenly with
+% the spacing), and the spacing that makes it as wide as the text worked out from the two
+\def\[INSERTFILENAME]Width#1{% the table's width with spacing #1, into \dimen0
+  \setlength{\tabcolsep}{#1}\def\SpaceBetweenColumns{#1}%
+  \sbox\WorPTmeasureBox{\expandafter\tabular\expandafter{\[INSERTFILENAME]Columns}\[INSERTFILENAME]Body\endtabular}%
+  \WorPTstraySpace{\[INSERTFILENAME]Columns}\dimen0=\dimexpr\wd\WorPTmeasureBox-\WorPTstray\relax}
+\def\[INSERTFILENAME]Fit#1{% the spacing for a page #1 wide, into \WorPTcolumnSpace; false if even the least is too wide
+  \ifdim\dimen4>#1\relax
+    \global\WorPTcolumnSpace=\dimexpr\dimen2*\numexpr\dimexpr#1-\dimen6\relax\relax/\numexpr\dimexpr\dimen4-\dimen6\relax\relax\relax
+    \ifdim\WorPTcolumnSpace<\dimen8 \global\WorPTcolumnSpace=\dimen8 \fi
+    \[INSERTFILENAME]Width{\WorPTcolumnSpace}%
+    \ifdim\dimen0>\dimexpr#1+0.1pt\relax\global\WorPTlandscapetrue\fi
+  \fi}
+\def\[INSERTFILENAME]Layout{%
+  \begingroup
+  \csname @floatboxreset\endcsname  % measured as set in a table: some classes (aastex) use a smaller font there
+  \renewcommand{\arraystretch}{\SpaceBetweenRows}%
+  \dimen2=\SpaceBetweenColumns\relax \dimen8=\MinSpaceBetweenColumns\relax
+  \[INSERTFILENAME]Width{\dimen2}\dimen4=\dimen0     % width with the spacing set above
+  \[INSERTFILENAME]Width{0pt}\dimen6=\dimen0          % width with no spacing
+  \global\WorPTcolumnSpace=\dimen2
+  \ifLandScape\global\WorPTlandscapetrue\else\global\WorPTlandscapefalse\[INSERTFILENAME]Fit\textwidth\fi
+  \ifWorPTlandscape
+    \global\WorPTlandscapefalse\global\WorPTcolumnSpace=\dimen2 \[INSERTFILENAME]Fit\textheight
+    \ifWorPTlandscape\PackageWarningNoLine{worpt}{The travel table is wider than the page even in landscape mode}\fi
+    \global\WorPTlandscapetrue
+  \fi
+  \endgroup}
+
 \newenvironment{[INSERTFILENAME]}{%
-\begin{table*}[h!]
-% ---- adjust to control vertical row separation/spacing, comment-out if not needed
+\[INSERTFILENAME]Layout
+\ifWorPTlandscape
+  \begin{sidewaystable*}
+\else
+  \begin{table*}[h!]
+\fi
 \renewcommand{\arraystretch}{\SpaceBetweenRows} % controls vertical row separation/spacing
-% ---- adjust to control horizontal column separation/spacing, comment-out if not needed
+\edef\SpaceBetweenColumns{\the\WorPTcolumnSpace}% the spacing between columns that fits the page
 \setlength{\tabcolsep}{\SpaceBetweenColumns}    % controls horizontal column separation/spacing
-\begin{WorPTinlineTabular}{\[INSERTFILENAME]Columns}
+\begin{WorPTinlineTabular}{\[INSERTFILENAME]Columns}\[INSERTFILENAME]Body
+\end{WorPTinlineTabular}}
+{%
+\ifWorPTlandscape
+  \end{sidewaystable*}
+\else
+  \end{table*}
+\fi
+}
+
+%--- the table itself: measured, then set
+\def\[INSERTFILENAME]Body{%
 %---- top header line
 \multicolumn{9}{|c|}{\cellcolor{\BannerColor}\color{\BannerFontColor}\BannerFontstyle{Travel Cost Details}}\\
 \multicolumn{3}{|c}{} & \multicolumn{5}{>{\columncolor{\PerTripShadingColor}[\tabcolsep][\PerTripShadingMargin]}c}{\color{\PerTripLabelFontColor}\emph{\textbf{per trip}}} & \\
@@ -73,11 +123,6 @@
 \YearFontstyle{Yr[INSERTYEARNUMBER]} & [NUMBERDOMTRIPS] & domestic & \$[DOMAIRFARE] & \$[DOMPERDIEM] & \$[DOMCONFERENCE] & \$[DOMGROUND] & \$[DOMPERTRIP] & \$[DOMALLTRIPS]\\
                    & [NUMBERINTTRIPS] & intern'l & \$[INTAIRFARE] & \$[INTPERDIEM] & \$[INTCONFERENCE] & \$[INTGROUND] & \$[INTPERTRIP] & \$[INTALLTRIPS]\\ \hline
 [ENDTRAVELYEARTEMPLATE]
-
-\end{WorPTinlineTabular}
-}
-{%
-\end{table*}
 }
 
 % COMMENT: The caption needs some information that is computed from input in the WorPT file. 

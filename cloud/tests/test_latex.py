@@ -3,8 +3,7 @@
 Every table of every fixture is put in one document, each on its own page, the way a table's readme says to
 (\\usepackage{worpt} last in the preamble, then \\input and the table's environment). The document must compile
 with no LaTeX errors, in each class that works here (a class whose own empty document does not compile, such as
-aastex631 without the revtex4-1 class it is built on, is skipped), and in the journal classes no table may run past
-the edges of the text. Skipped where pdflatex is not installed.
+aastex631 without the revtex4-1 class it is built on, is skipped), and no table may run past the edges of the text. Skipped where pdflatex is not installed.
 """
 import functools, html, pathlib, re, shutil, subprocess, sys, tempfile
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
@@ -36,19 +35,28 @@ def front(cls):
 # Writes the text block's left edges (odd and even pages) and width to the log, in points.
 EDGES = ('\\makeatletter\\AtEndDocument{\\typeout{WORPT EDGES \\strip@pt\\dimexpr1in+\\hoffset+\\oddsidemargin\\relax\\space'
          '\\strip@pt\\dimexpr1in+\\hoffset+\\evensidemargin\\relax\\space\\strip@pt\\textwidth}}\\makeatother\n')
-# The journal classes: there the tables must stay within the text. (In article and report, whose text is narrower, the
-# isANONtasks and isANONtravel tables are wider than the text and spill into the margins, as they always have.)
-JOURNALS = [c for c in CLASSES if 'aastex' in c or 'revtex' in c]
 
 
 def outside_text(folder, pdf):
-    """Words printed left or right of the text block (the log has its edges)."""
+    """Words printed left or right of the text block (the log has its edges), on pages not turned sideways (a table
+    in landscape mode runs along the page, and its words stand on end)."""
     log = pdf.with_suffix('.log').read_text(errors='replace')
     odd, even, width = map(float, re.search(r'WORPT EDGES ([\d.]+) ([\d.]+) ([\d.]+)', log).groups())
     lo, hi = min(odd, even) * 72 / 72.27 - 1, (max(odd, even) + width) * 72 / 72.27 + 1         # TeX points to PDF points
     xml = subprocess.run(['pdftotext', '-bbox', pdf.name, '-'], cwd=folder, capture_output=True, text=True).stdout
-    words = re.findall(r'<word xMin="([\d.]+)" yMin="[\d.]+" xMax="([\d.]+)" yMax="[\d.]+">([^<]*)</word>', xml)
-    return [html.unescape(w) for x0, x1, w in words if float(x0) < lo or float(x1) > hi]
+    return [w for sideways, words in pages(xml) if not sideways for x0, y0, x1, y1, w in words if x0 < lo or x1 > hi]
+
+
+def pages(xml):
+    """(sideways?, words with their boxes) for each page of `pdftotext -bbox` output; on a sideways page most words
+    are taller than they are wide."""
+    out = []
+    for page in xml.split('<page ')[1:]:
+        words = [(float(a), float(b), float(c), float(d), html.unescape(w)) for a, b, c, d, w in
+                 re.findall(r'<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)" yMax="([\d.]+)">([^<]*)</word>', page)]
+        wide = [(x1 - x0) > (y1 - y0) for x0, y0, x1, y1, w in words if len(w) > 2]
+        out.append((bool(wide) and sum(wide) < len(wide) / 2, words))
+    return out
 
 
 @functools.lru_cache(maxsize=None)
@@ -86,9 +94,8 @@ def test_tables_compile_with_worpt_sty_alone(folder, cls, tmp_path):
         text = subprocess.run(['pdftotext', 'doc.pdf', '-'], cwd=tmp_path, capture_output=True, text=True).stdout
         leaked = re.findall(r'\S*(?:\d(?:ex|pt|in|mm|cm)@|@[pcl]\d|\*\d+p)\S*', text)
         assert not leaked, f'{cls}: column specification printed in the table: {leaked[:5]}'
-        if cls in JOURNALS:
-            outside = outside_text(tmp_path, tmp_path / 'doc.pdf')
-            assert not outside, f'{cls}: tables run past the edge of the text: {outside[:8]}'
+        outside = outside_text(tmp_path, tmp_path / 'doc.pdf')
+        assert not outside, f'{cls}: tables run past the edge of the text: {outside[:8]}'
 
 
 @pytest.mark.parametrize('path', TEMPLATES, ids=[p.parent.name for p in TEMPLATES])
@@ -136,3 +143,19 @@ def test_colored_cells_reach_their_lines(cls, tmp_path):
     (tmp_path / 'doc.tex').write_text(documentclass(cls) + '\n' + paste_in('worpt') + show + '\\begin{document}\n' + tables + '\\end{document}\n')
     subprocess.run(['pdflatex', '-interaction=nonstopmode', 'doc.tex'], cwd=tmp_path, capture_output=True, timeout=120)
     assert re.findall(r'PADDING (\S+)', (tmp_path / 'doc.log').read_text(errors='replace')) == ['4.0pt', '4.0pt'], cls
+
+
+@pytest.mark.parametrize('name', ['isANONtasks', 'NOTANONhst', 'isANONtravel'])
+def test_tables_turn_sideways_on_a_page_too_narrow_for_them(name, tmp_path):
+    """On a page 3 inches wide these tables don't fit even when their Task or Role column (or, for travel, the spacing
+    between columns) is as small as it may be, so they are set in landscape mode, and fit there."""
+    if not shutil.which('pdftotext'): pytest.skip('pdftotext is not installed')
+    shutil.copy(TEMPLATE_DIR / 'worpt.sty', tmp_path)
+    (tmp_path / f'{name}.tex').write_text(build(load(CASES[1]), [name])[name])
+    (tmp_path / 'doc.tex').write_text('\\documentclass{article}\n\\setlength{\\textwidth}{3in}\n' + paste_in('worpt') + '\\begin{document}\n'
+                                      + paste_in(name) + '\n\\end{document}\n')
+    subprocess.run(['pdflatex', '-interaction=nonstopmode', 'doc.tex'], cwd=tmp_path, capture_output=True, timeout=120)
+    log = (tmp_path / 'doc.log').read_text(errors='replace')
+    assert not [l for l in log.splitlines() if l.startswith('!')] and 'Overfull \\hbox' not in log and 'worpt Warning' not in log
+    xml = subprocess.run(['pdftotext', '-bbox', 'doc.pdf', '-'], cwd=tmp_path, capture_output=True, text=True).stdout
+    assert [sideways for sideways, words in pages(xml) if words] == [True], name

@@ -9,20 +9,21 @@
 % ___________________________________________
 %       Default formatting preferences
 % ___________________________________________
-\LandScapefalse                % default is that the landscape mode is OFF
+\LandScapefalse                % landscape mode OFF, unless the table needs it (see MinTitleWidth); \LandScapetrue always uses it
 
-%---- column width controls
-\def\TaskWidth{3.4in}          % width of "Task" column (leftmost column)
+%---- column widths
+% The table is as wide as the page's text (in a two-column document it spans both columns). The "Task" column gets the
+% width the other columns leave (a long title takes more than one line). If less than MinTitleWidth is left, the table
+% is set in landscape mode, which is wider.
+\def\MinTitleWidth{1in}        % narrowest "Task" column before switching to landscape mode
 \def\StartFinishWidth{0.2in}  % width of start/finish columns
 \def\LeadWidth{0.5in}          % width of "Task Lead" column
 \def\ExpertiseWidth{1.5in}     % width of "Team Expertise" column (rightmost column)
+\def\TaskWidth{\WorPTtitleWidth}% width of "Task" column (leftmost column): what is left (or give a width, such as 3.4in)
 
 %---- table compactness controls
 \def\SpaceBetweenRows{0.87}     % vertical compactness of rows
 \def\SpaceBetweenColumns{2pt}  % spacing between columns
-
-%--- control to nudge table to the left or right
-\def\NudgeTable{1.2\textwidth} % adjust to help center table
 
 
 %--- aesthetic preferences
@@ -44,16 +45,33 @@
   >{\leavevmode}p{\ExpertiseWidth}|    % Expertise column
 }
 
+%--- the widths: the rest of the table measured with an empty "Task" column, and the "Task" column given what is left
+\def\[INSERTFILENAME]Layout{%
+  \begingroup
+  \csname @floatboxreset\endcsname  % measured as set in a table: some classes (aastex) use a smaller font there
+  \renewcommand{\arraystretch}{\SpaceBetweenRows}\setlength{\tabcolsep}{\SpaceBetweenColumns}%
+  \def\TaskWidth{0pt}%
+  \sbox\WorPTmeasureBox{\expandafter\tabular\expandafter{\[INSERTFILENAME]Columns}&&&&&&\\\endtabular}%
+  \WorPTstraySpace{\[INSERTFILENAME]Columns}%
+  \ifLandScape\global\WorPTlandscapetrue\else\global\WorPTlandscapefalse\fi
+  \global\WorPTtitleWidth=\dimexpr\textwidth-\wd\WorPTmeasureBox+\WorPTstray\relax
+  \ifdim\WorPTtitleWidth<\MinTitleWidth\relax\global\WorPTlandscapetrue\fi
+  \ifWorPTlandscape\global\WorPTtitleWidth=\dimexpr\textheight-\wd\WorPTmeasureBox+\WorPTstray\relax\fi
+  \ifdim\WorPTtitleWidth<\MinTitleWidth\relax
+    \global\WorPTtitleWidth=\MinTitleWidth\relax
+    \PackageWarningNoLine{worpt}{The tasks table is wider than the page even in landscape mode}%
+  \fi
+  \endgroup}
+
 \newenvironment{[INSERTFILENAME]}{%
-\ifLandScape
+\[INSERTFILENAME]Layout
+\ifWorPTlandscape
   \begin{sidewaystable*}
 \else
   \begin{table*}[h!]  % \begin{table} needed to make bottom table caption have same width as table
 \fi
 \renewcommand{\arraystretch}{\SpaceBetweenRows} % controls vertical row separation/spacing
 \setlength{\tabcolsep}{\SpaceBetweenColumns}    % controls horizontal column separation/spacing
-\centerline{
-\begin{minipage}{\NudgeTable}                   % increase to allow a wide table to spill into margin
 \begin{WorPTtabular}{\[INSERTFILENAME]Columns}
 
 %--- make colorized top banner labels, the column headers
@@ -75,11 +93,9 @@
 [INSERTSUMMARIES]
 
 \hline
-\end{WorPTtabular}
-\end{minipage}
-}}
+\end{WorPTtabular}}
 {%
-\ifLandScape
+\ifWorPTlandscape
   \end{sidewaystable*}
 \else
   \end{table*}

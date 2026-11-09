@@ -157,17 +157,17 @@ be turned into plain test by removing the "\textbf", eg {{#1}}
 </tr>
 
 <tr>
-<td><b>Table preamble - full control!</b></td>
+<td><b>Table columns - full control</b></td>
 <td>
-Use table preamble for more control over table layout (removing/adding vertical lines, changing column alignment, etc).<br>
-Copy/paste the ENTIRE below code in order to change default table preamble.<br>
-<u>IMPORTANT</u> Most of table preamble can be changed EXCEPT <i>do <b>NOT</b> change "T" and \LastYearPlusOne variables, and preserve the number of columns</i>
-(eg, make sure that any 'l' and 'c' that is removed is replaced by another alignment code).  
+For more control over the table's layout (removing or adding vertical lines, changing column alignment, etc.), copy the
+ENTIRE code below into your document after the table's <code>\input</code> line, and change it there.<br>
+<u>IMPORTANT</u> keep the number of columns (any column type that is removed must be replaced by another) and <code>\LastYearPlusOne</code> (WorPT sets it from the number of years).
 <pre><code>
-\newcolumntype{T}{
-  <mark>|l|*{\LastYearPlusOne}{c|}</mark>
+\def\isANONfteColumns{
+<mark>|l|*{\LastYearPlusOne}{c|}</mark>
 }
 </code></pre></td>
+</tr>
 </table>
 </details>
 

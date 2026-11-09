@@ -97,11 +97,22 @@ You can just comment out your added lines and recompile the document, if you wan
 <table>
  
 <tr>
+<td><b>Table orientation</b></td>
+<td><pre><code>
+\LandScapetrue          % will put the table in landscape mode
+</code></pre>
+Without this line, the table is set in landscape mode only when it needs to be: when it is wider than the page's text even with the least spacing between columns (below).
+</td>
+</tr>
+
+<tr>
 <td><b>Table compactness</b></td>
 <td><pre><code>
-\def\SpaceBetweenRows{<mark>1.0</mark>}    % vertical compactness of rows
-\def\SpaceBetweenColumns{<mark>5pt</mark>} % bigger = wider spacing between columns
+\def\SpaceBetweenRows{<mark>1.0</mark>}       % vertical compactness of rows
+\def\SpaceBetweenColumns{<mark>5pt</mark>}    % bigger = wider spacing between columns (the most it gets)
+\def\MinSpaceBetweenColumns{<mark>1pt</mark>} % the least spacing between columns before switching to landscape mode
 </code></pre>
+If the table is wider than the page's text, the spacing between its columns is made smaller, just enough for it to fit, but not below <code>\MinSpaceBetweenColumns</code>; if it still does not fit, the table is set in landscape mode.
 <details>
 <summary>reference image</summary>
 <img src="https://lh3.googleusercontent.com/d/11nB6CliLC7Xj4pYc3E88ZEPDjcskKUj0" width=45%>
@@ -154,19 +165,18 @@ You can just comment out your added lines and recompile the document, if you wan
 </tr>
 
 <tr>
-<td><b>Table preamble - full control!</b></td>
+<td><b>Table columns - full control</b></td>
 <td>
-Use table preamble for more control over table layout (removing/adding vertical lines, changing column alignment, etc).<br>
-Copy/paste the ENTIRE below code in order to change default table preamble.<br>
-<u>IMPORTANT</u> Most of table preamble can be changed EXCEPT <i>do <b>NOT</b> change "T" variable, and preserve the number of columns</i>
-(eg, make sure that any 'l' or "c" that is removed is replaced by another alignment code). You may retain the parameters below (like \PerTripShadingColor) and define them separately as the above customization options show, or replace them entirely with hard-coded numbers. 
+For more control over the table's layout (removing or adding vertical lines, changing column alignment, etc.), copy the
+ENTIRE code below into your document after the table's <code>\input</code> line, and change it there.<br>
+<u>IMPORTANT</u> keep the number of columns (any column type that is removed must be replaced by another). You may keep the settings (like <code>\PerTripShadingColor</code>) and set them as shown above, or write values in their place.
 <pre><code>
-\newcolumntype{T}{
- <mark>|lcl >{\columncolor{\PerTripShadingColor}[\tabcolsep][\PerTripShadingMargin]}</mark> 
- <mark>l >{\columncolor{\PerTripShadingColor}[\tabcolsep][\PerTripShadingMargin]}</mark> 
- <mark>l >{\columncolor{\PerTripShadingColor}[\tabcolsep][\PerTripShadingMargin]}</mark> 
- <mark>l >{\columncolor{\PerTripShadingColor}[\tabcolsep][\PerTripShadingMargin]}</mark> 
- <mark>l >{\columncolor{\PerTripShadingColor}[\tabcolsep][\PerTripShadingMargin]}</mark> 
+\def\isANONtravelColumns{
+ <mark>|lcl >{\columncolor{\PerTripShadingColor}[\tabcolsep][\PerTripShadingMargin]}</mark>
+ <mark>l>{\columncolor{\PerTripShadingColor}[\tabcolsep][\PerTripShadingMargin]}</mark>
+ <mark>l>{\columncolor{\PerTripShadingColor}[\tabcolsep][\PerTripShadingMargin]}</mark>
+ <mark>l>{\columncolor{\PerTripShadingColor}[\tabcolsep][\PerTripShadingMargin]}</mark>
+ <mark>l>{\columncolor{\PerTripShadingColor}[\tabcolsep][\PerTripShadingMargin]}</mark>
  <mark>ll|</mark>
 }
 </code></pre></td>

@@ -81,15 +81,25 @@ You can just comment out your added lines and recompile the document, if you wan
 <table>
 
 <tr>
+<td><b>Table orientation</b></td>
+<td><pre><code>
+\LandScapetrue          % will put the table in landscape mode
+</code></pre>
+Without this line, the table is set in landscape mode only when it needs to be: when the Role column would be narrower than <code>\MinTitleWidth</code> (below).
+</td>
+</tr>
+
+<tr>
 <td><b>Column width adjustments</b></td>
 <td><pre><code>
+\def\MinTitleWidth{<mark>1in</mark>}          % narrowest Role column before switching to landscape mode
 \def\ContributorWidth{<mark>1.8in</mark>}      % Contributor column width
 \def\PositionWidth{<mark>1.3in</mark>}         % Position column width
 \def\FundedMemberWidth{<mark>0.22in</mark>}    % Funded(?) column width
 \def\FteWidth{<mark>0.42in</mark>}             % FTE column width
 \def\RoleWidth{<mark>2.5in</mark>}             % Role column width (leave this line out to use what is left)
 </code></pre>
-The table is always as wide as the page's text; in a two-column document it spans both columns. The Role column gets the width the other columns leave, unless you give it a width here.
+The table is always as wide as the page's text; in a two-column document it spans both columns. The Role column gets the width the other columns leave, unless you give it a width here. If that would be narrower than <code>\MinTitleWidth</code>, the table is set in landscape mode, which is wider.
 <details>
 <summary>reference image</summary>
 <img src="https://lh3.googleusercontent.com/d/1VFoxre2-539OyEXfklTvudu-PYBlPuaJ" width=70%>
