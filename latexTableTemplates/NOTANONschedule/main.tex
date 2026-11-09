@@ -47,8 +47,13 @@
 %--- preferences of TASK label
 \def\TaskTitleLabel#1#2{~{\scriptsize{\textbf{\scshape{#1}}}}~{\color{mediumelectricblue}{\footnotesize\textbf{#2}}}} % Task title format for row item
 
+%--- preferences of SUBTASK label: indented under its task
+\def\SubtaskIndent{1em}
+\def\SubtaskTitleLabel#1#2{\hspace{\SubtaskIndent}\TaskTitleLabel{#1}{#2}} % Subtask title format for row item
+
 %--- preferences of timeline color
-\def\TimelineColor{mediumelectricblue}          % Task Timeline cell color
+\def\TimelineColor{mediumelectricblue}          % Task Timeline cell color (a task, or a subtask)
+\def\ParentTimelineColor{mediumelectricblue!35} % Task Timeline cell color of a task that has subtasks (it spans them)
 
 %--- team members' column labels (printed sideways), by institution and funding
 \def\FundedUsTeam#1{\small \color{blue}{#1}}    % funded US team member's label
@@ -70,7 +75,10 @@
   \rule[\dimexpr-0.25ex+\TeamOutline\relax]{0pt}{\dimexpr1.5ex-2\fboxrule\relax}\hspace{\dimexpr#2-2\fboxrule\relax}}}}
 
 %--- preferences for the FTE values: each task's total (right), and each team member's over the whole grant (bottom)
-\def\FteTotalFormat#1{\small{#1}}               % Total FTE value format
+\def\FteTotalFormat#1{\small{#1}}               % Total FTE of a task (or subtask): its own effort
+\def\FteRolledUpFormat#1{\small\itshape\color{mediumelectricblue}{#1}} % Total FTE of a task that has subtasks: theirs, added up
+\def\FteCategoryFormat#1{\small\bfseries{#1}}  % Total FTE of a task category: its tasks', added up
+\def\FteGrandTotalFormat#1{\small\bfseries{#1}}% the whole team's funded and unfunded FTE, at the foot
 \def\TeamFundedFteFormat#1{\scriptsize\color{blue}{#1}}% a team member's funded FTE
 \def\TeamUnfundedFteFormat#1{\scriptsize{#1}}   % a team member's unfunded FTE
 \def\TeamZeroFteFormat#1{\scriptsize\color{lightgray}{#1}}% a team member's FTE when it is zero
@@ -135,7 +143,11 @@ p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWid
   \[INSERTFILENAME]Sideways{\TeamFundedFteFormat{0.}}\[INSERTFILENAME]Sideways{\TeamUnfundedFteFormat{0.}}\[INSERTFILENAME]Sideways{\TeamZeroFteFormat{0.}}%
   \setbox0\hbox{\TeamHeaderFontsize{TEAM}}%
   \[INSERTFILENAME]AtLeast\WorPTteamWidth{\dimexpr(\wd0+2\tabcolsep-\NumberTeamMinusOne\arrayrulewidth)/\numexpr\NumberTeamMinusOne+1\relax\relax}%
-  \setbox0\hbox{\FteTotalFormat{\WidestFte}}\global\WorPTfteWidth=\wd0
+  \global\WorPTfteWidth=0pt
+  \setbox0\hbox{\FteTotalFormat{\WidestFte}}\[INSERTFILENAME]AtLeast\WorPTfteWidth{\wd0}%
+  \setbox0\hbox{\FteRolledUpFormat{\WidestFte}}\[INSERTFILENAME]AtLeast\WorPTfteWidth{\wd0}%
+  \setbox0\hbox{\FteCategoryFormat{\WidestFte}}\[INSERTFILENAME]AtLeast\WorPTfteWidth{\wd0}%
+  \setbox0\hbox{\FteGrandTotalFormat{\WidestFte}}\[INSERTFILENAME]AtLeast\WorPTfteWidth{\wd0}%
   \setbox0\hbox{\TotalFteHeaderFontsize{TOTAL FTE}}\[INSERTFILENAME]AtLeast\WorPTfteWidth{\dimexpr\ht0+\dp0\relax}% (lies sideways)
   \global\WorPTtitleWidth=0pt \WorPTmeasuringtrue
   \sbox\WorPTmeasureBox{\expandafter\tabular\expandafter{\[INSERTFILENAME]Columns}\[INSERTFILENAME]Body\endtabular}%
@@ -231,10 +243,10 @@ p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWid
 \hline
 \multicolumn{[INSERTNUMBERYEARSLICESPLUSONE]}{|r|}{\WorPTunlessMeasuring{\TeamFundedFteLabel}}
 [INSERTTEAMFUNDEDFTELIST] &      % each member's funded FTE
-\FteTotalFormat{[INSERTFTEFUNDEDTOTAL]}\\
+\FteGrandTotalFormat{[INSERTFTEFUNDEDTOTAL]}\\
 \multicolumn{[INSERTNUMBERYEARSLICESPLUSONE]}{|r|}{\WorPTunlessMeasuring{\TeamUnfundedFteLabel}}
 [INSERTTEAMUNFUNDEDFTELIST] &    % each member's unfunded FTE
-\FteTotalFormat{[INSERTFTEUNFUNDEDTOTAL]}\\
+\FteGrandTotalFormat{[INSERTFTEUNFUNDEDTOTAL]}\\
 \hline
 
 % COMMENT: below templates make one team member's FTE at the foot of the table, sideways: funded, unfunded, or zero.
@@ -257,7 +269,7 @@ p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWid
 \WorPTfitTitle\TaskCategoryLabel{[INSERTCATEGORYLABEL]}{[INSERTCATEGORYTITLE]} % category identification
 [INSERTEMPTYYEARSLICESLIST] &  % empty year slices
 [INSERTEMPTYTEAMCELLSLIST]     % empty team cells
-{}\\                           % empty total fte
+\FteCategoryFormat{[INSERTCATEGORYFTE]}\\ % the category's total fte
 [INSERTTASKSUNDERTHISCATEGORY] % tasks under this category
 \hline
 [ENDCATEGORYSECTIONTEMPLATE]
@@ -268,8 +280,9 @@ p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWid
  & \TimelineSize{}
 [ENDUNCOLOREDTIMELINETEMPLATE]
 
-% COMMENT ****************************** ROW TEMPLATE ***************************************
-% COMMENT: the below produces a single row for a task under a category. The script then makes several such rows
+% COMMENT ****************************** ROW TEMPLATES ***************************************
+% COMMENT: the below produce a single row for a task under a category: a task, a task that has subtasks (its
+% COMMENT: timeline spans theirs and its FTE adds theirs up), or a subtask. The script then makes several such rows
 % COMMENT: and glues them toegether, delimited by a end of line character, and this single string replaces the
 % COMMENT: INSERTTASKSUNDERTHISCATEGORY above in the CATEGORYSECTIONTEMPLATE above.
 [STARTTASKROWTEMPLATE]
@@ -279,6 +292,20 @@ p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWid
 [INSERTTEAMCELLSFORTHISTASK]  % who leads it and who works on it
 \FteTotalFormat{[INSERTFTETOTAL]}\\
 [ENDTASKROWTEMPLATE]
+[STARTPARENTTASKROWTEMPLATE]
+% begin task
+\WorPTfitTitle\TaskTitleLabel{[INSERTTASKLABEL]}{[INSERTTASKTITLE]} % title of this task
+[INSERTYEARSLICESLIST] &  % timeline for this task, spanning its subtasks'
+[INSERTTEAMCELLSFORTHISTASK]  % (its subtasks have the people)
+\FteRolledUpFormat{[INSERTFTETOTAL]}\\
+[ENDPARENTTASKROWTEMPLATE]
+[STARTSUBTASKROWTEMPLATE]
+% begin task
+\WorPTfitTitle\SubtaskTitleLabel{[INSERTTASKLABEL]}{[INSERTTASKTITLE]} % title of this subtask
+[INSERTYEARSLICESLIST] &  % timeline for this subtask
+[INSERTTEAMCELLSFORTHISTASK]  % who leads it and who works on it
+\FteTotalFormat{[INSERTFTETOTAL]}\\
+[ENDSUBTASKROWTEMPLATE]
 
 % COMMENT: the below template makes a single year slice that falls within the task timeline, helping to construct
 % COMMENT: a colored task timeline. The script picks this or the UNCOLORED template above the ROW TEMPLATE written above,
@@ -286,6 +313,9 @@ p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWid
 [STARTCOLOREDTIMELINETEMPLATE]
  & \TimelineSize\WorPTcellcolor{\TimelineColor}
 [ENDCOLOREDTIMELINETEMPLATE]
+[STARTPARENTCOLOREDTIMELINETEMPLATE]
+ & \TimelineSize\WorPTcellcolor{\ParentTimelineColor}
+[ENDPARENTCOLOREDTIMELINETEMPLATE]
 
 % COMMENT: the below templates make one team member's cell in a task's row: the task lead, a member who works on the
 % COMMENT: task funded by this grant, one whose work on it is partly or wholly unfunded, or one not on the task.

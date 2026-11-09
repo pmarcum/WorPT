@@ -53,7 +53,7 @@ Refer to <b>Customizations</b> section below to add personal preferences in the 
 \input{NOTANONschedule} % reset file parameters
 
 \begin{NOTANONschedule}
-\caption{Resource-loaded project schedule. Tasks are listed (left side), with duration of task activity indicated in blue-colored timelines, in months, under quarter-year labels (1,2,3,4). Each team member has a column (label color: blue$=$funded/U.S., black$=$not funded/U.S., red$=$international), marked for each task they work on: \TeamLeadKey$=$task lead, \TeamFundedKey$=$funded by this grant, \TeamUnfundedKey$=$partly or wholly not funded by this grant. The bottom rows give each team member's funded and unfunded effort over the whole grant in FTE (1~FTE$=$12~months); ``Total FTE'' (right side) is each task's effort, funded and unfunded.}
+\caption{Resource-loaded project schedule. Tasks are listed (left side), with duration of task activity indicated in blue-colored timelines, in months, under quarter-year labels (1,2,3,4); a task with subtasks (indented below it) has a light blue timeline spanning theirs. Each team member has a column (label color: blue$=$funded/U.S., black$=$not funded/U.S., red$=$international), marked for each task they work on: \TeamLeadKey$=$task lead, \TeamFundedKey$=$funded by this grant, \TeamUnfundedKey$=$partly or wholly not funded by this grant. The bottom rows give each team member's funded and unfunded effort over the whole grant in FTE (1~FTE$=$12~months); ``Total FTE'' (right side) is each task's effort, funded and unfunded: in italics for a task with subtasks (theirs added up), and in bold for a task category (its tasks added up).}
 \label{tab:NOTANONschedule}
 \end{NOTANONschedule}
 %:::::::::::::::::: end NOTANONschedule ::::::::::::::::::::
@@ -143,7 +143,10 @@ redefine as:<br>
    {<mark>\normalsize\textbf</mark>{#2}}}                               % Category label
 \def\TaskTitleLabel#1#2{~{<mark>\scriptsize{\textbf{\scshape</mark>{#1}}}}~
    {<mark>\color{mediumelectricblue}{\footnotesize\textbf</mark>{#2}}}} % Task title format for row item
+\def\SubtaskIndent{<mark>1em</mark>}                             % how far a subtask's title is indented
+\def\SubtaskTitleLabel#1#2{\hspace{\SubtaskIndent}\TaskTitleLabel{#1}{#2}} % Subtask title format
 </code></pre>
+For italic subtask titles, for example: <code>\def\SubtaskTitleLabel#1#2{\hspace{\SubtaskIndent}{\itshape\TaskTitleLabel{#1}{#2}}}</code>
 <details>
 <summary>reference image</summary>
 <img src="https://lh3.googleusercontent.com/d/1FptrYPilkvMpYVCh0EHQX5cKxFiZXUFh" width=50%>
@@ -167,7 +170,8 @@ redefine as:<br>
 <tr>
 <td><b>Color of task timelines</b></td>
 <td><pre><code>
-\def\TimelineColor{<mark>mediumelectricblue</mark>} % Task Timeline cell color
+\def\TimelineColor{<mark>mediumelectricblue</mark>}   % Task Timeline cell color (a task, or a subtask)
+\def\ParentTimelineColor{<mark>mediumelectricblue!35</mark>} % a task that has subtasks (its timeline spans theirs)
 </code></pre>
 <details>
 <summary>reference image</summary>
@@ -201,7 +205,10 @@ A task lead is marked in the lead color whether or not their work on it is funde
 <tr>
 <td><b>FTE values</b></td>
 <td><pre><code>
-\def\FteTotalFormat#1{<mark>\small</mark>{#1}}                       % each task's Total FTE (right)
+\def\FteTotalFormat#1{<mark>\small</mark>{#1}}                       % a task's (or subtask's) own Total FTE (right)
+\def\FteRolledUpFormat#1{<mark>\small\itshape\color{mediumelectricblue}</mark>{#1}} % a task with subtasks: theirs, added up
+\def\FteCategoryFormat#1{<mark>\small\bfseries</mark>{#1}}            % a task category: its tasks', added up
+\def\FteGrandTotalFormat#1{<mark>\small\bfseries</mark>{#1}}          % the whole team's funded and unfunded FTE (foot)
 \def\TeamFundedFteFormat#1{<mark>\scriptsize\color{blue}</mark>{#1}} % a team member's funded FTE (foot)
 \def\TeamUnfundedFteFormat#1{<mark>\scriptsize</mark>{#1}}           % a team member's unfunded FTE (foot)
 \def\TeamZeroFteFormat#1{<mark>\scriptsize\color{lightgray}</mark>{#1}} % a team member's FTE when it is zero

@@ -97,7 +97,7 @@ def team_rows(tex):
     marks = dict(TeamLeadColor='lead', TeamFundedColor='funded', TeamUnfundedColor='unfunded')   # (the unfunded mark is an open box)
     out = {}
     for row in tex.split('% begin task')[1:]:
-        label = re.search(r'\\TaskTitleLabel\{([^}]*)\}', row).group(1)
+        label = re.search(r'\\(?:Sub)?[tT]askTitleLabel\{([^}]*)\}', row).group(1)
         cells = row.split('% timeline for this task')[1].split('% who leads it')[0]
         out[label] = [marks[m] if m else 'none' for m in re.findall(r'(?:\\Team(?:Open)?Mark\{\\(\w+)\}|\{\}) &', cells)]
     return out
@@ -128,5 +128,22 @@ def test_schedule_foot_gives_each_members_funded_and_unfunded_fte():
     ids = re.findall(r'\\rotatebox\{90\}\{\\\w+Team\{([^}]*)\}\}', tex)
     values = lambda part: dict(zip(ids, re.findall(r'\\Team(?:Funded|Unfunded|Zero)FteFormat\{([^}]*)\}', part)))
     assert values(funded) == dict(a='0.25', c='0.00') and values(unfunded) == dict(a='0.25', c='1.00')
-    assert '\\FteTotalFormat{0.25}' in funded and '\\FteTotalFormat{1.25}' in unfunded            # the totals, in the Total FTE column
+    assert '\\FteGrandTotalFormat{0.25}' in funded and '\\FteGrandTotalFormat{1.25}' in unfunded            # the totals, in the Total FTE column
     assert '\\TeamZeroFteFormat{0.00}' in funded
+
+
+def test_schedule_sets_tasks_with_subtasks_apart():
+    """A task with subtasks: light blue timeline over its subtasks' span and its FTE (theirs added up) in italics; its
+    subtasks indented, with their own FTE as a task's; a category's row gives its FTE (its tasks added up), in bold."""
+    parent = Item('Parent task', children=[task('Sub one', [('a', 4, 0)], (1, 1), (1, 10)), task('Sub two', [('b', 2, 0)], (1, 20), (1, 30))])
+    tex = build(proposal([Item('Goal', children=[parent, task('Alone', [('a', 1, 0)], (1, 40), (1, 44))])]), ['NOTANONschedule'])['NOTANONschedule']
+    rows = {re.search(r'\{(A[\d.]*)\}', r).group(1): r for r in tex.split('% begin task')[1:]}
+    timeline = lambda r: re.findall(r'WorPTcellcolor\{\\(\w+)\}', r)
+    assert timeline(rows['A1']) and set(timeline(rows['A1'])) == {'ParentTimelineColor'} and '\\FteRolledUpFormat{' + fixed(6 / 52, 2) + '}' in rows['A1']
+    for sub, weeks in (('A1.1', 4), ('A1.2', 2)):
+        assert '\\SubtaskTitleLabel{' + sub + '}' in rows[sub] and set(timeline(rows[sub])) == {'TimelineColor'}
+        assert '\\FteTotalFormat{' + fixed(weeks / 52, 2) + '}' in rows[sub]
+    assert '\\TaskTitleLabel{A2}' in rows['A2'] and '\\FteTotalFormat{' + fixed(1 / 52, 2) + '}' in rows['A2']
+    assert [len(timeline(rows[k])) for k in ('A1.1', 'A1.2', 'A1')] == [3, 3, 7]    # months 1-3 and 5-7; the parent spans 1-7
+    category = tex.split('\\TaskCategoryLabel{A}')[1].split('% begin task')[0]
+    assert '\\FteCategoryFormat{' + fixed(7 / 52, 2) + '}' in category

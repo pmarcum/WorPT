@@ -355,7 +355,7 @@ def schedule(c):
         t = jsub(t, r'\[INSERT' + k + r'\]', v)
     blocks = (('year', 'YEARLABEL'), ('slice', 'YEARSLICELABEL'), ('category', 'CATEGORYSECTION'), ('empty', 'UNCOLOREDTIMELINE'),
               ('task', 'TASKROW'), ('filled', 'COLOREDTIMELINE'), ('id2name', 'IDTONAME'))
-    blocks += ((('lead', 'TEAMLEADCELL'), ('funded', 'TEAMFUNDEDCELL'), ('unfunded', 'TEAMUNFUNDEDCELL'), ('none', 'TEAMEMPTYCELL'),
+    blocks += ((('parent', 'PARENTTASKROW'), ('subtask', 'SUBTASKROW'), ('parent_filled', 'PARENTCOLOREDTIMELINE'), ('lead', 'TEAMLEADCELL'), ('funded', 'TEAMFUNDEDCELL'), ('unfunded', 'TEAMUNFUNDEDCELL'), ('none', 'TEAMEMPTYCELL'),
                 ('label_funded', 'FUNDEDUSTEAMLABEL'), ('label_unfunded', 'UNFUNDEDUSTEAMLABEL'), ('label_international', 'INTERNATIONALTEAMLABEL'),
                 ('fte_funded', 'TEAMFUNDEDFTE'), ('fte_unfunded', 'TEAMUNFUNDEDFTE'), ('fte_zero', 'TEAMZEROFTE')) if grid else
                (('funded', 'FUNDEDUSTEAMASSIGNMENT'), ('unfunded', 'UNFUNDEDUSTEAMASSIGNMENT'), ('international', 'INTERNATIONALTEAMASSIGNMENT')))
@@ -371,9 +371,10 @@ def schedule(c):
     t = jrep(t, '[INSERTYEARSLICELABELLIST]', ''.join(slice_label(k) for y in range(n) for k in range(1, slices // span + 1)))
     def timeline(row):
         if not row['start'] or not row['end']: return tp['empty'] * (n * slices)
+        filled = tp['parent_filled'] if grid and row['has_children'] else tp['filled']   # a task with subtasks spans theirs
         slice_of = lambda w: (w // WEEKS_PER_YEAR) * slices + (w % WEEKS_PER_YEAR) * slices // WEEKS_PER_YEAR   # the slice a week falls in
         q0, q1 = slice_of(week_index(row['start'])), slice_of(week_index(row['end']))
-        return ''.join(tp['filled'] if q0 <= q <= q1 else tp['empty'] for q in range(n * slices))
+        return ''.join(filled if q0 <= q <= q1 else tp['empty'] for q in range(n * slices))
     if grid:
         r, members = c['r'], {pid: c['people'][pid]['m'] for pid in order}
         leaf = {lab: k for k, lab in enumerate(r['leaf_labels'])}
@@ -396,8 +397,8 @@ def schedule(c):
             t = jrep(t, f'[INSERTTEAM{kind.upper()}FTELIST]',
                      ''.join(jrep(tp['fte_' + (kind if float(v) else 'zero')], '[INSERTFTE]', v) for v in values))
         t = jrep(jrep(t, '[INSERTFTEFUNDEDTOTAL]', fixed(r['project_total'][2], 2)), '[INSERTFTEUNFUNDEDTOTAL]', fixed(r['project_total'][1], 2))
-        totals = [fixed(r['project_total'][j], 2) for j in (1, 2)] + [row['fte'][0] for row in c['rows'] if row['kind'] != 'goal']
-        t = jrep(t, '[INSERTWIDESTFTE]', max(totals, key=len))
+        totals = [fixed(r['project_total'][j], 2) for j in (1, 2)] + [row['fte'][0] for row in c['rows']]
+        t = jrep(t, '[INSERTWIDESTFTE]', max(totals, key=len))                    # (categories' totals are among the rows)
     sections, section, tasks = [], None, []
     def close():
         if section is not None and tasks: sections.append(jrep(section, '[INSERTTASKSUNDERTHISCATEGORY]', '\n'.join(tasks)))
@@ -406,9 +407,10 @@ def schedule(c):
             close(); tasks = []
             section = jrep(jrep(tp['category'], '[INSERTCATEGORYLABEL]', row['label']), '[INSERTCATEGORYTITLE]', row['short'])
             section = jrep(section, '[INSERTEMPTYYEARSLICESLIST]', tp['empty'] * (n * slices))
-            if grid: section = jrep(section, '[INSERTEMPTYTEAMCELLSLIST]', tp['none'] * len(order))
+            if grid: section = jrep(jrep(section, '[INSERTEMPTYTEAMCELLSLIST]', tp['none'] * len(order)), '[INSERTCATEGORYFTE]', row['fte'][0])
             continue
-        s = jrep(jrep(tp['task'], '[INSERTTASKLABEL]', row['label']), '[INSERTTASKTITLE]', row['short'])
+        kind = 'parent' if grid and row['has_children'] else 'subtask' if grid and row['kind'] == 'subtask' else 'task'
+        s = jrep(jrep(tp[kind], '[INSERTTASKLABEL]', row['label']), '[INSERTTASKTITLE]', row['short'])
         s = jrep(s, '[INSERTYEARSLICESLIST]', timeline(row))
         if grid:
             s = jrep(jrep(s, '[INSERTTEAMCELLSFORTHISTASK]', team_cells(row)), '[INSERTFTETOTAL]', row['fte'][0])
