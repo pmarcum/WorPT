@@ -146,6 +146,7 @@ input.wk.on{border-color:#4a6a90}
 .bar.leaf{top:17%;bottom:17%;border-radius:5px;background:rgba(126,184,247,.55);box-shadow:inset 5px 0 0 rgba(255,255,255,.5),inset -5px 0 0 rgba(255,255,255,.5)}
 .bar.leaf.sub{background:rgba(126,184,247,.42)}
 .bar.leaf.picked{outline:2px solid var(--text);outline-offset:1px}
+.bar.leaf.replaced{opacity:.3}
 .bar.parent{top:28%;bottom:28%;border-radius:4px;background:rgba(201,167,255,.14);border:1px dashed rgba(201,167,255,.6)}
 .bar.cat{top:40%;bottom:40%;border-radius:3px;background:rgba(247,201,126,.55);box-shadow:-2px 0 0 rgba(247,201,126,.9),2px 0 0 rgba(247,201,126,.9)}
 .tsum{display:flex;gap:10px;align-items:flex-start}
@@ -846,7 +847,7 @@ function viewPlan() {
     '<div class="scroll' + (zoomed ? ' zoomed' : '') + '" id="plan-scroll" style="' + calBg(pxw) + '"><div style="min-width:' + minW + 'px">' + head +
     (rows || '<p class="muted" style="padding:14px 4px">No task categories yet. Start with a task category (a group of related tasks), then add tasks to it.</p>') + '</div></div>' +
     '<div class="row" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"><button type="button" class="btn" data-act="addCategory">+ Task category</button>' +
-    '<span class="hint" style="margin:0;flex:1;min-width:260px">Drag across a task\'s row to draw its bar, week by week; drag a bar\'s ends (the cursor becomes ↔) to lengthen or shorten it, or its middle to move it; click a bar and press Delete to remove it. ' +
+    '<span class="hint" style="margin:0;flex:1;min-width:260px">Drag across a task\'s row to draw its bar, week by week; drag a bar\'s ends (the cursor becomes ↔) to lengthen or shorten it, or its middle to move it; click a bar and press Delete to remove it. A click beside a bar changes nothing; drawing a new bar beside one asks before replacing it. ' +
     'Undo (' + KEYS.undo + ') takes back your last change, one at a time; Redo (' + KEYS.redo + ') puts it back. ' +
     (cols ? 'Type weeks straight into a person\'s column (a gray (2) is weeks they get through "team"); ★ makes them the task lead. ' : '') + 'Click a title for its details; Close (or Return, or Esc) hides them. Titles in <b style="color:var(--accent2)">gold</b> are task categories, ' +
     'in <b style="color:var(--parent)">lavender</b> tasks with subtasks; the others hold the effort. ' +
@@ -1285,17 +1286,21 @@ window.addEventListener('resize', () => {
 });
 
 // ── dragging a bar on the calendar (shown live; saved once, when the mouse is let go) ───────────────────────────
+// Drawing starts only once the pointer has moved DRAW_PX pixels: a click on a row never changes its timeline, and a
+// new bar drawn beside one already there replaces it only once OK is pressed.
+const DRAW_PX = 4;
 let DRAG = null;
 function startDrag(ev, tl) {
   if (ev.button !== 0) return;
   const id = +tl.dataset.tl, it = S.P.items.find(i => i.id === id), NQ = S.P.proposal.n_years * WEEKS, r = tl.getBoundingClientRect();
   const qAt = x => Math.max(0, Math.min(NQ - 1, Math.floor((x - r.left) / r.width * NQ)));      // the week under the pointer
   const q = qAt(ev.clientX), s = wIndex(it.start_year, it.start_week), e = wIndex(it.end_year, it.end_week);
-  const mode = barZone(ev, tl) || 'draw';
-  let bar = tl.querySelector('.bar');
-  if (!bar) { bar = document.createElement('span'); bar.className = 'bar leaf'; tl.appendChild(bar); }
-  DRAG = { id, it, NQ, qAt, mode, a: q, s0: s, e0: e, s: mode === 'draw' ? q : s, e: mode === 'draw' ? q : e, bar };
-  placeBar(); ev.preventDefault();
+  const mode = barZone(ev, tl) || 'draw', old = tl.querySelector('.bar');
+  let bar = old;
+  if (mode === 'draw') { bar = document.createElement('span'); bar.className = 'bar leaf'; bar.hidden = true; tl.appendChild(bar); }   // the old bar stays until OK
+  DRAG = { id, it, NQ, qAt, mode, a: q, x0: ev.clientX, moved: mode !== 'draw', old, s0: s, e0: e, s: mode === 'draw' ? q : s, e: mode === 'draw' ? q : e, bar };
+  if (DRAG.moved) placeBar();
+  ev.preventDefault();
   try { tl.setPointerCapture(ev.pointerId); } catch (err) { /* older browsers: the drag still works inside the row */ }
 }
 /** Where the pointer is on a bar: near either end (within 16 pixels, or a third of a short bar) resizes, the rest moves. */
@@ -1316,6 +1321,10 @@ function placeBar() {
 }
 function moveDrag(ev) {
   const d = DRAG; if (!d) return;
+  if (!d.moved) {                                                    // not yet a drag: a click so far
+    if (Math.abs(ev.clientX - d.x0) < DRAW_PX) return;
+    d.moved = true; d.bar.hidden = false; if (d.old) d.old.classList.add('replaced');
+  }
   const q = d.qAt(ev.clientX);
   if (d.mode === 'draw') { d.s = Math.min(d.a, q); d.e = Math.max(d.a, q); }
   else if (d.mode === 'start') d.s = Math.min(q, d.e);
@@ -1326,11 +1335,15 @@ function moveDrag(ev) {
 function endDrag() {
   const d = DRAG; DRAG = null;
   if (!d) return;
+  if (!d.moved) { d.bar.remove(); return; }                          // a click beside the bar (or on an empty row): nothing changes
   S.barSel = d.id; S.sel = d.id;                                     // the bar just clicked or dragged is the one Delete removes
   if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
   if (d.s === d.s0 && d.e === d.e0) { render(); return; }            // nothing changed: put the bar back as it was
   const [sy, sw] = yw(d.s), [ey, ew] = yw(d.e);
-  attempt(() => change('updateItem', d.id, { version: d.it.version, start_year: sy, start_week: sw, end_year: ey, end_week: ew }));
+  const save = () => attempt(() => change('updateItem', d.id, { version: d.it.version, start_year: sy, start_week: sw, end_year: ey, end_week: ew }));
+  if (d.mode !== 'draw' || d.s0 == null) { save(); return; }
+  ask('Replace this bar?', 'The bar of ' + labelOf(d.id) + ' "' + (d.it.title || '(untitled)') + '" (' + span(yw(d.s0), yw(d.e0)) + ') is replaced by ' +
+    span(yw(d.s), yw(d.e)) + '. Undo (' + KEYS.undo + ') takes it back.', [['OK', true, 'primary']]).then(ok => { if (ok) save(); else render(); });
 }
 
 // ── a clicked bar: Delete (or Backspace) removes it, once OK is pressed ─────────────────────────────────────────
