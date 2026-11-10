@@ -86,6 +86,13 @@ label.f input,label.f select,label.f textarea{font-size:13px}
 .zoomed .sg-h.c.pin{flex-direction:column;justify-content:flex-end}
 .zoomed .sg-cell.pin{justify-content:center}
 .zoomed .sg-sum.pin{justify-content:center}
+.zoomed .sg-fte.pin{justify-content:flex-end}
+/* each row's total FTE: a task's own effort; a task with subtasks and a task category add up what is under them */
+.sg-fte{text-align:right;font-family:var(--mono);font-size:11px;color:var(--text);padding:0 6px 0 0;align-self:center;font-variant-numeric:tabular-nums;cursor:default}
+.sg-fte.zero{color:var(--muted)}
+.sg-fte.parent{font-style:italic;color:var(--parent)}
+.sg-fte.cat{font-weight:700;color:var(--accent2)}
+.sg-h.ftehead{text-align:right;padding-right:6px}
 .zoomed .sg-details{position:sticky;left:0;width:100cqw;box-sizing:border-box}
 .sg-head{align-items:end;border-bottom:1px solid var(--border2)}
 .sg-h{font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--muted);padding:4px;text-transform:uppercase}
@@ -531,6 +538,7 @@ function render() {
   const was = $('#plan-scroll'), scrollX = was ? was.scrollLeft : 0, scrollY = was ? was.scrollTop : 0;
   $('#app').innerHTML = html;
   const sc = $('#plan-scroll');
+  if (sc) fitPlanBox(sc);            // first: its up-and-down scroll bar, if it gets one, takes room the calendar must fit beside
   if (sc) {
     const cal = sc.querySelector('.tl.cal');
     if (S.zoomKeep != null && cal) {
@@ -541,7 +549,6 @@ function render() {
   }
   S.zoomKeep = null;
   if (sc && planZoom() === 0 && sc.scrollWidth > sc.clientWidth + 1 && !S.refit) { S.refit = true; render(); S.refit = false; }
-  if (sc) fitPlanBox(sc);
   if (sc && S.open !== S.shownOpen && !S.refit) revealDetails(sc);
   S.shownOpen = S.open;
   if (key) {
@@ -728,16 +735,17 @@ function setTeamView(v) { try { localStorage.setItem('worpt_team_view', v); } ca
 
 function viewPlan() {
   const P = S.P, nodes = tree(), ny = P.proposal.n_years, NQ = ny * 4, NW = ny * WEEKS, cols = teamView() === 'columns' && P.members.length > 0;
-  const zoom = planZoom(), zoomed = zoom > 0, TITLE = 240;
+  const zoom = planZoom(), zoomed = zoom > 0, TITLE = 240, FTEW = 40;   // FTEW: the column of each row's total FTE
   const tagLen = m => isColl(m) ? 5 : Math.max(0, ...P.items.map(i => { const u = unfundedFor(i.id, m); return u > 0 ? (wk(u) + 'u').length : 0; }));
   const colW = cols ? P.members.map(m => { const t = tagLen(m); return Math.max(54, Math.ceil(34 + 14 + (t ? 3 + t * 6.1 : 0) + 4)); }) : [];
   // whole pixels a week: zoomed, the step chosen; fitted, as many as fill the room (at least 5, room to drag by a week)
   const room = ($('#plan-scroll') || {}).clientWidth || (($('#app') || {}).clientWidth || 1200) - 34;
-  const pxw = zoomed ? weekPx(ZOOMS[zoom]) : Math.max(weekPx(ZOOMS[0]), weekPx((room - 52 - TITLE - colW.reduce((a, w) => a + w, 0)) / NW, true));
+  const pxw = zoomed ? weekPx(ZOOMS[zoom]) : Math.max(weekPx(ZOOMS[0]), weekPx((room - 52 - TITLE - colW.reduce((a, w) => a + w, 0) - FTEW) / NW, true));
   const calW = NW * pxw;
-  const tmpl = 'grid-template-columns:52px ' + TITLE + 'px ' + colW.map(w => w + 'px ').join('') + calW + 'px';
-  const minW = 52 + TITLE + colW.reduce((a, w) => a + w, 0) + calW;
-  const pinAt = colW.reduce((a, w) => a.concat(a[a.length - 1] + w), [52 + TITLE]);      // where each team column is pinned
+  const tmpl = 'grid-template-columns:52px ' + TITLE + 'px ' + colW.map(w => w + 'px ').join('') + FTEW + 'px ' + calW + 'px';
+  const minW = 52 + TITLE + colW.reduce((a, w) => a + w, 0) + FTEW + calW;
+  const pinAt = colW.reduce((a, w) => a.concat(a[a.length - 1] + w), [52 + TITLE]);      // where each team column is pinned (then the FTE column)
+  const F = colW.length;                                                                   // the FTE column's place among them
   const pin = (i, z) => zoomed ? ' style="left:' + (i < 0 ? (i === -2 ? 0 : 52) : pinAt[i]) + 'px' + (z ? ';z-index:' + z : '') + '"' : '';
   // the names, at 45 degrees, get the height their longest one needs
   const whoH = cols ? Math.ceil((Math.max(...P.members.map(m => textWidth(shortName(m), '600 11px', '--mono'))) + 11) * Math.SQRT1_2) + 4 : 0;
@@ -751,6 +759,8 @@ function viewPlan() {
   const iss = planIssues(nodes), tip = list => ' title="' + esc(list.join('\n')) + '"';
   const head = '<div class="sg-head" style="' + tmpl + '"><div class="sg-ctl pin"' + pin(-2) + '>' + zoomer + toggle + '<span class="sg-h">Task categories, tasks and subtasks</span></div>' +
     (cols ? P.members.map((m, i) => '<span class="sg-h c pin' + (iss.person[m.short_id] ? ' bad' : '') + '"' + pin(i, 3 + P.members.length - i) + tip([personName(m)].concat(iss.person[m.short_id] || [])) + '><span class="who" style="height:' + whoH + 'px"><i>' + esc(shortName(m)) + '</i></span><b>' + esc(m.short_id) + '</b><br>weeks</span>').join('') : '') +
+    '<span class="sg-h c ftehead pin"' + pin(F, 2) + ' title="Each row\'s total effort, in FTE (funded and unfunded), as in the tables: a task\'s own; a task with subtasks adds up theirs (in italics), a task category its tasks\' (in bold). Hover a figure for its funded and unfunded parts.">' +
+      (cols ? '<span class="who" style="height:' + whoH + 'px"></span>' : '') + '<b>FTE</b><br>total</span>' +
     '<div class="tl" style="grid-template-columns:repeat(' + NQ + ',minmax(0,1fr))">' +
     Array.from({ length: ny }, (_, y) => '<span class="yh">Year ' + (y + 1) + '</span>').join('') +
     Array.from({ length: NQ }, (_, q) => '<span class="qh' + (q % 4 === 0 ? ' y' : '') + '">Q' + (q % 4 + 1) + '</span>').join('') +
@@ -786,6 +796,7 @@ function viewPlan() {
       '<span class="sg-lab pin"' + pin(-2) + '>' + (iss.row[it.id] ? '<span class="bad"' + tip(iss.row[it.id]) + '>' + esc(labelOf(it.id)) + '</span>' : esc(labelOf(it.id))) + '</span>' +
       '<button type="button" class="sg-title pin' + (it.description ? ' described' : '') + '" data-openitem="' + it.id + '" aria-expanded="' + open + '" title="' +
         esc((it.title || '(untitled)') + (it.description ? '\n\n' + it.description : '')) + '" style="padding-left:' + (4 + d * 16) + 'px' + (zoomed ? ';left:52px' : '') + '">' + esc(it.short_title || it.title || '(untitled)') + '</button>' + colCells +
+      fteCell(it.id, d === 0 ? 'cat' : leaf ? 'leaf' : 'parent', pin(F)) +
       '<div class="tl cal' + (leaf ? ' leaf' : '') + '" data-tl="' + it.id + '">' + bar + '</div></div>' +
       (open ? '<div class="sg-details card stack">' + viewItem(n, nodes) + '</div>' : '');
   }).join('');
@@ -796,6 +807,7 @@ function viewPlan() {
     '<span class="hint" style="margin:0;flex:1;min-width:260px">Drag across a task\'s row to draw its bar, week by week; drag a bar\'s ends (the cursor becomes ↔) to lengthen or shorten it, or its middle to move it. ' +
     (cols ? 'Type weeks straight into a person\'s column (a gray (2) is weeks they get through "team"); ★ makes them the task lead. ' : '') + 'Click a title for its details; Close (or Return, or Esc) hides them. Titles in <b style="color:var(--accent2)">gold</b> are task categories, ' +
     'in <b style="color:var(--parent)">lavender</b> tasks with subtasks; the others hold the effort. ' +
+    'The FTE column keeps a running total for each row as you go: a task\'s own effort, a task with subtasks its subtasks\' (in italics), a task category its tasks\' (in bold). ' +
     'Problems listed under Checks are marked in red on the plan; hover a mark to read it.</span></div></section>' +
     '<div class="cols" style="margin-top:14px"><div style="flex:2 1 520px;min-width:0">' + viewRipple() + '</div><div style="flex:1 1 300px;min-width:0">' + viewChecks() + '</div></div>';
 }
@@ -904,6 +916,12 @@ const HELP = {
   unfunded: 'The part of the weeks not paid by this proposal. For example, 1.5 weeks with 0.5 unfunded is 1.0 week funded plus 0.5 week unfunded. A collaborator\'s weeks are all unfunded.'
 };
 const info = text => '<span class="info" tabindex="0" title="' + esc(text) + '" aria-label="' + esc(text) + '" role="note">ⓘ</span>';
+// A row's total FTE on the plan, from the server's figures (the tables' own): total, and in its hover funded and unfunded
+function fteCell(id, kind, pinned) {
+  const f = (S.P.computed.items[id] || {}).fte || [0, 0, 0];
+  return '<span class="sg-fte ' + kind + (f[0] > 0 ? '' : ' zero') + ' pin"' + pinned + ' title="' + esc(f2(f[0]) + ' FTE: ' + f2(f[2]) + ' funded, ' + f2(f[1]) + ' unfunded' +
+    (kind === 'cat' ? ' (its tasks, added up)' : kind === 'parent' ? ' (its subtasks, added up)' : '')) + '">' + (f[0] > 0 ? f2(f[0]) : '·') + '</span>';
+}
 const span = (s, e) => s && e ? 'Year ' + s[0] + ' week ' + s[1] + ' – Year ' + e[0] + ' week ' + e[1] : 'none yet';
 
 function viewRipple() {
