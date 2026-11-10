@@ -84,6 +84,17 @@ Rules the server applies to every change:
   the team, changing the number of years, or restoring; anyone on the proposal can also save a named one.
   Full editors restore or delete them. Automatic snapshots are kept for 60 days, named ones until deleted.
   A restore never removes the person doing it, and can itself be undone.
+- Undo and redo (`POST /api/proposals/<id>/undo`, `.../redo`; Ctrl+Z and Ctrl+Y in the dashboard): everything one
+  request changes is one step (`steps`; its rows in `history` carry the step's number). A person undoes their own
+  steps in a work plan, newest first, back to the work plan's creation, and redoes what they undid until they make a
+  new change there; this is kept in the database, so it survives a reload. Only the columns a step changed are put
+  back, and only if nobody changed them since: otherwise the step is skipped (the refusal, code `stuck`, says who
+  changed it) and the next undo goes on to the step before. An undo that would break the rules above (after
+  others' changes) is refused the same way. Undo needs the same rights as the change. Row numbers are never used
+  twice (`top_ids`), so a deleted row comes back under its own number, and a restore keeps the snapshot's numbers
+  and records each row it changes, so changes made before a restore can still be undone after it. A profile
+  changed with a work plan open is undone in that plan. `GET /api/proposals/<id>` says what undo and redo would
+  do (`you.undo`, `you.redo`), in words. Changes made before undo existed (November 2026) can't be undone.
 - Refusals are HTTP 200 with `{"status": "error", "code": ..., "message": ...}`.
 - `GET /api/proposals/<id>/changed` returns the number of the proposal's newest change; the dashboard asks
   every 10 seconds while it is visible and reloads only when the number grows.

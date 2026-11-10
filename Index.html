@@ -60,6 +60,9 @@ input:disabled,select:disabled,textarea:disabled{opacity:.6}
 .ptitle h1{margin:0;font-size:17px;font-weight:600}
 .ptitle .meta{font-family:var(--mono);font-size:11px;color:var(--muted)}
 .tabs{display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--border);padding-bottom:8px;margin-bottom:14px}
+.tabs .undo{margin-left:auto;display:flex;gap:4px}
+.tabs .undo .btn{min-height:30px;padding:4px 10px;border:1px solid var(--border2);color:var(--text)}
+.tabs .undo .btn:disabled{opacity:.35;cursor:default}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px}
 .h2{margin:0 0 8px;font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:500}
 .hint{font-size:11px;color:var(--muted);line-height:1.5;margin:6px 0 0}
@@ -142,6 +145,7 @@ input.wk.on{border-color:#4a6a90}
 .bar{position:absolute;pointer-events:none;display:flex;align-items:center;padding:0 8px;font-family:var(--mono);font-size:11px;white-space:nowrap;overflow:visible}
 .bar.leaf{top:17%;bottom:17%;border-radius:5px;background:rgba(126,184,247,.55);box-shadow:inset 5px 0 0 rgba(255,255,255,.5),inset -5px 0 0 rgba(255,255,255,.5)}
 .bar.leaf.sub{background:rgba(126,184,247,.42)}
+.bar.leaf.picked{outline:2px solid var(--text);outline-offset:1px}
 .bar.parent{top:28%;bottom:28%;border-radius:4px;background:rgba(201,167,255,.14);border:1px dashed rgba(201,167,255,.6)}
 .bar.cat{top:40%;bottom:40%;border-radius:3px;background:rgba(247,201,126,.55);box-shadow:-2px 0 0 rgba(247,201,126,.9),2px 0 0 rgba(247,201,126,.9)}
 .tsum{display:flex;gap:10px;align-items:flex-start}
@@ -225,7 +229,7 @@ pre.latex{background:var(--bg);border:1px solid var(--border);border-radius:6px;
 // ── state ────────────────────────────────────────────────────────────────────────────────────────────────────
 const S = {
   cfg: null, me: null, view: 'proposals', proposals: [], people: [], pid: null, P: null, prev: null,
-  tab: 'plan', sel: null, lastChange: 0, lit: {}, saving: 0, table: null, tableOut: null, snaps: null,
+  tab: 'plan', sel: null, barSel: null, lastChange: 0, lit: {}, saving: 0, table: null, tableOut: null, snaps: null,
 };
 const TABS = [['plan', 'Plan'], ['team', 'Team'], ['budget', 'Travel & budget'], ['tables', 'Tables'], ['snapshots', 'Snapshots'], ['settings', 'Settings']];
 const TABLE_NAMES = {
@@ -323,6 +327,7 @@ function closeModal() { const m = $('#modal'); m.hidden = true; m.innerHTML = ''
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
   if (!$('#modal').hidden) closeModal();
+  else if (S.barSel != null) unpickBar();
   else if (S.open != null && S.tab === 'plan') { S.open = null; render(); }
 });
 function ask(title, text, buttons) {          // buttons: [[label, value, cls]] → Promise of the value (null if closed)
@@ -452,7 +457,7 @@ function go(view) {
 document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
 
 async function openProposal(pid) {
-  S.view = 'proposal'; S.pid = pid; S.tab = 'plan'; S.sel = null; S.open = null; S.prev = null; S.table = null; S.tableOut = null; S.snaps = null;
+  S.view = 'proposal'; S.pid = pid; S.tab = 'plan'; S.sel = null; S.barSel = null; S.open = null; S.prev = null; S.table = null; S.tableOut = null; S.snaps = null;
   setNav('proposal');
   $('#app').innerHTML = '<p class="empty">Opening the work plan…</p>';
   try {
@@ -648,9 +653,9 @@ function editPerson(person) {
                   expertise: $('#pp-exp').value, pronoun: $('#pp-pron').value };
       if (!own) f.email = $('#pp-email').value;
       try {
-        const r = person ? (S.pid ? await change('updatePerson', person.id, Object.assign({ version: person.version }, f))
+        const r = person ? (S.pid ? await change('updatePerson', person.id, Object.assign({ version: person.version, made_in: S.pid }, f))   // undone in this plan
                                   : await api('updatePerson', person.id, Object.assign({ version: person.version }, f)))
-                         : await api('createPerson', f);
+                         : await api('createPerson', S.pid ? Object.assign({ made_in: S.pid }, f) : f);
         closeModal(); toast('Profile saved.', true);
         await Promise.all([loadPeople(), loadMe()]); if (!S.pid) render();
         resolve(r.person);
@@ -669,8 +674,45 @@ function viewProposal() {
   const body = { plan: viewPlan, team: viewTeam, budget: viewBudget, tables: viewTables, snapshots: viewSnapshots, settings: viewSettings }[S.tab]();
   return '<div class="ptitle"><h1>' + esc(p.title) + '</h1><span class="meta">' + esc(p.program || 'no program set') + ' · ' + p.n_years + ' year' + (p.n_years === 1 ? '' : 's') +
     ' · full editors: ' + esc(leads || '—') + (P.you.member_id ? '' : ' · viewing as admin') + '</span></div>' +
-    '<nav class="tabs" aria-label="Work plan sections">' + TABS.map(t => '<button type="button" data-tab="' + t[0] + '" aria-current="' + (S.tab === t[0] ? 'page' : 'false') + '">' + esc(t[1]) + '</button>').join('') + '</nav>' + body;
+    '<nav class="tabs" aria-label="Work plan sections">' + TABS.map(t => '<button type="button" data-tab="' + t[0] + '" aria-current="' + (S.tab === t[0] ? 'page' : 'false') + '">' + esc(t[1]) + '</button>').join('') +
+    undoButtons() + '</nav>' + body;
 }
+
+// ── undo and redo: your own changes to this work plan, one at a time (kept by the server, so they survive a reload) ──
+const MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+const KEYS = { undo: MAC ? '⌘Z' : 'Ctrl+Z', redo: MAC ? '⇧⌘Z' : 'Ctrl+Y' };
+const canUndo = () => !!(S.P && 'undo' in S.P.you && S.cfg && S.cfg.coreLibraryVersion >= 3);   // a server and Core library that know undo
+function undoButtons() {
+  if (!canUndo()) return '';
+  const b = (which, icon, word) => {
+    const what = S.P.you[which];
+    return '<button type="button" class="btn" data-undo="' + which + '"' + (what ? '' : ' disabled') + ' title="' +
+      esc(what ? word + ' ' + what + ' (' + KEYS[which] + ')' : 'Nothing to ' + word.toLowerCase()) + '">' + icon + ' ' + word + '</button>';
+  };
+  return '<span class="undo">' + b('undo', '↶', 'Undo') + b('redo', '↷', 'Redo') + '</span>';
+}
+async function undoRedo(which) {
+  if (!canUndo() || undoRedo.busy) return;
+  undoRedo.busy = true;
+  try {
+    for (let t = 0; S.saving && t < 150; t++) await new Promise(r => setTimeout(r, 100));     // a change still being saved goes first
+    if (!S.P.you[which]) { toast(which === 'undo' ? 'Nothing to undo: your changes to this work plan are all undone.' : 'Nothing to redo.'); return; }
+    const r = await change(which, S.pid);
+    toast((which === 'undo' ? 'Undone: ' : 'Redone: ') + r.done + '.', true);
+  } catch (e) { showError(e); reloadProposal(); }
+  finally { undoRedo.busy = false; }
+}
+// Ctrl+Z (⌘Z) undoes, Ctrl+Y or Ctrl+Shift+Z (⇧⌘Z) redoes. While you are typing in a box, they undo and redo the typing instead.
+document.addEventListener('keydown', e => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+  const k = (e.key || '').toLowerCase(), which = k === 'z' ? (e.shiftKey ? 'redo' : 'undo') : k === 'y' && !e.shiftKey ? 'redo' : null;
+  if (!which || S.view !== 'proposal' || !S.P || !$('#modal').hidden || DRAG || !canUndo()) return;
+  const box = e.target.closest && e.target.closest('textarea,[contenteditable],input:not([type=checkbox]):not([type=radio]):not([type=button])');
+  if (box && (box.isContentEditable || box.value !== box.defaultValue)) return;       // something typed: the box's own undo
+  e.preventDefault();
+  if (box) box.blur();
+  undoRedo(which);
+});
 
 // The tree, in order, with depth and label.
 function tree() {
@@ -773,7 +815,7 @@ function viewPlan() {
     let s, e;
     if (leaf) { s = wIndex(it.start_year, it.start_week); e = wIndex(it.end_year, it.end_week); }
     else { const c = P.computed.items[it.id] || {}; s = c.start ? wIndex(c.start[0], c.start[1]) : null; e = c.end ? wIndex(c.end[0], c.end[1]) : null; }
-    const kind = d === 0 ? 'cat' : leaf ? (d === 2 ? 'leaf sub' : 'leaf') : 'parent';
+    const kind = d === 0 ? 'cat' : leaf ? (d === 2 ? 'leaf sub' : 'leaf') + (S.barSel === it.id ? ' picked' : '') : 'parent';
     const chips = work.map(a => {
       const m = a.is_team ? null : memberById(a.member_id), u = m && isColl(m) ? 'all' : Math.min(+a.unfunded || 0, +a.weeks || 0);
       return (a.is_team ? 'team' : (m || {}).short_id) + (a.is_lead ? '★' : '') + ' ' + wk(a.weeks) + 'w' + (u === 'all' ? ' (all unf.)' : u > 0 ? ' (' + wk(u) + ' unf.)' : '');
@@ -804,7 +846,8 @@ function viewPlan() {
     '<div class="scroll' + (zoomed ? ' zoomed' : '') + '" id="plan-scroll" style="' + calBg(pxw) + '"><div style="min-width:' + minW + 'px">' + head +
     (rows || '<p class="muted" style="padding:14px 4px">No task categories yet. Start with a task category (a group of related tasks), then add tasks to it.</p>') + '</div></div>' +
     '<div class="row" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"><button type="button" class="btn" data-act="addCategory">+ Task category</button>' +
-    '<span class="hint" style="margin:0;flex:1;min-width:260px">Drag across a task\'s row to draw its bar, week by week; drag a bar\'s ends (the cursor becomes ↔) to lengthen or shorten it, or its middle to move it. ' +
+    '<span class="hint" style="margin:0;flex:1;min-width:260px">Drag across a task\'s row to draw its bar, week by week; drag a bar\'s ends (the cursor becomes ↔) to lengthen or shorten it, or its middle to move it; click a bar and press Delete to remove it. ' +
+    'Undo (' + KEYS.undo + ') takes back your last change, one at a time; Redo (' + KEYS.redo + ') puts it back. ' +
     (cols ? 'Type weeks straight into a person\'s column (a gray (2) is weeks they get through "team"); ★ makes them the task lead. ' : '') + 'Click a title for its details; Close (or Return, or Esc) hides them. Titles in <b style="color:var(--accent2)">gold</b> are task categories, ' +
     'in <b style="color:var(--parent)">lavender</b> tasks with subtasks; the others hold the effort. ' +
     'The FTE column keeps a running total for each row as you go: a task\'s own effort, a task with subtasks its subtasks\' (in italics), a task category its tasks\' (in bold). ' +
@@ -911,7 +954,7 @@ function viewItem(n, nodes) {
 const HELP = {
   short: 'The schedule and task management tables keep each title to one line: they show the short title when there is one, otherwise the title, cut short with "…" if it is too long for the line. The plan shows it too; hover over a title there to see the full title.',
   description: 'For your team only: it shows when you hover over the title in the plan (a dotted underline marks titles that have one), and is never printed in the tables.',
-  timeline: 'Or drag its bar on the calendar. A year has 52 weeks: Q1 is weeks 1–13, Q2 14–26, Q3 27–39, Q4 40–52.',
+  timeline: 'Or drag its bar on the calendar (click the bar and press Delete to remove it). A year has 52 weeks: Q1 is weeks 1–13, Q2 14–26, Q3 27–39, Q4 40–52.',
   get weeks() { return 'Each person\'s total effort on this item, in weeks. The green figure beside it is that effort in FTE, counted over the whole item (weeks ÷ ' + ((S.P && S.P.proposal.weeks_per_fte) || 52) + '), updated as you type; the panel below the calendar shows how it lands in each year once saved.'; },
   unfunded: 'The part of the weeks not paid by this proposal. For example, 1.5 weeks with 0.5 unfunded is 1.0 week funded plus 0.5 week unfunded. A collaborator\'s weeks are all unfunded.'
 };
@@ -1194,6 +1237,15 @@ const ACTIONS = {
     await api('saveSnapshot', S.pid, $('#snap-name').value);
     S.snaps = null; toast('Snapshot saved.', true); render();
   }),
+  deleteTimeline: () => attempt(async () => {
+    const it = S.P.items.find(i => i.id === S.barSel); if (!it || it.start_year == null) { unpickBar(); return; }
+    const when = span([it.start_year, it.start_week], [it.end_year, it.end_week]);
+    const ok = await ask('Delete this timeline?', 'The bar of ' + labelOf(it.id) + ' "' + (it.title || '(untitled)') + '" (' + when + ') is taken off the calendar. ' +
+      'Its people and weeks stay, but until it has a timeline again its weeks are not counted in any year (Checks lists it). Drag across its row to draw a new bar.', [['OK', true, 'danger']]);
+    if (!ok) return;
+    S.barSel = null;
+    await change('updateItem', it.id, { version: it.version, start_year: null, start_week: null, end_year: null, end_week: null });
+  }),
   deleteItem: () => attempt(async () => {
     const pre = await api('deleteItem', S.sel, false);
     const ok = await ask('Delete this item?', pre.message + ' A snapshot is saved first, so it can be undone.', [['Delete', true, 'danger']]);
@@ -1274,15 +1326,29 @@ function moveDrag(ev) {
 function endDrag() {
   const d = DRAG; DRAG = null;
   if (!d) return;
+  S.barSel = d.id; S.sel = d.id;                                     // the bar just clicked or dragged is the one Delete removes
+  if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
   if (d.s === d.s0 && d.e === d.e0) { render(); return; }            // nothing changed: put the bar back as it was
   const [sy, sw] = yw(d.s), [ey, ew] = yw(d.e);
   attempt(() => change('updateItem', d.id, { version: d.it.version, start_year: sy, start_week: sw, end_year: ey, end_week: ew }));
 }
 
+// ── a clicked bar: Delete (or Backspace) removes it, once OK is pressed ─────────────────────────────────────────
+function unpickBar() { S.barSel = null; document.querySelectorAll('.bar.picked').forEach(b => b.classList.remove('picked')); }
+document.addEventListener('pointerdown', ev => {                    // a click anywhere else lets go of the bar (without redrawing the page)
+  if (S.barSel != null && !ev.target.closest('.tl.leaf[data-tl="' + S.barSel + '"]')) unpickBar();
+}, true);
+document.addEventListener('keydown', e => {
+  if ((e.key !== 'Delete' && e.key !== 'Backspace') || S.barSel == null || !$('#modal').hidden || S.view !== 'proposal' || S.tab !== 'plan') return;
+  if (e.target.closest('input,textarea,select,[contenteditable]')) return;          // typing in a box deletes text, as usual
+  e.preventDefault(); ACTIONS.deleteTimeline();
+});
+
 function wire() {
   const app = $('#app');
   app.querySelectorAll('[data-zoom]').forEach(b => b.onclick = () => setPlanZoom(b.dataset.zoom === 'fit' ? 0 : planZoom() + +b.dataset.zoom));
   app.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openProposal(b.dataset.open));
+  app.querySelectorAll('[data-undo]').forEach(b => b.onclick = () => undoRedo(b.dataset.undo));
   app.querySelectorAll('[data-act]').forEach(b => {
     if (b.tagName === 'SELECT') return;
     b.onclick = () => ACTIONS[b.dataset.act] && ACTIONS[b.dataset.act]();

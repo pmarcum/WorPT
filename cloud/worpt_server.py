@@ -100,11 +100,12 @@ def create_app(db_path=None, credential=None, read_credential=None):
     def people(): return ok(people=store.people(user(), request.args.get('q', '')))
 
     @app.post('/api/people')
-    def add_person(): return ok(person=store.create_person(user(), body()))
+    def add_person():
+        b = body(); made_in = b.pop('made_in', None); return ok(person=store.create_person(user(), b, made_in))
 
     @app.patch('/api/people/<int:person_id>')
     def edit_person(person_id):
-        b = body(); return ok(person=store.update_person(user(), person_id, b.pop('version', None), b))
+        b = body(); made_in = b.pop('made_in', None); return ok(person=store.update_person(user(), person_id, b.pop('version', None), b, made_in))
 
     @app.get('/api/proposals')
     def proposals(): return ok(proposals=store.list_proposals(user()))
@@ -140,6 +141,13 @@ def create_app(db_path=None, credential=None, read_credential=None):
 
     @app.delete('/api/snapshots/<int:snapshot_id>')
     def delete_snapshot(snapshot_id): return ok(deleted=store.delete_snapshot(user(), snapshot_id))
+
+    # Undo and redo (Ctrl+Z and Ctrl+Y in the dashboard): the person's own changes to this work plan, one step at a time.
+    @app.post('/api/proposals/<pid>/undo')
+    def undo(pid): return ok(**store.travel(user(), pid, 'undo'))
+
+    @app.post('/api/proposals/<pid>/redo')
+    def redo(pid): return ok(**store.travel(user(), pid, 'redo'))
 
     @app.get('/api/proposals/<pid>/history')
     def history(pid): return ok(history=store.history(user(), pid, request.args.get('limit', 200)))

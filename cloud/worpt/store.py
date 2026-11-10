@@ -4,6 +4,12 @@ Every editable row carries a `version`; an update must quote the version it star
 refused as a conflict and the current row is returned (nothing is overwritten silently). Every change is
 written to the `history` table (who, when, the row before and after), so anything can be restored.
 
+Undo and redo: everything one request changes is one step (the `steps` table; its rows in `history` carry the
+step's number). A person can undo their own steps in a work plan, newest first, as far back as they like, and redo
+what they undid until they make a new change there. A step is undone field by field: only what it changed is put
+back, and only if nobody has changed it since (otherwise it is skipped, with a message saying who changed it).
+Row ids are never used twice, so a deleted row comes back under its own id.
+
 Who may do what (agreed 5 November 2026):
   * admin (ADMIN_EMAILS) and core (CORE_MEMBERS) may create proposals; access-code users may not.
   * admins see every proposal; everyone else sees the proposals they are on.
@@ -54,6 +60,11 @@ CREATE TABLE IF NOT EXISTS snapshots (
   id INTEGER PRIMARY KEY, proposal_id TEXT NOT NULL REFERENCES proposals(id) ON DELETE CASCADE,
   at TEXT NOT NULL, user TEXT NOT NULL, kind TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', data TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS snapshots_proposal ON snapshots (proposal_id, id);
+CREATE TABLE IF NOT EXISTS steps (
+  id INTEGER PRIMARY KEY, at TEXT NOT NULL, user TEXT NOT NULL, proposal_id TEXT, kind TEXT NOT NULL DEFAULT 'do',
+  state TEXT NOT NULL DEFAULT 'done', undoes INTEGER);
+CREATE INDEX IF NOT EXISTS steps_user ON steps (user, proposal_id, state, id);
+CREATE TABLE IF NOT EXISTS top_ids (tbl TEXT PRIMARY KEY, top INTEGER NOT NULL);
 """
 LEVELS = ('goal', 'task', 'subtask')
 TRAVEL_DEFAULT = dict(airfare=[0, 0, 0], perdiem=[0, 0, 0], conference=[0, 0, 0], ground=[0, 0, 0], days=[0, 0])
@@ -71,7 +82,9 @@ AUTO_SNAPSHOT_DAYS = 60          # automatic snapshots are kept this long; named
 # Columns added after the first release, so an existing database gains them when the server starts.
 ADDED_COLUMNS = [('people', 'expertise', "TEXT NOT NULL DEFAULT ''"), ('people', 'pronoun', "TEXT NOT NULL DEFAULT ''"),
                  ('items', 'start_week', 'INTEGER'), ('items', 'end_week', 'INTEGER'), ('items', 'short_title', "TEXT NOT NULL DEFAULT ''"),
-                 ('items', 'description', "TEXT NOT NULL DEFAULT ''")]   # a note on what the item stands for; shown in the dashboard only
+                 ('items', 'description', "TEXT NOT NULL DEFAULT ''"),   # a note on what the item stands for; shown in the dashboard only
+                 ('history', 'step', 'INTEGER')]                         # the step (request) a change was part of, for undo
+ID_TABLES = ('people', 'members', 'items', 'assignments', 'nonlabor')      # numbered rows; a number is never used twice
 TIMELINE = ('start_year', 'start_week', 'end_year', 'end_week')
 
 
@@ -112,6 +125,18 @@ class WorptError(Exception):
         super().__init__(message); self.message, self.code, self.extra = message, code, extra
 
 
+class Stuck(Exception):
+    """A step can't be undone or redone: `tbl` row `rid` changed since (or `reason` says why)."""
+    def __init__(self, tbl=None, rid=None, reason=''):
+        super().__init__(reason); self.tbl, self.rid, self.reason = tbl, rid, reason
+
+
+class Connection(sqlite3.Connection):
+    """A database connection that knows the step its changes belong to: `kind` is 'do' (an ordinary change), 'undo'
+    or 'redo'; `made_in` is the work plan open in the dashboard when a profile was changed."""
+    step, kind, made_in = None, 'do', None
+
+
 class User:
     def __init__(self, email, access):
         self.email, self.access = (email or '').strip().lower(), access   # access: 'admin', 'core' or 'code'
@@ -139,17 +164,36 @@ class Store:
             # roles are numbered by WorPT, and labels come from roles (from November 2026): bring older members in line
             for (pid,) in db.execute('SELECT DISTINCT proposal_id FROM members').fetchall():
                 self.renumber_roles(db, User('worpt-server', 'admin'), pid)
+            db.execute('CREATE INDEX IF NOT EXISTS history_step ON history (step)')
+            for tbl in ID_TABLES:                   # the highest number each kind of row has ever had, deleted rows included
+                top = max(db.execute(f'SELECT coalesce(max(id), 0) FROM {tbl}').fetchone()[0],
+                          db.execute('SELECT coalesce(max(CAST(row_id AS INTEGER)), 0) FROM history WHERE tbl = ?', (tbl,)).fetchone()[0])
+                db.execute('INSERT INTO top_ids (tbl, top) VALUES (?, ?) ON CONFLICT (tbl) DO UPDATE SET top = max(top, excluded.top)', (tbl, top))
 
     @contextlib.contextmanager
     def connect(self):
         """One transaction: everything inside is saved together, or (on any refusal or error) nothing is."""
-        db = sqlite3.connect(self.path, timeout=30)
+        db = sqlite3.connect(self.path, timeout=30, factory=Connection)
         db.row_factory = sqlite3.Row
         db.execute('PRAGMA foreign_keys = ON'); db.execute('PRAGMA journal_mode = WAL')
         try:
-            with db: yield db
+            with db:
+                yield db
+                self.finish_step(db)
         finally:
             db.close()
+
+    @staticmethod
+    def finish_step(db):
+        """A step belongs to the work plan it changed (or, for a profile, the one open in the dashboard; none if it
+        changed several). A new change there ends what its author could redo there."""
+        if db.step is None: return
+        pids = {r[0] for r in db.execute('SELECT DISTINCT proposal_id FROM history WHERE step = ?', (db.step,))} - {None}
+        pid = db.made_in or (next(iter(pids)) if len(pids) == 1 else None)
+        db.execute('UPDATE steps SET proposal_id = ? WHERE id = ?', (pid, db.step))
+        if pid and db.kind == 'do':
+            db.execute("UPDATE steps SET state = 'dead' WHERE user = (SELECT user FROM steps WHERE id = ?) AND proposal_id = ? AND state = 'undone'",
+                       (db.step, pid))
 
     # ------------------------------------------------ small helpers
     @staticmethod
@@ -168,9 +212,20 @@ class Store:
         return [self.row(r) for r in db.execute(sql, args).fetchall()]
 
     def log(self, db, user, proposal_id, tbl, row_id, action, before=None, after=None):
-        db.execute('INSERT INTO history (at, user, proposal_id, tbl, row_id, action, before, after) VALUES (?,?,?,?,?,?,?,?)',
+        if db.step is None:
+            db.step = db.execute('INSERT INTO steps (at, user, kind) VALUES (?,?,?)', (now(), user.email, db.kind)).lastrowid
+        db.execute('INSERT INTO history (at, user, proposal_id, tbl, row_id, action, before, after, step) VALUES (?,?,?,?,?,?,?,?,?)',
                    (now(), user.email, proposal_id, tbl, str(row_id), action,
-                    None if before is None else json.dumps(before), None if after is None else json.dumps(after)))
+                    None if before is None else json.dumps(before), None if after is None else json.dumps(after), db.step))
+
+    @staticmethod
+    def new_id(db, tbl, rid=None):
+        """A number for a new row: one never used before in this table (or `rid`, a row's own number, put back)."""
+        top = max(db.execute('SELECT coalesce(max(top), 0) FROM top_ids WHERE tbl = ?', (tbl,)).fetchone()[0],
+                  db.execute(f'SELECT coalesce(max(id), 0) FROM {tbl}').fetchone()[0])
+        rid = top + 1 if rid is None else rid
+        db.execute('INSERT INTO top_ids (tbl, top) VALUES (?, ?) ON CONFLICT (tbl) DO UPDATE SET top = max(top, excluded.top)', (tbl, max(top, rid)))
+        return rid
 
     def get(self, db, tbl, rid, what):
         r = self.one(db, f'SELECT * FROM {tbl} WHERE id = ?', rid)
@@ -194,6 +249,7 @@ class Store:
 
     def insert_row(self, db, user, tbl, values, proposal_id):
         self.daily_snapshot(db, user, proposal_id)
+        if tbl in ID_TABLES: values = dict(values, id=self.new_id(db, tbl, values.get('id')))
         cols = ', '.join(values)
         vals = [json.dumps(v) if k in JSON_COLS else v for k, v in values.items()]
         cur = db.execute(f'INSERT INTO {tbl} ({cols}) VALUES ({",".join("?" * len(values))})', vals)
@@ -257,8 +313,14 @@ class Store:
             if other: raise WorptError(f'{email} already belongs to the profile of {other["first"]} {other["last"]}; '
                                        'each Google email can have only one profile.', 'duplicate_email', existing=other)
 
-    def create_person(self, user, fields):
+    def made_in(self, db, user, proposal_id):
+        """A profile changed while a work plan is open is undone there (when the person may see that plan)."""
+        if proposal_id and self.one(db, 'SELECT id FROM proposals WHERE id = ?', proposal_id) and (user.admin or self.membership(db, user, proposal_id)):
+            db.made_in = proposal_id
+
+    def create_person(self, user, fields, made_in=None):
         with self.connect() as db:
+            self.made_in(db, user, made_in)
             if not (user.core or self.is_any_lead(db, user)):
                 raise WorptError('Only admins, core members and full editors of a work plan can add people.')
             f = self.clean_person({k: v for k, v in fields.items() if k in EDITABLE['people']})
@@ -266,8 +328,9 @@ class Store:
             self.check_email_free(db, f.get('email'))
             return self.insert_row(db, user, 'people', f, None)
 
-    def update_person(self, user, person_id, version, fields):
+    def update_person(self, user, person_id, version, fields, made_in=None):
         with self.connect() as db:
+            self.made_in(db, user, made_in)
             if not self.can_edit_person(db, user, person_id):
                 raise WorptError("You can edit your own profile, or the profiles of people on work plans where you are a full editor.")
             f = self.clean_person({k: v for k, v in fields.items() if k in EDITABLE['people']})
@@ -672,8 +735,9 @@ class Store:
         with self.connect() as db:
             p = self.proposal(db, user, proposal_id)
             m = self.membership(db, user, proposal_id)
+            ways = {w: (lambda s: s and self.describe(db, s['id']))(self.next_step(db, user, proposal_id, w)) for w in ('undo', 'redo')}
             return dict(self.export(db, proposal_id), last_change=self.last_change(db, proposal_id), you=dict(email=user.email, access=user.access,
-                        member_id=m and m['id'], lead=bool(m and m['is_lead']), can_manage_team=user.admin or bool(m and m['is_lead'])))
+                        member_id=m and m['id'], lead=bool(m and m['is_lead']), can_manage_team=user.admin or bool(m and m['is_lead']), **ways))
 
     def history(self, user, proposal_id, limit=200):
         with self.connect() as db:
@@ -730,41 +794,307 @@ class Store:
                 raise WorptError('That snapshot is from before you were a full editor of this work plan, so restoring it would take '
                                  'away your access. Ask another full editor or an admin to restore it.', 'refused')
             self.snapshot(db, user, pid, 'before', f'Before restoring the snapshot of {s["at"]}')
-            p = data['proposal']
-            db.execute('UPDATE proposals SET title = ?, program = ?, n_years = ?, rounding = ?, travel = ?, version = version + 1 WHERE id = ?',
-                       (p['title'], p['program'], p['n_years'], p['rounding'], json.dumps(p['travel']), pid))
-            for tbl in ('items', 'members', 'nonlabor'):                  # assignments go with their items and members
-                db.execute(f'DELETE FROM {tbl} WHERE proposal_id = ?', (pid,))
+            p, cur = data['proposal'], self.one(db, 'SELECT * FROM proposals WHERE id = ?', pid)
+            settings = dict(title=p['title'], program=p['program'], n_years=p['n_years'], rounding=p['rounding'], travel=p['travel'])
+            if any(cur[k] != v for k, v in settings.items()):
+                self.update_row(db, user, 'proposals', pid, cur['version'], settings, pid, 'proposal')
+            # take away what is there now, one recorded row at a time (effort first, subtasks before their tasks)
+            now_items = self.all(db, 'SELECT * FROM items WHERE proposal_id = ?', pid)
+            ids = [i['id'] for i in now_items] or [-1]
+            for a in self.all(db, f'SELECT id FROM assignments WHERE item_id IN ({",".join("?" * len(ids))}) ORDER BY id', *ids):
+                self.delete_row(db, user, 'assignments', a['id'], pid, 'assignment')
+            for i in sorted(now_items, key=lambda i: -self.depth(db, i['id'])):
+                self.delete_row(db, user, 'items', i['id'], pid, 'item')
+            for tbl, what in (('nonlabor', 'budget line'), ('members', 'team member')):
+                for r in self.all(db, f'SELECT id FROM {tbl} WHERE proposal_id = ? ORDER BY id', pid):
+                    self.delete_row(db, user, tbl, r['id'], pid, what)
+            # then put the snapshot's rows back under their own numbers (a new one only if another row has the number)
+            free = lambda tbl, rid: rid is not None and not db.execute(f'SELECT 1 FROM {tbl} WHERE id = ?', (rid,)).fetchone()
+            own = lambda tbl, rid: rid if free(tbl, rid) else None
             member_id, back = {}, []
             for m in data['members']:                                       # people still on file, numbered as they are today
                 person = self.one(db, 'SELECT * FROM people WHERE id = ?', m['person_id'])
                 if person is None: continue
                 back.append(dict(m, last=person['last'], role=canonical_role(m['role']) if person['us'] else 'coll(0)'))
             for m, role in numbered_roles(back):
-                cur = db.execute('INSERT INTO members (proposal_id, person_id, short_id, role, is_lead, fte_accuracy, bio_summary, task_summary, trips) '
-                                 'VALUES (?,?,?,?,?,?,?,?,?)', (pid, m['person_id'], role_label(role), role, int(m['is_lead']), m['fte_accuracy'],
-                                                                m['bio_summary'], m['task_summary'], json.dumps(m['trips'])))
-                member_id[m['id']] = cur.lastrowid
+                member_id[m['id']] = self.insert_row(db, user, 'members', dict(
+                    id=own('members', m['id']), proposal_id=pid, person_id=m['person_id'], short_id=role_label(role), role=role, is_lead=int(m['is_lead']),
+                    fte_accuracy=m['fte_accuracy'], bio_summary=m['bio_summary'], task_summary=m['task_summary'], trips=m['trips']), pid)['id']
             item_id, pending = {}, [weeks_from_quarters(dict(i)) for i in data['items']]   # snapshots saved before weeks have quarters
             while pending:                                                  # parents before their children
                 ready = [i for i in pending if i['parent_id'] is None or i['parent_id'] in item_id]
                 if not ready: break
                 for i in ready:
-                    cur = db.execute('INSERT INTO items (proposal_id, parent_id, position, title, short_title, description, start_year, start_week, end_year, end_week) '
-                                     'VALUES (?,?,?,?,?,?,?,?,?,?)',
-                                     (pid, item_id.get(i['parent_id']), i['position'], i['title'], i.get('short_title', ''),   # older snapshots have
-                                      i.get('description', ''), i['start_year'], i['start_week'], i['end_year'], i['end_week']))  # neither of these
-                    item_id[i['id']] = cur.lastrowid
+                    item_id[i['id']] = self.insert_row(db, user, 'items', dict(
+                        id=own('items', i['id']), proposal_id=pid, parent_id=item_id.get(i['parent_id']), position=i['position'], title=i['title'],
+                        short_title=i.get('short_title', ''), description=i.get('description', ''),     # older snapshots have neither of these
+                        start_year=i['start_year'], start_week=i['start_week'], end_year=i['end_year'], end_week=i['end_week']), pid)['id']
                     pending.remove(i)
             for a in data['assignments']:
                 if a['item_id'] not in item_id or (not a['is_team'] and a['member_id'] not in member_id): continue
-                db.execute('INSERT INTO assignments (item_id, member_id, is_team, is_lead, weeks, unfunded, position) VALUES (?,?,?,?,?,?,?)',
-                           (item_id[a['item_id']], None if a['is_team'] else member_id[a['member_id']], int(a['is_team']), int(a['is_lead']),
-                            a['weeks'], a['unfunded'], a['position']))
+                self.insert_row(db, user, 'assignments', dict(
+                    id=own('assignments', a['id']), item_id=item_id[a['item_id']], member_id=None if a['is_team'] else member_id[a['member_id']],
+                    is_team=int(a['is_team']), is_lead=int(a['is_lead']), weeks=a['weeks'], unfunded=a['unfunded'], position=a['position']), pid)
             for r in data['nonlabor']:
-                db.execute('INSERT INTO nonlabor (proposal_id, position, item, amounts) VALUES (?,?,?,?)', (pid, r['position'], r['item'], json.dumps(r['amounts'])))
+                self.insert_row(db, user, 'nonlabor', dict(id=own('nonlabor', r['id']), proposal_id=pid, position=r['position'], item=r['item'],
+                                                           amounts=r['amounts']), pid)
             self.log(db, user, pid, 'proposal_snapshot', snapshot_id, 'restore', None, {'snapshot_at': s['at'], 'name': s['name']})
             return {'restored': s['at'], 'name': s['name']}
+
+    # ------------------------------------------------ undo and redo
+    def next_step(self, db, user, proposal_id, which):
+        """The step Ctrl+Z (or Ctrl+Y) would undo (redo) for this person in this work plan, or None. Undo goes back from
+        the newest; redo puts back the last one undone first. Creating the work plan is where undo stops."""
+        s = self.one(db, f"SELECT * FROM steps WHERE user = ? AND proposal_id = ? AND kind = 'do' AND state = ? ORDER BY id {'DESC' if which == 'undo' else 'ASC'} LIMIT 1",
+                     user.email, proposal_id, 'done' if which == 'undo' else 'undone')
+        if s and db.execute("SELECT 1 FROM history WHERE step = ? AND ((tbl = 'proposals' AND action = 'insert') OR (tbl = 'proposal_snapshot' AND action = 'delete'))",
+                            (s['id'],)).fetchone():
+            return None
+        return s
+
+    def step_rows(self, db, step_id):
+        rows = self.all(db, 'SELECT * FROM history WHERE step = ? ORDER BY id', step_id)
+        for r in rows: r['before'], r['after'] = (None if r[k] is None else json.loads(r[k]) for k in ('before', 'after'))
+        return rows
+
+    def travel(self, user, proposal_id, which):
+        """Undo (which='undo') or redo this person's step in this work plan, as one new step. If something it would put
+        back has changed since, nothing changes, the step is skipped (Ctrl+Z goes on to the one before it), and the
+        refusal says who changed what."""
+        try:
+            with self.connect() as db:
+                db.execute('BEGIN IMMEDIATE')                       # two quick presses never undo the same step twice
+                db.kind = which
+                self.proposal(db, user, proposal_id)
+                s = self.next_step(db, user, proposal_id, which)
+                if s is None: raise WorptError('Nothing to undo.' if which == 'undo' else 'Nothing to redo.', 'nothing')
+                what = self.describe(db, s['id'])
+                self.daily_snapshot(db, user, proposal_id)
+                self.replay(db, user, s, which)
+                db.execute('UPDATE steps SET state = ? WHERE id = ?', ('undone' if which == 'undo' else 'done', s['id']))
+                if db.step: db.execute('UPDATE steps SET undoes = ? WHERE id = ?', (s['id'], db.step))
+                return dict(done=what, **{w: (lambda n: n and self.describe(db, n['id']))(self.next_step(db, user, proposal_id, w)) for w in ('undo', 'redo')})
+        except Stuck as e:
+            with self.connect() as db:
+                db.execute("UPDATE steps SET state = 'dead' WHERE id = ?", (s['id'],))
+                why = e.reason or f'{self.who_changed(db, user, s, e)} changed it since, and that change stays'
+            more = 'Undo again to undo your change before it.' if which == 'undo' else 'It is taken off what Redo can put back.'
+            raise WorptError(f"{'Undo' if which == 'undo' else 'Redo'} of {what} was skipped: {why}. {more}", 'stuck')
+
+    def who_changed(self, db, user, s, e):
+        last = db.execute('SELECT max(id) FROM history WHERE step = ?', (s['id'],)).fetchone()[0]
+        r = (e.tbl and self.one(db, 'SELECT user FROM history WHERE tbl = ? AND row_id = ? AND id > ? ORDER BY id DESC LIMIT 1', e.tbl, str(e.rid), last)) or \
+            self.one(db, 'SELECT user FROM history WHERE proposal_id = ? AND id > ? AND user != ? ORDER BY id DESC LIMIT 1', s['proposal_id'], last, user.email)
+        if not r: return 'someone'
+        if r['user'] == user.email: return 'you'
+        p = self.one(db, 'SELECT first, last FROM people WHERE email = ?', r['user'])
+        return f"{p['first']} {p['last']}".strip() if p else r['user']
+
+    @staticmethod
+    def kind_of(role):                                              # co-I(2) -> co-I(0): numbers are WorPT's, not the person's
+        return re.sub(r'\(\s*\d+\s*\)\s*$', '(0)', role or '')
+
+    def same(self, tbl, current, expected, keys):
+        """Whether a row still holds what a step left in it, for these columns (numbers WorPT keeps in order by itself,
+        such as positions and role numbers, don't count)."""
+        for k in keys:
+            if k in ('version', 'position', 'short_id'): continue
+            a, b = current.get(k), expected.get(k)
+            if tbl == 'members' and k == 'role': a, b = self.kind_of(a), self.kind_of(b)
+            if a != b: return False
+        return True
+
+    def replay(self, db, user, s, which):
+        """Put back, row by row, what the step changed (which='undo', newest row first) or change it again ('redo')."""
+        rows = self.step_rows(db, s['id'])
+        plans = ({s['proposal_id']} | {h['proposal_id'] for h in rows}) - {None}
+        was = {pid: set(self.problems(db, pid)) for pid in plans}
+        rows = [h for h in rows if h['tbl'] in ID_TABLES + ('proposals',)]   # not the note that a restore happened: its rows are recorded one by one
+        for h in rows:                                                # rights are checked first, on the work plan as it stands
+            if h['before'] is None or h['after'] is None: self.allowed(db, user, s, h, h['before'] or h['after'])
+            elif self.changes(h['tbl'], h['before'], h['after']): self.allowed(db, user, s, h, self.changes(h['tbl'], h['before'], h['after']))
+        teams = set()
+        for h in (reversed(rows) if which == 'undo' else rows):
+            frm, to = (h['after'], h['before']) if which == 'undo' else (h['before'], h['after'])
+            rid = h['row_id'] if h['tbl'] == 'proposals' else int(h['row_id'])
+            self.apply(db, user, s, h, rid, frm, to)
+            if h['tbl'] == 'members': teams.add(h['proposal_id'])
+        for pid in teams: self.renumber_roles(db, user, pid)          # numbers and labels in order again
+        for pid in plans:                                             # WorPT's rules still kept
+            new = [m for m in self.problems(db, pid) if m not in was[pid]]
+            if new: raise Stuck(reason=new[0] + ', because of changes made since')
+
+    def changes(self, tbl, frm, to):
+        """The columns a change sets, and to what (a role renumbered by WorPT is not a change: numbers are given out again)."""
+        out = {k: v for k, v in to.items() if k not in ('version', 'short_id') and v != frm.get(k)}
+        if tbl == 'members' and 'role' in out and self.kind_of(out['role']) == self.kind_of(frm.get('role')): del out['role']
+        return out
+
+    def allowed(self, db, user, s, h, changes):
+        """The person may still make this change: they still see the work plan; team changes need a full editor (or
+        an admin); profiles, someone allowed to edit them. Side effects in other work plans (a profile's new last name
+        renumbering their teams) need nothing more."""
+        if h['tbl'] == 'people':
+            if not self.can_edit_person(db, user, h['row_id'] and int(h['row_id'])):
+                raise WorptError("You can edit your own profile, or the profiles of people on work plans where you are a full editor.")
+        elif h['proposal_id'] == s['proposal_id']:
+            team = h['tbl'] == 'members' and not set(changes) <= {'trips'}
+            self.proposal(db, user, h['proposal_id'], need='team' if team else 'view')
+
+    def plan_of_row(self, db, tbl, row):
+        if tbl in ('items', 'members', 'nonlabor'): return row.get('proposal_id')
+        if tbl == 'assignments':
+            it = self.one(db, 'SELECT proposal_id FROM items WHERE id = ?', row.get('item_id'))
+            return it and it['proposal_id']
+        if tbl == 'proposals': return row.get('id')
+        return None
+
+    def apply(self, db, user, s, h, rid, frm, to):
+        tbl, pid = h['tbl'], h['proposal_id']
+        cur = self.one(db, f'SELECT * FROM {tbl} WHERE id = ?', rid)
+        if cur is not None and tbl != 'people' and self.plan_of_row(db, tbl, cur) != pid: raise Stuck(tbl, rid)
+        if frm is None:                                                   # the row comes back (or is made again)
+            if cur is not None: raise Stuck(tbl, rid)
+            row = {k: v for k, v in to.items() if k != 'version'}
+            if tbl == 'members': row['short_id'] = f'~{rid}'               # its label is given out again below
+            if tbl == 'items':
+                parent = row['parent_id'] and self.one(db, 'SELECT proposal_id FROM items WHERE id = ?', row['parent_id'])
+                if row['parent_id'] and (not parent or parent['proposal_id'] != pid): raise Stuck('items', row['parent_id'])
+                row['position'] = self.place(db, pid, row['parent_id'], row['position'])
+            if tbl == 'assignments':
+                if self.plan_of_row(db, tbl, row) != pid: raise Stuck('items', row['item_id'])
+                m = row['member_id'] and self.one(db, 'SELECT proposal_id FROM members WHERE id = ?', row['member_id'])
+                if row['member_id'] and (not m or m['proposal_id'] != pid): raise Stuck('members', row['member_id'])
+            try:
+                db.execute(f'INSERT INTO {tbl} ({", ".join(row)}, version) VALUES ({",".join("?" * len(row))}, ?)',
+                           (*[json.dumps(v) if k in JSON_COLS else v for k, v in row.items()], to['version'] + 1))
+            except sqlite3.IntegrityError:
+                raise Stuck(tbl, rid)                                     # e.g. the person was put on the team again since
+            self.new_id(db, tbl, rid)
+            self.log(db, user, pid, tbl, rid, 'insert', None, self.get(db, tbl, rid, tbl))
+        elif to is None:                                                  # the row goes again
+            if cur is None or not self.same(tbl, cur, frm, frm): raise Stuck(tbl, rid)
+            below = {'items': (('items', 'parent_id'), ('assignments', 'item_id')), 'members': (('assignments', 'member_id'),),
+                     'people': (('members', 'person_id'),)}.get(tbl, ())
+            for child, col in below:                                      # added since, so it can't simply go
+                r = self.one(db, f'SELECT id FROM {child} WHERE {col} = ? LIMIT 1', rid)
+                if r: raise Stuck(child, r['id'])
+            db.execute(f'DELETE FROM {tbl} WHERE id = ?', (rid,))
+            if tbl == 'items': self.renumber(db, pid, cur['parent_id'])
+            self.log(db, user, pid, tbl, rid, 'delete', cur, None)
+        else:                                                             # the columns the step changed go back (or forward)
+            changes = self.changes(tbl, frm, to)
+            if not changes: return
+            if cur is None or not self.same(tbl, cur, frm, changes): raise Stuck(tbl, rid)
+            moving = tbl == 'items' and ('parent_id' in changes or 'position' in changes)
+            plain = {k: v for k, v in changes.items() if not (moving and k in ('parent_id', 'position'))}
+            if plain:
+                db.execute(f'UPDATE {tbl} SET {", ".join(f"{k} = ?" for k in plain)}, version = version + 1 WHERE id = ?',
+                           (*[json.dumps(v) if k in JSON_COLS else v for k, v in plain.items()], rid))
+            if moving:
+                parent = to['parent_id']
+                if parent is not None and not self.one(db, 'SELECT id FROM items WHERE id = ? AND proposal_id = ?', parent, pid): raise Stuck('items', parent)
+                self.renumber(db, pid, cur['parent_id'], skip=rid)
+                pos = self.place(db, pid, parent, to['position'], skip=rid)
+                db.execute('UPDATE items SET parent_id = ?, position = ?, version = version + 1 WHERE id = ?', (parent, pos, rid))
+                self.renumber(db, pid, parent)
+            self.log(db, user, pid, tbl, rid, 'update', cur, self.get(db, tbl, rid, tbl))
+
+    def problems(self, db, pid):
+        """How a work plan breaks WorPT's rules, if it does (an undo or redo, after changes made since, could make it)."""
+        out = []
+        items = {i['id']: i for i in self.all(db, 'SELECT * FROM items WHERE proposal_id = ?', pid)}
+        ids = list(items) or [-1]
+        work = self.all(db, f'SELECT * FROM assignments WHERE item_id IN ({",".join("?" * len(ids))})', *ids)
+        kids, depth = {}, {}
+        for i in items.values(): kids.setdefault(i['parent_id'], []).append(i['id'])
+        def d(i): return depth.setdefault(i, 0 if items[i]['parent_id'] is None else d(items[i]['parent_id']) + 1)
+        has_work = {a['item_id'] for a in work}
+        for i, it in items.items():
+            timed = any(it[k] is not None for k in TIMELINE)
+            if d(i) > 2: out.append(f'"{it["title"]}" would be a fourth level')
+            if (d(i) == 0 or i in kids) and (timed or i in has_work):
+                out.append(f'"{it["title"]}" would be {"a task with subtasks" if d(i) else "a task category"} with its own {"timeline" if timed else "effort"}')
+        seen, leads = set(), set()
+        for a in work:
+            k = (a['item_id'], a['member_id'], a['is_team'])
+            if k in seen: out.append(f'someone would be on "{items[a["item_id"]]["title"]}" twice')
+            if a['is_lead'] and a['item_id'] in leads: out.append(f'"{items[a["item_id"]]["title"]}" would have two task leads')
+            seen.add(k)
+            if a['is_lead']: leads.add(a['item_id'])
+        if not db.execute('SELECT 1 FROM members WHERE proposal_id = ? AND is_lead = 1', (pid,)).fetchone():
+            out.append('the work plan would have no full editor')
+        return out
+
+    def describe(self, db, step_id):
+        """A step in a few words, for the Undo and Redo buttons: 'moving the bar of "Calibrate"', 'adding Ann Lee to the team'."""
+        rows = self.step_rows(db, step_id)
+        restore = next((r for r in rows if r['tbl'] == 'proposal_snapshot' and r['action'] == 'restore'), None)
+        if restore: return f'restoring the snapshot "{restore["after"]["name"]}"' if restore['after'].get('name') else 'restoring a snapshot'
+        rows = [r for r in rows if r['tbl'] in ID_TABLES + ('proposals',)]
+        if not rows: return 'your last change'
+        gone = [r for r in rows if r['action'] == 'delete']
+        main = (next((r for r in reversed(gone) if r['tbl'] == 'items'), None) or next((r for r in gone if r['tbl'] == 'members'), None) or gone[0]) if gone \
+            else next((r for r in rows if r['action'] == 'insert'), rows[0])
+        b, a = main['before'] or {}, main['after'] or {}
+        row = a or b
+        changed = {k for k in set(a) | set(b) if k not in ('version', 'short_id') and a.get(k) != b.get(k)}
+        quote = lambda t: f'"{t if len(t) <= 40 else t[:38].rstrip() + "…"}"' if t else 'an untitled item'
+        def title(item_id):
+            it = self.one(db, 'SELECT title FROM items WHERE id = ?', item_id)
+            if it is None:
+                h = self.one(db, "SELECT before FROM history WHERE tbl = 'items' AND row_id = ? AND before IS NOT NULL ORDER BY id DESC LIMIT 1", str(item_id))
+                it = h and json.loads(h['before'])
+            return quote((it or {}).get('title', ''))
+        def name(person_id):
+            p = self.one(db, 'SELECT first, last FROM people WHERE id = ?', person_id)
+            return f"{p['first']} {p['last']}".strip() if p else 'someone'
+        def who(assignment):
+            if assignment.get('is_team'): return 'everyone not named'
+            m = self.one(db, 'SELECT person_id FROM members WHERE id = ?', assignment.get('member_id'))
+            if m is None:
+                h = self.one(db, "SELECT before FROM history WHERE tbl = 'members' AND row_id = ? AND before IS NOT NULL ORDER BY id DESC LIMIT 1",
+                             str(assignment.get('member_id')))
+                m = h and json.loads(h['before'])
+            return name(m['person_id']) if m else 'someone'
+        tbl, act = main['tbl'], main['action']
+        if tbl == 'items':
+            t = quote(row.get('title', ''))
+            if act == 'insert': return f'adding {t}'
+            if act == 'delete': return f'deleting {t}'
+            if changed & {'parent_id', 'position'}: return f'moving {t}'
+            if changed & set(TIMELINE):
+                return f'removing the bar of {t}' if a.get('start_year') is None else f'drawing the bar of {t}' if b.get('start_year') is None else f'changing the bar of {t}'
+            if 'title' in changed: return f'renaming {quote(b.get("title", ""))}'
+            if 'short_title' in changed: return f'changing the short title of {t}'
+            if 'description' in changed: return f'changing the description of {t}'
+            return f'changing {t}'
+        if tbl == 'assignments':
+            t, w = title(row.get('item_id')), who(row)
+            if act == 'insert': return f'putting {w} on {t}'
+            if act == 'delete': return f'taking {w} off {t}'
+            if 'is_lead' in changed: return f'changing the task lead of {t}'
+            if 'unfunded' in changed and 'weeks' not in changed: return f"changing {w}'s unfunded weeks on {t}"
+            if 'item_id' in changed: return f'moving the effort of {title(b.get("item_id"))} to {t}'
+            return f"changing {w}'s weeks on {t}"
+        if tbl == 'members':
+            n = name(row.get('person_id'))
+            if act == 'insert': return f'adding {n} to the team'
+            if act == 'delete': return f'taking {n} off the team'
+            if changed == {'trips'}: return f"changing {n}'s trips"
+            if 'is_lead' in changed: return f'changing whether {n} is a full editor'
+            if 'role' in changed: return f"changing {n}'s role"
+            return f"changing {n}'s team details"
+        if tbl == 'nonlabor':
+            t = quote(row.get('item', '')) if row.get('item') else 'a budget line'
+            return {'insert': f'adding the budget line {t}', 'delete': f'deleting the budget line {t}'}.get(act, f'changing the budget line {t}')
+        if tbl == 'proposals':
+            for k, words in (('title', 'renaming the work plan'), ('n_years', 'changing the number of years'), ('travel', 'changing the travel costs'),
+                             ('program', 'changing the program'), ('rounding', 'changing the rounding')):
+                if k in changed: return words
+            return "changing the work plan's settings"
+        if tbl == 'people': return f"adding {name(row.get('id'))}'s profile" if act == 'insert' else f"changing {name(row.get('id'))}'s profile"
+        return 'your last change'
 
     def model(self, proposal_id, data=None):
         """The proposal as worpt.model objects (for the effort engine and the tables), plus id maps for the dashboard."""

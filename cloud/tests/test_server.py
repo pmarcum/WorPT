@@ -744,3 +744,213 @@ def test_items_have_a_description_for_the_team_only(team, tmp_path):
         c.execute('UPDATE snapshots SET data = ? WHERE id = ?', (json.dumps(data), snap['id']))
     ann.ok('post', f"/api/snapshots/{snap['id']}/restore")
     assert {i['description'] for i in ann.ok('get', f'/api/proposals/{pid}')['items']} == {''}
+
+
+# ------------------------------------------------ undo and redo
+def full(api, pid):
+    """Everything about a work plan an undo should put back, ids included (but not versions)."""
+    d = api.ok('get', f'/api/proposals/{pid}')
+    strip = lambda rows: sorted(tuple(sorted((k, json.dumps(v)) for k, v in r.items() if k not in ('version', 'person_version'))) for r in rows)
+    return dict(proposal={k: v for k, v in d['proposal'].items() if k != 'version'},
+                members=strip(d['members']), items=strip(d['items']), work=strip(d['assignments']), budget=strip(d['nonlabor']))
+
+
+def undo(api, pid, which='undo', **expect):
+    out = api.ok('post', f'/api/proposals/{pid}/{which}')
+    for k, v in expect.items(): assert out[k] == v, out
+    return out
+
+
+def you(api, pid): return api.ok('get', f'/api/proposals/{pid}')['you']
+
+
+def item(api, pid, iid): return next(i for i in api.ok('get', f'/api/proposals/{pid}')['items'] if i['id'] == iid)
+
+
+def test_undo_and_redo_a_bar(team):
+    ann, pid, task = team['ann'], team['pid'], team['task']
+    plain = full(ann, pid)
+    task = timed(ann, task, (1, 5, 1, 20))
+    drawn = full(ann, pid)
+    assert you(ann, pid)['undo'] == 'drawing the bar of "Task A1"' and you(ann, pid)['redo'] is None
+    undo(ann, pid, done='drawing the bar of "Task A1"', redo='drawing the bar of "Task A1"')
+    assert full(ann, pid) == plain
+    undo(ann, pid, 'redo', done='drawing the bar of "Task A1"')
+    assert full(ann, pid) == drawn
+    t = item(ann, pid, task['id'])
+    ann.ok('patch', f"/api/items/{t['id']}", dict(version=t['version'], start_year=None, start_week=None, end_year=None, end_week=None))
+    assert you(ann, pid)['undo'] == 'removing the bar of "Task A1"'
+    undo(ann, pid)
+    assert full(ann, pid) == drawn
+
+
+def test_undo_goes_back_one_change_at_a_time_and_stops_where_the_plan_was_made(team):
+    ann, pid, task, m = team['ann'], team['pid'], team['task'], team['bob_m']
+    states = [full(ann, pid)]
+    task = timed(ann, task); states.append(full(ann, pid))
+    a = ann.ok('post', f"/api/items/{task['id']}/assignments", dict(member_id=m['id'], weeks=6))['assignment']; states.append(full(ann, pid))
+    ann.ok('patch', f"/api/assignments/{a['id']}", dict(version=a['version'], weeks=9, is_lead=True)); states.append(full(ann, pid))
+    t = item(ann, pid, task['id'])
+    ann.ok('patch', f"/api/items/{t['id']}", dict(version=t['version'], title='Renamed', description='Why')); states.append(full(ann, pid))
+    v = ann.ok('get', f'/api/proposals/{pid}')['proposal']
+    ann.ok('patch', f'/api/proposals/{pid}', dict(version=v['version'], travel=dict(v['travel'], airfare=[900, 0, 0]))); states.append(full(ann, pid))
+    line = ann.ok('post', f'/api/proposals/{pid}/nonlabor', dict(item='Publications', amounts=[1000, 0, 0]))['line']; states.append(full(ann, pid))
+    ann.ok('delete', f"/api/nonlabor/{line['id']}"); states.append(full(ann, pid))
+    words = ['deleting the budget line "Publications"', 'adding the budget line "Publications"', 'changing the travel costs', 'renaming "Task A1"',
+             'changing the task lead of "Task A1"', 'putting Bob Bobson on "Task A1"', 'drawing the bar of "Task A1"']
+    for k, w in enumerate(words):
+        undo(ann, pid, done=w)
+        assert full(ann, pid) == states[-2 - k], w
+    for k, w in enumerate(reversed(words)):                          # and all the way forward again (titles as they are now)
+        undo(ann, pid, 'redo', done=w.replace('"Task A1"', '"Renamed"') if k > 3 else w)
+        assert full(ann, pid) == states[k + 1], w
+    ann.no('post', f'/api/proposals/{pid}/redo', code='nothing')
+    for _ in words: undo(ann, pid)
+    undo(ann, pid, done='adding "Task A1"'); undo(ann, pid, done='adding "Goal A"')
+    undo(ann, pid, done='adding Bob Bobson to the team')
+    ann.no('post', f'/api/proposals/{pid}/undo', code='nothing')     # making the work plan itself is not undone
+    assert you(ann, pid)['undo'] is None and ann.ok('get', f'/api/proposals/{pid}')['items'] == []
+
+
+def test_undoing_a_delete_brings_everything_back_under_its_own_ids(team):
+    ann, pid, goal, task, m = team['ann'], team['pid'], team['goal'], team['task'], team['bob_m']
+    t2 = ann.ok('post', f'/api/proposals/{pid}/items', dict(title='Task A2', parent_id=goal['id']))['item']
+    sub = ann.ok('post', f'/api/proposals/{pid}/items', dict(title='Sub', parent_id=task['id']))['item']
+    sub = timed(ann, sub)
+    ann.ok('post', f"/api/items/{sub['id']}/assignments", dict(member_id=m['id'], weeks=3, is_lead=True))
+    ann.ok('post', f"/api/items/{sub['id']}/assignments", dict(is_team=True, weeks=1))
+    before = full(ann, pid)
+    ann.ok('delete', f"/api/items/{task['id']}?confirm=1")
+    assert item(ann, pid, t2['id'])['position'] == 0
+    assert you(ann, pid)['undo'] == 'deleting "Task A1"'
+    undo(ann, pid)
+    assert full(ann, pid) == before                                  # ids, positions, effort and leads
+    new = ann.ok('post', f'/api/proposals/{pid}/items', dict(title='New', parent_id=goal['id']))['item']
+    ann.ok('delete', f"/api/items/{new['id']}?confirm=1")
+    newer = ann.ok('post', f'/api/proposals/{pid}/items', dict(title='Newer', parent_id=goal['id']))['item']
+    assert newer['id'] > new['id']                                   # a number is never used twice
+
+
+def test_undoing_a_move_puts_the_item_back_in_its_place(team):
+    ann, pid, goal, task = team['ann'], team['pid'], team['goal'], team['task']
+    g2 = ann.ok('post', f'/api/proposals/{pid}/items', dict(title='Goal B'))['item']
+    t2 = ann.ok('post', f'/api/proposals/{pid}/items', dict(title='Task A2', parent_id=goal['id']))['item']
+    ann.ok('post', f'/api/proposals/{pid}/items', dict(title='Task B1', parent_id=g2['id']))
+    before = full(ann, pid)
+    task = item(ann, pid, task['id'])
+    ann.ok('patch', f"/api/items/{task['id']}", dict(version=task['version'], parent_id=g2['id'], position=1))
+    assert you(ann, pid)['undo'] == 'moving "Task A1"'
+    undo(ann, pid)
+    assert full(ann, pid) == before
+    t2 = item(ann, pid, t2['id'])
+    ann.ok('patch', f"/api/items/{t2['id']}", dict(version=t2['version'], position=0))       # within its task category
+    undo(ann, pid)
+    assert full(ann, pid) == before
+
+
+def test_undoing_a_new_subtask_gives_its_task_back_its_effort(team):
+    ann, pid, task, m = team['ann'], team['pid'], timed(team['ann'], team['task']), team['bob_m']
+    ann.ok('post', f"/api/items/{task['id']}/assignments", dict(member_id=m['id'], weeks=6, is_lead=True))
+    before = full(ann, pid)
+    ann.ok('post', f'/api/proposals/{pid}/items', dict(title='Sub', parent_id=task['id'], effort_destination='new_child'))
+    assert you(ann, pid)['undo'] == 'adding "Sub"'
+    undo(ann, pid)
+    assert full(ann, pid) == before
+
+
+def test_undoing_team_changes_puts_labels_back(team):
+    ann, pid, p, task = team['ann'], team['pid'], team['people'], timed(team['ann'], team['task'])
+    cat = ann.ok('post', f"/api/proposals/{pid}/members", dict(person_id=p['cat']['id'], role='co-I'))['member']   # Catson: co-I 2
+    ann.ok('post', f"/api/items/{task['id']}/assignments", dict(member_id=team['bob_m']['id'], weeks=4))
+    before = full(ann, pid)
+    labels = lambda: sorted(m['short_id'] for m in ann.ok('get', f'/api/proposals/{pid}')['members'])
+    assert labels() == ['PI', 'co-I 1', 'co-I 2']
+    ann.ok('delete', f"/api/members/{team['bob_m']['id']}?confirm=1")                  # Catson becomes co-I 1
+    assert labels() == ['PI', 'co-I 1'] and you(ann, pid)['undo'] == 'taking Bob Bobson off the team'
+    undo(ann, pid)
+    assert full(ann, pid) == before
+    cat = next(m for m in ann.ok('get', f'/api/proposals/{pid}')['members'] if m['id'] == cat['id'])
+    ann.ok('patch', f"/api/members/{cat['id']}", dict(version=cat['version'], role='Sci-PI'))
+    assert you(ann, pid)['undo'] == "changing Cat Catson's role"
+    undo(ann, pid)
+    assert full(ann, pid) == before
+
+
+def test_a_profile_changed_in_a_work_plan_is_undone_there(team):
+    ann, pid, p = team['ann'], team['pid'], team['people']
+    ann.ok('post', f"/api/proposals/{pid}/members", dict(person_id=p['cat']['id'], role='co-I'))
+    before = full(ann, pid)
+    bob = ann.ok('get', f"/api/proposals/{pid}")['members']
+    ann.ok('patch', f"/api/people/{p['bob']['id']}", dict(version=p['bob']['version'], last='Zed', made_in=pid))   # renumbers the co-Is
+    assert you(ann, pid)['undo'] == "changing Bob Zed's profile"
+    undo(ann, pid)
+    assert full(ann, pid) == before and ann.ok('get', '/api/people')['people'][1]['last'] == 'Bobson'
+
+
+def test_undo_skips_what_someone_else_changed_since(team):
+    ann, bob, pid, task = team['ann'], team['bob'], team['pid'], team['task']
+    t2 = ann.ok('post', f"/api/proposals/{pid}/items", dict(title='Task A2', parent_id=team['goal']['id']))['item']
+    task = timed(ann, task, (1, 1, 1, 10))
+    task = timed(ann, task, (1, 1, 1, 20))
+    timed(bob, task, (1, 1, 1, 30))                                  # Bob moves the same bar
+    assert you(bob, pid)['undo'] == 'changing the bar of "Task A1"'
+    out = ann.no('post', f'/api/proposals/{pid}/undo', code='stuck')
+    assert 'Bob Bobson changed it since' in out['message'] and 'Undo again' in out['message']
+    assert item(ann, pid, task['id'])['end_week'] == 30              # Bob's change stays
+    out = ann.no('post', f'/api/proposals/{pid}/undo', code='stuck')    # her first bar: Bob's change is still on it
+    assert 'Bob Bobson changed it since' in out['message']
+    undo(ann, pid, done='adding "Task A2"')                          # her change before those goes back
+    assert all(i['id'] != t2['id'] for i in ann.ok('get', f'/api/proposals/{pid}')['items'])
+
+
+def test_undo_never_breaks_the_plan_s_rules(team):
+    ann, bob, pid, task, m = team['ann'], team['bob'], team['pid'], timed(team['ann'], team['task']), team['bob_m']
+    ann.ok('post', f"/api/items/{task['id']}/assignments", dict(member_id=m['id'], weeks=6))
+    ann.ok('post', f'/api/proposals/{pid}/items', dict(title='Sub 1', parent_id=task['id'], effort_destination='new_child'))
+    bob.ok('post', f'/api/proposals/{pid}/items', dict(title='Sub 2', parent_id=task['id']))          # Bob adds another subtask
+    out = ann.no('post', f'/api/proposals/{pid}/undo', code='stuck')    # her effort would go back on a task with subtasks
+    assert '"Task A1" would be a task with subtasks with its own' in out['message']
+    assert sorted(i['title'] for i in ann.ok('get', f'/api/proposals/{pid}')['items']) == ['Goal A', 'Sub 1', 'Sub 2', 'Task A1']
+    t = ann.ok('post', f'/api/proposals/{pid}/items', dict(title='Task A2', parent_id=team['goal']['id']))['item']
+    bob.ok('post', f'/api/proposals/{pid}/items', dict(title='Under it', parent_id=t['id']))
+    out = ann.no('post', f'/api/proposals/{pid}/undo', code='stuck')    # Bob put something under her new task
+    assert 'Bob Bobson changed it since' in out['message']
+
+
+def test_undo_is_your_own_and_a_new_change_ends_redo(team):
+    ann, bob, pid, task = team['ann'], team['bob'], team['pid'], team['task']
+    timed(ann, task)
+    bob.no('post', f'/api/proposals/{pid}/undo', code='nothing')     # Bob has nothing of his own to undo
+    team['dan'].no('post', f'/api/proposals/{pid}/undo', code='not_found')
+    undo(ann, pid)
+    assert you(ann, pid)['redo'] == 'drawing the bar of "Task A1"'
+    ann.ok('post', f'/api/proposals/{pid}/items', dict(title='Goal B'))
+    assert you(ann, pid)['redo'] is None
+    ann.no('post', f'/api/proposals/{pid}/redo', code='nothing')
+
+
+def test_undoing_a_restore_and_the_changes_before_it(team):
+    ann, pid, task, m = team['ann'], team['pid'], timed(team['ann'], team['task']), team['bob_m']
+    snap = ann.ok('post', f'/api/proposals/{pid}/snapshots', dict(name='early'))['snapshot']
+    first = full(ann, pid)
+    ann.ok('post', f"/api/items/{task['id']}/assignments", dict(member_id=m['id'], weeks=6, is_lead=True))
+    ann.ok('post', f"/api/proposals/{pid}/members", dict(person_id=team['people']['cat']['id'], role='co-I'))
+    ann.ok('delete', f"/api/items/{team['goal']['id']}?confirm=1")
+    later = full(ann, pid)
+    ann.ok('post', f"/api/snapshots/{snap['id']}/restore")
+    assert full(ann, pid) == first                                   # a restore keeps the rows' own numbers
+    assert you(ann, pid)['undo'] == 'restoring the snapshot "early"'
+    undo(ann, pid)
+    assert full(ann, pid) == later
+    undo(ann, pid, done='deleting "Goal A"'); undo(ann, pid, done='adding Cat Catson to the team')
+    undo(ann, pid, done='putting Bob Bobson on "Task A1"')
+    assert full(ann, pid) == first
+
+
+def test_undo_needs_the_same_rights_as_the_change(team):
+    ann, eve, pid, p = team['ann'], team['eve'], team['pid'], team['people']
+    ann.ok('post', f"/api/proposals/{pid}/members", dict(person_id=p['cat']['id'], role='co-I', is_lead=True))
+    me = next(m for m in eve.ok('get', f'/api/proposals/{pid}')['members'] if m['person_id'] == p['ann']['id'])
+    eve.ok('patch', f"/api/members/{me['id']}", dict(version=me['version'], is_lead=False))   # Ann is no longer a full editor
+    ann.no('post', f'/api/proposals/{pid}/undo', code='refused')
+    assert you(ann, pid)['undo'] == 'adding Cat Catson to the team'  # still there, if she becomes a full editor again
