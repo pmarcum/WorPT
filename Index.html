@@ -144,6 +144,10 @@ input.wk.on{border-color:#4a6a90}
 .tsum .roles ul{margin:0 0 4px;padding-left:16px}
 .tsum .roles .btn{align-self:flex-start;margin-top:4px}
 .sg-details .dhead{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start}
+.sg-details.stack{gap:8px;padding:10px 12px}
+.info{display:inline-block;margin-left:5px;color:var(--muted);cursor:help;font-size:12px;line-height:1;text-transform:none;letter-spacing:0}  /* hover for help */
+.info:hover,.info:focus{color:var(--accent);outline:none}
+.sg-details .timeline{gap:6px}
 .sg-details{margin:4px 0 12px 52px;max-width:840px;background:#1b2332;border:1px solid #3d5a80;box-shadow:0 6px 18px rgba(0,0,0,.45)}
 .badge{font-family:var(--mono);font-size:12px;color:var(--accent);padding:3px 8px;border:1px solid #2a3a50;border-radius:4px}
 .level{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
@@ -502,6 +506,12 @@ setInterval(async () => {
 }, POLL_MS);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.pid) reloadProposal(); });
 
+// The plan's box ends at the bottom of the window (when the page is scrolled to the top), so its sideways scroll bar is
+// always in view, without scrolling the page down to it; it scrolls up and down inside. At least 340 pixels tall.
+function fitPlanBox(sc) {
+  sc.style.maxHeight = Math.max(340, Math.floor(window.innerHeight - (sc.getBoundingClientRect().top + window.scrollY) - 14)) + 'px';
+}
+
 // A task's details just opened: scroll the plan (and the page, if need be) so the whole panel shows, rather than running
 // off the bottom of the plan's box, under the section below it. A panel too tall for the box starts just under the header.
 function revealDetails(sc) {
@@ -531,6 +541,7 @@ function render() {
   }
   S.zoomKeep = null;
   if (sc && planZoom() === 0 && sc.scrollWidth > sc.clientWidth + 1 && !S.refit) { S.refit = true; render(); S.refit = false; }
+  if (sc) fitPlanBox(sc);
   if (sc && S.open !== S.shownOpen && !S.refit) revealDetails(sc);
   S.shownOpen = S.open;
   if (key) {
@@ -843,11 +854,9 @@ function viewItem(n, nodes) {
     '</span><span class="row" style="flex-wrap:nowrap"><button type="button" class="btn danger" data-act="deleteItem">Delete…</button>' +
     '<button type="button" class="btn" data-act="closeDetails" aria-label="Close these details" title="Close (Return or Esc)">Close ✕</button></span></div>' +
     '<div class="row" style="gap:10px;align-items:flex-start;flex-wrap:wrap"><label class="f" style="flex:2 1 300px">Title<input data-save="item:' + it.id + ':title" data-version="' + it.version + '" value="' + esc(it.title) + '" maxlength="500"></label>' +
-    '<label class="f" style="flex:1 1 200px"><span>Short title <span class="muted">(optional)</span></span><input data-save="item:' + it.id + ':short_title" data-version="' + it.version + '" value="' + esc(it.short_title || '') + '" maxlength="200" placeholder="' + esc(it.title || '') + '"></label></div>' +
-    '<p class="hint" style="margin:-4px 0 0">The schedule and task management tables keep each title to one line: they show the short title when there is one, otherwise the title, cut short with "…" if it is too long for the line. The plan shows it too; hover to see the full title.</p>' +
-    '<label class="f"><span>Description <span class="muted">(optional)</span></span><textarea data-save="item:' + it.id + ':description" data-version="' + it.version + '" rows="3" ' +
-      'placeholder="What this ' + LEVEL[d].toLowerCase() + ' stands for and involves: a reminder of what to describe in the proposal">' + esc(it.description || '') + '</textarea></label>' +
-    '<p class="hint" style="margin:-4px 0 0">For your team only: it shows when you hover over the title in the plan (a dotted underline marks titles that have one), and is never printed in the tables.</p>';
+    '<label class="f" style="flex:1 1 200px"><span>Short title <span class="muted">(optional)</span>' + info(HELP.short) + '</span><input data-save="item:' + it.id + ':short_title" data-version="' + it.version + '" value="' + esc(it.short_title || '') + '" maxlength="200" placeholder="' + esc(it.title || '') + '" aria-description="' + esc(HELP.short) + '"></label></div>' +
+    '<label class="f"><span>Description <span class="muted">(optional)</span>' + info(HELP.description) + '</span><textarea data-save="item:' + it.id + ':description" data-version="' + it.version + '" rows="2" ' +
+      'placeholder="What this ' + LEVEL[d].toLowerCase() + ' stands for and involves: a reminder of what to describe in the proposal" aria-description="' + esc(HELP.description) + '">' + esc(it.description || '') + '</textarea></label>';
   if (d === 0) return html + '<p class="muted" style="margin:0;line-height:1.5">A task category groups related tasks. It has no timeline or people of its own; its line on the calendar and its numbers come from its tasks (' + (+itemWeeks(it.id).toFixed(1)) + ' weeks in all).</p>' +
     '<div><button type="button" class="btn" data-act="addTask">+ Task in this category</button></div>';
   if (!leaf) {
@@ -859,8 +868,10 @@ function viewItem(n, nodes) {
     Array.from({ length: Math.max(ny, v || 0) }, (_, k) => '<option value="' + (k + 1) + '"' + (v === k + 1 ? ' selected' : '') + '>Year ' + (k + 1) + '</option>').join('') + '</select>';
   const wbox = (field, v) => '<span class="muted">week</span><input type="text" inputmode="numeric" data-num="dec" data-type="int" style="width:44px" data-save="item:' + it.id + ':' + field + '" data-version="' + it.version +
     '" value="' + (v || '') + '" placeholder="1–52" aria-label="' + field.replace('_', ' ') + '"><span class="muted" style="min-width:24px">' + (v ? 'Q' + qOf(v) : '') + '</span>';
-  html += (d === 1 ? '<div><button type="button" class="btn" data-act="addSub">+ Subtask</button></div>' : '') + '<fieldset><legend>Timeline (or drag its bar on the calendar)</legend><div class="row"><span class="muted">From</span>' + ysel('start_year', it.start_year) + wbox('start_week', it.start_week) +
-    '<span class="muted">to</span>' + ysel('end_year', it.end_year) + wbox('end_week', it.end_week) + '</div><p class="hint" style="margin:6px 0 0">A year has 52 weeks: Q1 is weeks 1–13, Q2 14–26, Q3 27–39, Q4 40–52.</p></fieldset>';
+  // the timeline on one line, with + Subtask (a task) at its end
+  html += '<div class="row timeline"><span class="muted">Timeline' + info(HELP.timeline) + '</span><span class="muted">from</span>' + ysel('start_year', it.start_year) + wbox('start_week', it.start_week) +
+    '<span class="muted">to</span>' + ysel('end_year', it.end_year) + wbox('end_week', it.end_week) +
+    (d === 1 ? '<button type="button" class="btn" data-act="addSub" style="margin-left:auto">+ Subtask</button>' : '') + '</div>';
   const work = P.assignments.filter(a => a.item_id === it.id).sort((a, b) => a.position - b.position || a.id - b.id);
   const named = new Set(work.filter(a => !a.is_team).map(a => a.member_id));
   const unnamed = P.members.filter(m => !named.has(m.id));
@@ -878,14 +889,21 @@ function viewItem(n, nodes) {
   }).join('');
   const addable = P.members.filter(m => !named.has(m.id)).map(m => '<option value="m' + m.id + '">' + esc(personName(m) + ' (' + idRole(m) + ')') + '</option>').join('') +
     (work.some(a => a.is_team) ? '' : '<option value="team">Everyone not named (team)</option>');
-  return html + '<div><div class="pgrid head"><span>Person</span><span>Task lead</span><span>Weeks (total)</span><span>of which unfunded</span><span></span></div>' + rows +
+  return html + '<div><div class="pgrid head"><span>Person</span><span>Task lead</span><span>Weeks (total)' + info(HELP.weeks) + '</span><span>of which unfunded' + info(HELP.unfunded) + '</span><span></span></div>' + rows +
     (!P.members.length ? '<p class="hint prow">The team is empty. Add people on the Team tab first; then they can be put on tasks here. <button type="button" class="btn" data-tab="team">Go to the Team tab</button></p>'
       : addable ? '<label class="row prow" style="gap:8px"><span class="muted">Add a person</span><select data-act="assign" style="flex:1;max-width:340px"><option value="">Choose a team member…</option>' + addable + '</select></label>'
       : '<p class="hint prow">Everyone on the team is already on this ' + (d === 2 ? 'subtask' : 'task') + '. To put someone else on it, first add them to the team. <button type="button" class="btn" data-tab="team">Go to the Team tab</button></p>') +
-    (work.some(a => a.is_team) && unnamed.length === 0 ? '<p class="hint">"Everyone not named (team)" covers nobody here, because everyone on the team is named on this ' + (d === 2 ? 'subtask' : 'task') + '.</p>' : '') +
-    '<p class="hint">Weeks is each person\'s total effort on this item; "of which unfunded" is the part of that total not paid by this proposal. For example, 1.5 weeks with 0.5 unfunded is 1.0 week funded plus 0.5 week unfunded. A collaborator\'s weeks are all unfunded.</p>' +
-    '<p class="hint">The green figure is that person\'s effort on this item in FTE, counted over the whole item (weeks ÷ ' + (P.proposal.weeks_per_fte || 52) + '), updated as you type. The panel below the calendar shows how it lands in each year once saved.</p></div>';
+    (work.some(a => a.is_team) && unnamed.length === 0 ? '<p class="hint">"Everyone not named (team)" covers nobody here, because everyone on the team is named on this ' + (d === 2 ? 'subtask' : 'task') + '.</p>' : '') + '</div>';
 }
+// The details' explanations, behind a small ⓘ beside what they explain (hover, or tab to it), so the panel stays compact.
+const HELP = {
+  short: 'The schedule and task management tables keep each title to one line: they show the short title when there is one, otherwise the title, cut short with "…" if it is too long for the line. The plan shows it too; hover over a title there to see the full title.',
+  description: 'For your team only: it shows when you hover over the title in the plan (a dotted underline marks titles that have one), and is never printed in the tables.',
+  timeline: 'Or drag its bar on the calendar. A year has 52 weeks: Q1 is weeks 1–13, Q2 14–26, Q3 27–39, Q4 40–52.',
+  get weeks() { return 'Each person\'s total effort on this item, in weeks. The green figure beside it is that effort in FTE, counted over the whole item (weeks ÷ ' + ((S.P && S.P.proposal.weeks_per_fte) || 52) + '), updated as you type; the panel below the calendar shows how it lands in each year once saved.'; },
+  unfunded: 'The part of the weeks not paid by this proposal. For example, 1.5 weeks with 0.5 unfunded is 1.0 week funded plus 0.5 week unfunded. A collaborator\'s weeks are all unfunded.'
+};
+const info = text => '<span class="info" tabindex="0" title="' + esc(text) + '" aria-label="' + esc(text) + '" role="note">ⓘ</span>';
 const span = (s, e) => s && e ? 'Year ' + s[0] + ' week ' + s[1] + ' – Year ' + e[0] + ' week ' + e[1] : 'none yet';
 
 function viewRipple() {
