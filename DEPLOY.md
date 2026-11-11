@@ -247,6 +247,13 @@ A backup restores every work plan at once. To put back just one work plan, use i
 dashboard instead: WorPT saves a snapshot at the first change of each day and before anything drastic,
 and anyone can save a named one.
 
+**If the VM itself is lost:** the nightly backups sit on the VM's own disk, so they go with it. The whole disk,
+WorPT included (with BibMan and gooTeX), is also copied by a weekly Google Cloud **disk snapshot** (schedule
+`weekly-vm-backup`, Sundays 2–3 am California time, each kept 8 days; this is not the dashboard's Snapshots tab).
+Restore the VM from that snapshot first, then, if you need a later state, one of the nightly backups as above.
+Setting up, checking, taking one by hand, stopping and restoring are described in BibMan's MAINTENANCE.md,
+section "Backups", since the three apps share the VM.
+
 ## Removing WorPT
 
 ```bash
