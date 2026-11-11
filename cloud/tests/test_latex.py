@@ -88,6 +88,8 @@ def test_tables_compile_with_worpt_sty_alone(folder, cls, tmp_path):
     log = (tmp_path / 'doc.log').read_text(errors='replace')
     errors = [l for l in log.splitlines() if l.startswith('!')]
     assert not errors and (tmp_path / 'doc.pdf').exists(), f'{cls}: {errors[:5]}'
+    # a color begun in a box that was measured and thrown away, and ended on the page, upsets pdfTeX's color stack
+    assert not re.findall(r'pdfTeX warning.*color', log), f'{cls}: {re.findall(r"pdfTeX warning.*color.*", log)[:3]}'
     # A class can take a column specification it doesn't understand without an error and print parts of it instead
     # (aastex and revtex can't repeat inside a repeat): no such text may show in the tables.
     if shutil.which('pdftotext'):

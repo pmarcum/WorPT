@@ -123,32 +123,33 @@ p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWid
 
 %--- the widths: month columns wide enough for the timeline's labels (so the last month of a year is not stretched to
 % fit them), team columns wide enough for their numbers and labels, the Total FTE column for its numbers, then the
-% rest of the table measured without its titles, and the title column given what is left of the page
+% rest of the table measured without its titles, and the title column given what is left of the page (measured with
+% \sbox, which keeps the colors of the labels and numbers inside the box measured)
 \def\[INSERTFILENAME]AtLeast#1#2{\ifdim#1<#2\global#1=#2\fi}
 \def\[INSERTFILENAME]Layout{%
   \begingroup
   \csname @floatboxreset\endcsname  % measured as set in a table: some classes (aastex) use a smaller font there
   \renewcommand{\arraystretch}{\SpaceBetweenRows}\setlength{\tabcolsep}{\SpaceBetweenColumns}%
   \global\WorPTmonthWidth=\TimelineWidth\relax
-  \setbox0\hbox{\TaskTimelineHeaderFontsize{TIMELINE}}\setbox2\hbox{\TaskTimelineHeaderFontsize{TASK}}%
+  \sbox0{\TaskTimelineHeaderFontsize{TIMELINE}}\sbox2{\TaskTimelineHeaderFontsize{TASK}}%
   \ifdim\wd2>\wd0 \setbox0\box2 \fi
   \[INSERTFILENAME]AtLeast\WorPTmonthWidth{\dimexpr(\wd0+2\tabcolsep-\numexpr12*\NumberYears-1\relax\arrayrulewidth)/\numexpr12*\NumberYears\relax\relax}%
-  \setbox0\hbox{\YearHeaderFontsize{YR\NumberYears}}%
+  \sbox0{\YearHeaderFontsize{YR\NumberYears}}%
   \[INSERTFILENAME]AtLeast\WorPTmonthWidth{\dimexpr(\wd0+2\tabcolsep-11\arrayrulewidth)/12\relax}%
-  \setbox0\hbox{\YearSliceHeaderFontsize{4}}%
+  \sbox0{\YearSliceHeaderFontsize{4}}%
   \[INSERTFILENAME]AtLeast\WorPTmonthWidth{\dimexpr(\wd0-2\arrayrulewidth)/3\relax}%
   \global\WorPTteamWidth=0pt
-  \def\[INSERTFILENAME]Sideways##1{\setbox0\hbox{##1}\[INSERTFILENAME]AtLeast\WorPTteamWidth{\dimexpr\ht0+\dp0+\TeamCellPadding\relax}}%
+  \def\[INSERTFILENAME]Sideways##1{\sbox0{##1}\[INSERTFILENAME]AtLeast\WorPTteamWidth{\dimexpr\ht0+\dp0+\TeamCellPadding\relax}}%
   \[INSERTFILENAME]Sideways{\FundedUsTeam{Xy}}\[INSERTFILENAME]Sideways{\UnfundedUsTeam{Xy}}\[INSERTFILENAME]Sideways{\InternationalTeam{Xy}}%
   \[INSERTFILENAME]Sideways{\TeamFundedFteFormat{0.}}\[INSERTFILENAME]Sideways{\TeamUnfundedFteFormat{0.}}\[INSERTFILENAME]Sideways{\TeamZeroFteFormat{0.}}%
-  \setbox0\hbox{\TeamHeaderFontsize{TEAM}}%
+  \sbox0{\TeamHeaderFontsize{TEAM}}%
   \[INSERTFILENAME]AtLeast\WorPTteamWidth{\dimexpr(\wd0+2\tabcolsep-\NumberTeamMinusOne\arrayrulewidth)/\numexpr\NumberTeamMinusOne+1\relax\relax}%
   \global\WorPTfteWidth=0pt
-  \setbox0\hbox{\FteTotalFormat{\WidestFte}}\[INSERTFILENAME]AtLeast\WorPTfteWidth{\wd0}%
-  \setbox0\hbox{\FteRolledUpFormat{\WidestFte}}\[INSERTFILENAME]AtLeast\WorPTfteWidth{\wd0}%
-  \setbox0\hbox{\FteCategoryFormat{\WidestFte}}\[INSERTFILENAME]AtLeast\WorPTfteWidth{\wd0}%
-  \setbox0\hbox{\FteGrandTotalFormat{\WidestFte}}\[INSERTFILENAME]AtLeast\WorPTfteWidth{\wd0}%
-  \setbox0\hbox{\TotalFteHeaderFontsize{TOTAL FTE}}\[INSERTFILENAME]AtLeast\WorPTfteWidth{\dimexpr\ht0+\dp0\relax}% (lies sideways)
+  \sbox0{\FteTotalFormat{\WidestFte}}\[INSERTFILENAME]AtLeast\WorPTfteWidth{\wd0}%
+  \sbox0{\FteRolledUpFormat{\WidestFte}}\[INSERTFILENAME]AtLeast\WorPTfteWidth{\wd0}%
+  \sbox0{\FteCategoryFormat{\WidestFte}}\[INSERTFILENAME]AtLeast\WorPTfteWidth{\wd0}%
+  \sbox0{\FteGrandTotalFormat{\WidestFte}}\[INSERTFILENAME]AtLeast\WorPTfteWidth{\wd0}%
+  \sbox0{\TotalFteHeaderFontsize{TOTAL FTE}}\[INSERTFILENAME]AtLeast\WorPTfteWidth{\dimexpr\ht0+\dp0\relax}% (lies sideways)
   \global\WorPTtitleWidth=0pt \WorPTmeasuringtrue
   \sbox\WorPTmeasureBox{\expandafter\tabular\expandafter{\[INSERTFILENAME]Columns}\[INSERTFILENAME]Body\endtabular}%
   \ifLandScape\global\WorPTlandscapetrue\else\global\WorPTlandscapefalse\fi
