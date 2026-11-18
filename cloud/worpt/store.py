@@ -83,7 +83,8 @@ AUTO_SNAPSHOT_DAYS = 60          # automatic snapshots are kept this long; named
 ADDED_COLUMNS = [('people', 'expertise', "TEXT NOT NULL DEFAULT ''"), ('people', 'pronoun', "TEXT NOT NULL DEFAULT ''"),
                  ('items', 'start_week', 'INTEGER'), ('items', 'end_week', 'INTEGER'), ('items', 'short_title', "TEXT NOT NULL DEFAULT ''"),
                  ('items', 'description', "TEXT NOT NULL DEFAULT ''"),   # a note on what the item stands for; shown in the dashboard only
-                 ('history', 'step', 'INTEGER')]                         # the step (request) a change was part of, for undo
+                 ('history', 'step', 'INTEGER'),                         # the step (request) a change was part of, for undo
+                 ('proposals', 'frozen_at', 'TEXT'), ('proposals', 'frozen_by', 'TEXT')]   # a frozen work plan can't be changed
 ID_TABLES = ('people', 'members', 'items', 'assignments', 'nonlabor')      # numbered rows; a number is never used twice
 TIMELINE = ('start_year', 'start_week', 'end_year', 'end_week')
 
@@ -162,7 +163,8 @@ class Store:
                 db.execute(f'UPDATE items SET end_week = end_q * {WEEKS_PER_QUARTER} WHERE end_q IS NOT NULL AND end_week IS NULL')
                 db.execute('ALTER TABLE items DROP COLUMN start_q'); db.execute('ALTER TABLE items DROP COLUMN end_q')
             # roles are numbered by WorPT, and labels come from roles (from November 2026): bring older members in line
-            for (pid,) in db.execute('SELECT DISTINCT proposal_id FROM members').fetchall():
+            for (pid,) in db.execute('SELECT DISTINCT m.proposal_id FROM members m JOIN proposals p ON p.id = m.proposal_id '
+                                     'WHERE p.frozen_at IS NULL').fetchall():
                 self.renumber_roles(db, User('worpt-server', 'admin'), pid)
             db.execute('CREATE INDEX IF NOT EXISTS history_step ON history (step)')
             for tbl in ID_TABLES:                   # the highest number each kind of row has ever had, deleted rows included
@@ -212,6 +214,7 @@ class Store:
         return [self.row(r) for r in db.execute(sql, args).fetchall()]
 
     def log(self, db, user, proposal_id, tbl, row_id, action, before=None, after=None):
+        if proposal_id and db.kind != 'freeze': self.not_frozen(db, proposal_id)   # every change to a work plan is logged, so this guards them all
         if db.step is None:
             db.step = db.execute('INSERT INTO steps (at, user, kind) VALUES (?,?,?)', (now(), user.email, db.kind)).lastrowid
         db.execute('INSERT INTO history (at, user, proposal_id, tbl, row_id, action, before, after, step) VALUES (?,?,?,?,?,?,?,?,?)',
@@ -265,6 +268,36 @@ class Store:
         self.log(db, user, proposal_id, tbl, rid, 'delete', before, None)
         return before
 
+    def not_frozen(self, db, proposal_id):
+        p = self.one(db, 'SELECT title, frozen_at FROM proposals WHERE id = ?', proposal_id)
+        if p and p['frozen_at']:
+            raise WorptError(f'"{p["title"]}" is frozen, so nothing in it can be changed. To unfreeze it and make edits, '
+                             'click the freeze toggle (full editors and admins can).', 'frozen')
+
+    def freeze(self, db, user, proposal_id, on, name=None):
+        """Freeze a work plan (nothing in it can change, until it is unfrozen) or unfreeze it. Freezing saves a snapshot,
+        so the plan as it was frozen is kept even if it is unfrozen and changed later. Changes to profiles that would
+        renumber roles in a frozen plan, or make someone a collaborator there, wait until it is unfrozen; they are made then."""
+        self.proposal(db, user, proposal_id, need='team')
+        cur = self.one(db, 'SELECT * FROM proposals WHERE id = ?', proposal_id)
+        if bool(cur['frozen_at']) == bool(on): return self.get(db, 'proposals', proposal_id, 'proposal')
+        db.kind = 'freeze'                                              # not something Undo takes back
+        if on: self.snapshot(db, user, proposal_id, 'named', (name or '').strip()[:200] or f'Frozen {now()[:10]}')
+        db.execute('UPDATE proposals SET frozen_at = ?, frozen_by = ?, version = version + 1 WHERE id = ?',
+                   (now() if on else None, user.email if on else None, proposal_id))
+        self.log(db, user, proposal_id, 'proposals', proposal_id, 'update', cur, self.get(db, 'proposals', proposal_id, 'proposal'))
+        if not on:                                                      # profile changes made while it was frozen
+            for m in self.all(db, 'SELECT m.*, p.us, p.last FROM members m JOIN people p ON p.id = m.person_id WHERE m.proposal_id = ?', proposal_id):
+                if not m['us'] and canonical_role(m['role']) != 'coll(0)': self.to_collaborator(db, user, m, m['last'])
+            self.renumber_roles(db, user, proposal_id)
+        return self.get(db, 'proposals', proposal_id, 'proposal')
+
+    def to_collaborator(self, db, user, m, last):
+        """Someone at a non-US institution is a collaborator, on every work plan."""
+        save = lambda role: self.update_row(db, user, 'members', m['id'], m['version'], dict(role=role, short_id=role_label(role)),
+                                            m['proposal_id'], 'team member')
+        self.renumber_roles(db, user, m['proposal_id'], dict(id=m['id'], role='coll(0)', last=last), save)
+
     # ------------------------------------------------ who is who
     def person_for(self, db, user):
         return self.one(db, 'SELECT * FROM people WHERE email = ?', user.email) if user.email else None
@@ -273,11 +306,14 @@ class Store:
         me = self.person_for(db, user)
         return me and self.one(db, 'SELECT * FROM members WHERE proposal_id = ? AND person_id = ?', proposal_id, me['id'])
 
-    def proposal(self, db, user, proposal_id, need='view'):
+    def proposal(self, db, user, proposal_id, need='view', change=False):
+        """The work plan, if this person may see it (need='view') or manage its team ('team'); change=True: about to
+        change it, which a frozen plan refuses before anything else is checked."""
         p = self.one(db, 'SELECT * FROM proposals WHERE id = ?', proposal_id)
         m = p and self.membership(db, user, proposal_id)
         if p is None or not (user.admin or m):
             raise WorptError('That work plan does not exist, or you are not on its team.', 'not_found')
+        if change: self.not_frozen(db, proposal_id)
         if need == 'team' and not (user.admin or m['is_lead']):
             raise WorptError("Only this work plan's full editors (or an admin) can change its team and full editors.")
         return p
@@ -336,11 +372,10 @@ class Store:
             f = self.clean_person({k: v for k, v in fields.items() if k in EDITABLE['people']})
             if 'email' in f: self.check_email_free(db, f['email'], person_id)
             p = self.update_row(db, user, 'people', person_id, version, f, None, 'profile')
-            for m in self.all(db, 'SELECT * FROM members WHERE person_id = ?', person_id):
+            for m in self.all(db, 'SELECT m.* FROM members m JOIN proposals x ON x.id = m.proposal_id '
+                                  'WHERE m.person_id = ? AND x.frozen_at IS NULL', person_id):   # frozen plans follow when unfrozen
                 if not p['us'] and canonical_role(m['role']) != 'coll(0)':     # non-US means collaborator, on every work plan
-                    save = lambda role, m=m: self.update_row(db, user, 'members', m['id'], m['version'], dict(role=role, short_id=role_label(role)),
-                                                             m['proposal_id'], 'team member')
-                    self.renumber_roles(db, user, m['proposal_id'], dict(id=m['id'], role='coll(0)', last=p['last']), save)
+                    self.to_collaborator(db, user, m, p['last'])
                 else: self.renumber_roles(db, user, m['proposal_id'])            # numbers follow last names, which may have changed
             return p
 
@@ -401,8 +436,11 @@ class Store:
 
     def update_proposal(self, user, proposal_id, version, fields):
         with self.connect() as db:
-            self.proposal(db, user, proposal_id)
             f = dict(fields)
+            if 'frozen' in f:
+                if set(f) - {'frozen', 'snapshot_name'}: raise WorptError('Freeze or unfreeze a work plan on its own, without other changes.', 'invalid')
+                return self.freeze(db, user, proposal_id, bool(f['frozen']), f.get('snapshot_name'))
+            self.proposal(db, user, proposal_id, change=True)
             if 'n_years' in f: f['n_years'] = self.check_years(f['n_years'])
             if 'title' in f and not (f['title'] or '').strip(): raise WorptError('A work plan needs a title.', 'missing')
             if 'rounding' in f and f['rounding'] not in ('nearest', 'up'): raise WorptError('Rounding is "nearest" or "up".', 'invalid')
@@ -413,7 +451,7 @@ class Store:
 
     def delete_proposal(self, user, proposal_id, confirm_title):
         with self.connect() as db:
-            p = self.proposal(db, user, proposal_id, need='team')
+            p = self.proposal(db, user, proposal_id, need='team', change=True)
             if (confirm_title or '').strip() != p['title'].strip():
                 raise WorptError('To delete this work plan, type its title exactly as it appears.', 'confirm_title')
             snapshot = self.export(db, proposal_id)
@@ -472,14 +510,14 @@ class Store:
 
     def add_member(self, user, proposal_id, fields):
         with self.connect() as db:
-            self.proposal(db, user, proposal_id, need='team')
+            self.proposal(db, user, proposal_id, need='team', change=True)
             return self.add_member_db(db, user, proposal_id, fields)
 
     def update_member(self, user, member_id, version, fields):
         with self.connect() as db:
             m = self.get(db, 'members', member_id, 'team member')
             # trips are part of the budget, which anyone on the proposal may edit; everything else about a member is the team's
-            self.proposal(db, user, m['proposal_id'], need='view' if set(fields) <= {'trips'} else 'team')
+            self.proposal(db, user, m['proposal_id'], need='view' if set(fields) <= {'trips'} else 'team', change=True)
             person = self.get(db, 'people', m['person_id'], 'profile')
             f = self.check_member_fields(db, m['proposal_id'], dict(fields), member_id, person)
             if m['is_lead'] and 'is_lead' in f and not f['is_lead']: self.keep_a_lead(db, m)
@@ -495,7 +533,7 @@ class Store:
     def remove_member(self, user, member_id, confirm=False):
         with self.connect() as db:
             m = self.get(db, 'members', member_id, 'team member')
-            self.proposal(db, user, m['proposal_id'], need='team')
+            self.proposal(db, user, m['proposal_id'], need='team', change=True)
             if m['is_lead']: self.keep_a_lead(db, m)
             work = self.all(db, 'SELECT * FROM assignments WHERE member_id = ?', member_id)
             if not confirm:
@@ -555,7 +593,7 @@ class Store:
 
     def add_item(self, user, proposal_id, parent_id=None, title='', position=None, effort_destination=None):
         with self.connect() as db:
-            self.proposal(db, user, proposal_id)
+            self.proposal(db, user, proposal_id, change=True)
             move = self.check_new_parent(db, user, proposal_id, parent_id, 1, effort_destination)
             pos = self.place(db, proposal_id, parent_id, position)
             item = self.insert_row(db, user, 'items', dict(proposal_id=proposal_id, parent_id=parent_id, position=pos,
@@ -586,7 +624,7 @@ class Store:
     def update_item(self, user, item_id, version, fields):
         with self.connect() as db:
             it = self.get(db, 'items', item_id, 'item')
-            self.proposal(db, user, it['proposal_id'])
+            self.proposal(db, user, it['proposal_id'], change=True)
             f = dict(fields)
             if any(k in f for k in TIMELINE):
                 if self.depth(db, item_id) == 0: raise WorptError('A task category has no timeline of its own; give its tasks timelines.', 'invalid')
@@ -630,7 +668,7 @@ class Store:
         with self.connect() as db:
             it = self.get(db, 'items', item_id, 'item')
             pid = it['proposal_id']
-            self.proposal(db, user, pid)
+            self.proposal(db, user, pid, change=True)
             ids, frontier = [item_id], [item_id]
             while frontier:
                 frontier = [r[0] for r in db.execute(f'SELECT id FROM items WHERE parent_id IN ({",".join("?" * len(frontier))})', frontier)]
@@ -669,7 +707,7 @@ class Store:
     def add_assignment(self, user, item_id, fields):
         with self.connect() as db:
             item = self.get(db, 'items', item_id, 'item')
-            self.proposal(db, user, item['proposal_id'])
+            self.proposal(db, user, item['proposal_id'], change=True)
             f = self.check_assignment(db, item, {k: v for k, v in fields.items() if k in EDITABLE['assignments']})
             if not f.get('is_team') and f.get('member_id') is None: raise WorptError('Choose a person (or "Everyone not named").', 'missing')
             if f.get('is_lead'): self.clear_lead(db, user, item)
@@ -684,7 +722,7 @@ class Store:
         with self.connect() as db:
             a = self.get(db, 'assignments', assignment_id, 'assignment')
             item = self.get(db, 'items', a['item_id'], 'item')
-            self.proposal(db, user, item['proposal_id'])
+            self.proposal(db, user, item['proposal_id'], change=True)
             f = self.check_assignment(db, item, dict(fields), assignment_id)
             out = self.update_row(db, user, 'assignments', assignment_id, version, f, item['proposal_id'], 'assignment')
             if f.get('is_lead'): self.clear_lead(db, user, item, keep=assignment_id)
@@ -694,13 +732,13 @@ class Store:
         with self.connect() as db:
             a = self.get(db, 'assignments', assignment_id, 'assignment')
             item = self.get(db, 'items', a['item_id'], 'item')
-            self.proposal(db, user, item['proposal_id'])
+            self.proposal(db, user, item['proposal_id'], change=True)
             return self.delete_row(db, user, 'assignments', assignment_id, item['proposal_id'], 'assignment')
 
     # ------------------------------------------------ non-labor budget
     def add_nonlabor(self, user, proposal_id, item, amounts):
         with self.connect() as db:
-            self.proposal(db, user, proposal_id)
+            self.proposal(db, user, proposal_id, change=True)
             pos = db.execute('SELECT coalesce(max(position) + 1, 0) FROM nonlabor WHERE proposal_id = ?', (proposal_id,)).fetchone()[0]
             return self.insert_row(db, user, 'nonlabor', dict(proposal_id=proposal_id, position=pos, item=item or '',
                                                               amounts=[float(v or 0) for v in amounts or []]), proposal_id)
@@ -708,7 +746,7 @@ class Store:
     def update_nonlabor(self, user, row_id, version, fields):
         with self.connect() as db:
             r = self.get(db, 'nonlabor', row_id, 'budget line')
-            self.proposal(db, user, r['proposal_id'])
+            self.proposal(db, user, r['proposal_id'], change=True)
             f = dict(fields)
             if 'amounts' in f: f['amounts'] = [float(v or 0) for v in f['amounts']]
             return self.update_row(db, user, 'nonlabor', row_id, version, f, r['proposal_id'], 'budget line')
@@ -716,7 +754,7 @@ class Store:
     def delete_nonlabor(self, user, row_id):
         with self.connect() as db:
             r = self.get(db, 'nonlabor', row_id, 'budget line')
-            self.proposal(db, user, r['proposal_id'])
+            self.proposal(db, user, r['proposal_id'], change=True)
             return self.delete_row(db, user, 'nonlabor', row_id, r['proposal_id'], 'budget line')
 
     # ------------------------------------------------ reading a whole proposal
@@ -788,7 +826,7 @@ class Store:
         with self.connect() as db:
             s = self.get(db, 'snapshots', snapshot_id, 'snapshot')
             pid = s['proposal_id']
-            self.proposal(db, user, pid, need='team')
+            self.proposal(db, user, pid, need='team', change=True)
             data, me = json.loads(s['data']), self.person_for(db, user)
             if not user.admin and not any(me and m['person_id'] == me['id'] and m['is_lead'] for m in data['members']):
                 raise WorptError('That snapshot is from before you were a full editor of this work plan, so restoring it would take '
@@ -865,7 +903,7 @@ class Store:
             with self.connect() as db:
                 db.execute('BEGIN IMMEDIATE')                       # two quick presses never undo the same step twice
                 db.kind = which
-                self.proposal(db, user, proposal_id)
+                self.proposal(db, user, proposal_id, change=True)
                 s = self.next_step(db, user, proposal_id, which)
                 if s is None: raise WorptError('Nothing to undo.' if which == 'undo' else 'Nothing to redo.', 'nothing')
                 what = self.describe(db, s['id'])

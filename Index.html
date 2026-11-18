@@ -63,6 +63,10 @@ input:disabled,select:disabled,textarea:disabled{opacity:.6}
 .tabs .undo{margin-left:auto;display:flex;gap:4px}
 .tabs .undo .btn{min-height:30px;padding:4px 10px;border:1px solid var(--border2);color:var(--text)}
 .tabs .undo .btn:disabled{opacity:.35;cursor:default}
+.tabs .undo .btn.freeze.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.tabs .undo .btn.freeze.on:disabled{opacity:1}
+.frozen-note{margin:-6px 0 12px;padding:8px 12px;border:1px solid var(--accent);border-radius:8px;font-size:13px}
+#app.frozen .tl.leaf,#app.frozen .tl.leaf .bar{cursor:default}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px}
 .h2{margin:0 0 8px;font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:500}
 .hint{font-size:11px;color:var(--muted);line-height:1.5;margin:6px 0 0}
@@ -304,10 +308,16 @@ function toast(msg, ok) {
   const t = $('#toast'); t.textContent = msg; t.className = ok ? 'ok' : ''; t.hidden = false;
   clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, ok ? 3000 : 9000);
 }
-function showError(e) { toast((e && e.message) || String(e)); }
+function showError(e) {
+  if (e && e.code === 'frozen' && S.view === 'proposal') { frozenNotice(); reloadProposal(); return; }   // frozen, perhaps just now by someone else
+  toast((e && e.message) || String(e));
+}
 
 /** A change to the open proposal: the change and the proposal as it now stands come back together. */
+const WHILE_FROZEN = ['saveSnapshot', 'deleteSnapshot', 'updatePerson', 'createPerson'];   // not the plan itself
 async function change(fn, ...args) {
+  if (isFrozen() && !WHILE_FROZEN.includes(fn) && !(fn === 'updateProposal' && args[1] && 'frozen' in args[1]))
+    throw { code: 'frozen', message: 'This work plan is frozen.' };
   setSaving(+1);
   try {
     const out = await gas('change', S.pid, fn, ...args);
@@ -543,6 +553,8 @@ function render() {
   const html = S.view === 'proposal' && S.P ? viewProposal() : S.view === 'people' ? viewPeople() : viewProposals();
   const was = $('#plan-scroll'), scrollX = was ? was.scrollLeft : 0, scrollY = was ? was.scrollTop : 0;
   $('#app').innerHTML = html;
+  $('#app').classList.toggle('frozen', isFrozen());
+  if (isFrozen()) $('#app').querySelectorAll(TEXT_BOX).forEach(el => { if (!el.closest(FROZEN_OK)) el.readOnly = true; });   // can be copied, not changed
   const sc = $('#plan-scroll');
   if (sc) fitPlanBox(sc);            // first: its up-and-down scroll bar, if it gets one, takes room the calendar must fit beside
   if (sc) {
@@ -572,7 +584,7 @@ function render() {
 function viewProposals() {
   const canCreate = S.cfg && S.cfg.access !== 'code';
   const list = S.proposals.map(p =>
-    '<button type="button" class="pcard" data-open="' + esc(p.id) + '"><b>' + esc(p.title) + '</b>' +
+    '<button type="button" class="pcard" data-open="' + esc(p.id) + '"><b>' + (p.frozen_at ? '<span title="Frozen: nothing in it can be changed">❄ </span>' : '') + esc(p.title) + '</b>' +
     '<span class="mono muted" style="font-size:11px">' + esc(p.program || 'no program set') + ' · ' + p.n_years + ' year' + (p.n_years === 1 ? '' : 's') + '</span>' +
     '<span class="muted">Full editors: ' + esc(p.leads || '—') + '</span>' +
     '<span class="muted" style="font-size:11px;margin-top:auto">Last changed ' + esc(when(p.last_changed_at)) + '</span></button>').join('');
@@ -676,8 +688,75 @@ function viewProposal() {
   return '<div class="ptitle"><h1>' + esc(p.title) + '</h1><span class="meta">' + esc(p.program || 'no program set') + ' · ' + p.n_years + ' year' + (p.n_years === 1 ? '' : 's') +
     ' · full editors: ' + esc(leads || '—') + (P.you.member_id ? '' : ' · viewing as admin') + '</span></div>' +
     '<nav class="tabs" aria-label="Work plan sections">' + TABS.map(t => '<button type="button" data-tab="' + t[0] + '" aria-current="' + (S.tab === t[0] ? 'page' : 'false') + '">' + esc(t[1]) + '</button>').join('') +
-    undoButtons() + '</nav>' + body;
+    '<span class="undo">' + freezeToggle() + undoButtons() + '</span></nav>' + frozenNote() + body;
 }
+
+// ── freezing: once a proposal is submitted, nothing in its work plan can be changed until it is unfrozen ──────────
+// The server refuses every change to a frozen plan; the page also stops edits where they start (typing, dragging,
+// clicking) and says why. Looking, copying, making the LaTeX tables and saving snapshots still work.
+const isFrozen = () => !!(S.view === 'proposal' && S.P && S.P.proposal && S.P.proposal.frozen_at);
+const canFreeze = () => !!(S.P && S.P.proposal && 'frozen_at' in S.P.proposal);         // a server that knows freezing
+const dateWords = d => d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+function frozenBy() {
+  const by = (S.P.proposal.frozen_by || '').toLowerCase(), m = S.P.members.find(x => (x.email || '').toLowerCase() === by);
+  return m ? (m.first + ' ' + m.last).trim() : by || 'someone';
+}
+const frozenWhen = () => 'Frozen on ' + dateWords(new Date(S.P.proposal.frozen_at)) + ' by ' + frozenBy();
+function freezeToggle() {
+  if (!canFreeze()) return '';
+  const f = isFrozen(), can = S.P.you.can_manage_team;
+  if (!f && !can) return '';
+  return '<button type="button" class="btn freeze' + (f ? ' on' : '') + '" data-freeze aria-pressed="' + f + '"' + (can ? '' : ' disabled') + ' title="' +
+    esc(f ? frozenWhen() + (can ? '. Click to unfreeze.' : '. A full editor can unfreeze it.') : 'Freeze this work plan, so nothing in it can be changed (for example, once the proposal is submitted)') +
+    '">❄ ' + (f ? 'Frozen' : 'Freeze') + '</button>';
+}
+function frozenNote() {
+  return isFrozen() ? '<div class="frozen-note">❄ ' + esc(frozenWhen()) + ': nothing in this work plan can be changed. ' +
+    (S.P.you.can_manage_team ? 'To make edits, unfreeze it with the ❄ Frozen toggle beside the tabs.' : 'A full editor can unfreeze it.') + '</div>' : '';
+}
+function frozenNotice() {
+  if (!$('#modal').hidden) return;
+  modal('<h2>This work plan is frozen</h2><p style="margin:0;line-height:1.55">' +
+    (S.P.you.can_manage_team ? 'To unfreeze it and make edits, click the ❄ Frozen toggle beside the tabs.' : 'Only its full editors (and admins) can unfreeze it, with the ❄ Frozen toggle beside the tabs.') +
+    '</p><div class="actions"><button type="button" class="btn primary" data-i="ok">OK</button></div>', m => { m.querySelector('[data-i]').onclick = closeModal; });
+}
+async function toggleFreeze() {
+  const f = isFrozen(), title = S.P.proposal.title, name = 'Frozen ' + dateWords(new Date());
+  const ok = await ask(f ? 'Unfreeze this work plan?' : 'Freeze this work plan?', f
+    ? 'Everyone on the team will be able to change "' + title + '" again. The snapshot saved when it was frozen stays in Snapshots.'
+    : 'Nothing in "' + title + '" can be changed until a full editor unfreezes it: not the plan, the team, travel and budget, or its settings. ' +
+      'Everyone on the team can still look at it, copy from it, make its LaTeX tables and save snapshots. A snapshot named "' + name + '" is saved now.',
+    [[f ? 'Unfreeze' : 'Freeze', true, 'primary']]);
+  if (!ok) return;
+  await attempt(async () => {
+    await change('updateProposal', S.pid, { version: S.P.proposal.version, frozen: !f, snapshot_name: name });
+    toast(f ? 'Unfrozen: the work plan can be changed again.' : 'Frozen. The snapshot "' + name + '" was saved.', true);
+  });
+}
+const FROZEN_OK = '[data-tab],[data-zoom],[data-teamview],[data-go],[data-open],[data-openitem],[data-table],[data-editperson],[data-delsnap],[data-freeze],' +
+  '[data-act="closeDetails"],[data-act="copyId"],[data-act="copyTable"],[data-act="saveSnapshot"],[data-act="newProposal"],#snap-name,#latex';
+const TEXT_BOX = 'input:not([type=checkbox]):not([type=radio]):not([type=button]),textarea';
+function frozenTarget(e) {                                      // a control that would change the frozen plan, or null
+  if (!isFrozen() || !e.target.closest || e.target.closest('#modal')) return null;
+  const t = e.target.closest('#app button, #app select, #app input, #app textarea, #app .tl.leaf');
+  return t && !t.closest(FROZEN_OK) ? t : null;
+}
+// Buttons, lists, ticks and the calendar are stopped when pressed; the notice opens when the button is let go (opened at
+// once, letting go would land on it and close it). Boxes can still be selected and copied.
+let frozenPress = false;
+document.addEventListener('pointerdown', e => {
+  const t = frozenTarget(e); if (!t || t.matches(TEXT_BOX)) return;
+  e.preventDefault(); e.stopPropagation(); frozenPress = true;
+}, true);
+document.addEventListener('pointerup', e => { if (frozenPress) { frozenPress = false; e.preventDefault(); e.stopPropagation(); frozenNotice(); } }, true);
+document.addEventListener('click', e => { const t = frozenTarget(e); if (t && !t.matches(TEXT_BOX)) { e.preventDefault(); e.stopPropagation(); } }, true);
+document.addEventListener('keydown', e => {                     // typing, deleting, pasting, cutting, or arrows in a list: stopped
+  const t = frozenTarget(e); if (!t || !t.matches(TEXT_BOX + ',select')) return;
+  const k = e.key || '', mod = e.ctrlKey || e.metaKey;
+  if (mod ? /^[vxzy]$/i.test(k) : (k.length === 1 || /^(Backspace|Delete|Enter)$/.test(k) || (t.matches('select') && /^Arrow/.test(k)))) {
+    e.preventDefault(); e.stopPropagation(); frozenNotice();
+  }
+}, true);
 
 // ── undo and redo: your own changes to this work plan, one at a time (kept by the server, so they survive a reload) ──
 const MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
@@ -690,7 +769,7 @@ function undoButtons() {
     return '<button type="button" class="btn" data-undo="' + which + '"' + (what ? '' : ' disabled') + ' title="' +
       esc(what ? word + ' ' + what + ' (' + KEYS[which] + ')' : 'Nothing to ' + word.toLowerCase()) + '">' + icon + ' ' + word + '</button>';
   };
-  return '<span class="undo">' + b('undo', '↶', 'Undo') + b('redo', '↷', 'Redo') + '</span>';
+  return b('undo', '↶', 'Undo') + b('redo', '↷', 'Redo');
 }
 async function undoRedo(which) {
   if (!canUndo() || undoRedo.busy) return;
@@ -708,6 +787,7 @@ document.addEventListener('keydown', e => {
   if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
   const k = (e.key || '').toLowerCase(), which = k === 'z' ? (e.shiftKey ? 'redo' : 'undo') : k === 'y' && !e.shiftKey ? 'redo' : null;
   if (!which || S.view !== 'proposal' || !S.P || !$('#modal').hidden || DRAG || !canUndo()) return;
+  if (isFrozen() && !(e.target.closest && e.target.closest(TEXT_BOX))) { e.preventDefault(); frozenNotice(); return; }
   const box = e.target.closest && e.target.closest('textarea,[contenteditable],input:not([type=checkbox]):not([type=radio]):not([type=button])');
   if (box && (box.isContentEditable || box.value !== box.defaultValue)) return;       // something typed: the box's own undo
   e.preventDefault();
@@ -849,6 +929,7 @@ function viewPlan() {
     '<div class="row" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"><button type="button" class="btn" data-act="addCategory">+ Task category</button>' +
     '<span class="hint" style="margin:0;flex:1;min-width:260px">Drag across a task\'s row to draw its bar, week by week; drag a bar\'s ends (the cursor becomes ↔) to lengthen or shorten it, or its middle to move it; click a bar and press Delete to remove it. A click beside a bar changes nothing; drawing a new bar beside one asks before replacing it. ' +
     'Undo (' + KEYS.undo + ') takes back your last change, one at a time; Redo (' + KEYS.redo + ') puts it back. ' +
+    'Once the proposal is submitted, a full editor can freeze the work plan (❄ Freeze, beside the tabs), so nothing in it changes by accident. ' +
     (cols ? 'Type weeks straight into a person\'s column (a gray (2) is weeks they get through "team"); ★ makes them the task lead. ' : '') + 'Click a title for its details; Close (or Return, or Esc) hides them. Titles in <b style="color:var(--accent2)">gold</b> are task categories, ' +
     'in <b style="color:var(--parent)">lavender</b> tasks with subtasks; the others hold the effort. ' +
     'The FTE column keeps a running total for each row as you go: a task\'s own effort, a task with subtasks its subtasks\' (in italics), a task category its tasks\' (in bold). ' +
@@ -1362,6 +1443,7 @@ function wire() {
   app.querySelectorAll('[data-zoom]').forEach(b => b.onclick = () => setPlanZoom(b.dataset.zoom === 'fit' ? 0 : planZoom() + +b.dataset.zoom));
   app.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openProposal(b.dataset.open));
   app.querySelectorAll('[data-undo]').forEach(b => b.onclick = () => undoRedo(b.dataset.undo));
+  app.querySelectorAll('[data-freeze]').forEach(b => b.onclick = toggleFreeze);
   app.querySelectorAll('[data-act]').forEach(b => {
     if (b.tagName === 'SELECT') return;
     b.onclick = () => ACTIONS[b.dataset.act] && ACTIONS[b.dataset.act]();

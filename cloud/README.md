@@ -95,6 +95,11 @@ Rules the server applies to every change:
   and records each row it changes, so changes made before a restore can still be undone after it. A profile
   changed with a work plan open is undone in that plan. `GET /api/proposals/<id>` says what undo and redo would
   do (`you.undo`, `you.redo`), in words. Changes made before undo existed (November 2026) can't be undone.
+- Freezing (`PATCH /api/proposals/<id>` with `{"frozen": true}` or `false`, and optionally `snapshot_name`; full
+  editors and admins): a frozen work plan refuses every change (code `frozen`), checked before anything else,
+  including restoring a snapshot, undo, and deleting the plan; it can still be read, its tables made and snapshots
+  saved. Freezing saves a named snapshot. Profile changes that would renumber roles in a frozen plan, or make someone a
+  collaborator there, wait and are made when it is unfrozen. Freezing and unfreezing are not undone by Undo.
 - Refusals are HTTP 200 with `{"status": "error", "code": ..., "message": ...}`.
 - `GET /api/proposals/<id>/changed` returns the number of the proposal's newest change; the dashboard asks
   every 10 seconds while it is visible and reloads only when the number grows.

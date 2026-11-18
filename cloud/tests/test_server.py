@@ -954,3 +954,73 @@ def test_undo_needs_the_same_rights_as_the_change(team):
     eve.ok('patch', f"/api/members/{me['id']}", dict(version=me['version'], is_lead=False))   # Ann is no longer a full editor
     ann.no('post', f'/api/proposals/{pid}/undo', code='refused')
     assert you(ann, pid)['undo'] == 'adding Cat Catson to the team'  # still there, if she becomes a full editor again
+
+
+# ------------------------------------------------ freezing a work plan
+def freeze(api, pid, on=True, **kw):
+    v = api.ok('get', f'/api/proposals/{pid}')['proposal']['version']
+    return api.ok('patch', f'/api/proposals/{pid}', dict(version=v, frozen=on, **kw))['proposal']
+
+
+def test_a_frozen_plan_can_t_be_changed_in_any_way(team):
+    ann, eve, pid, goal, task, m = team['ann'], team['eve'], team['pid'], team['goal'], timed(team['ann'], team['task']), team['bob_m']
+    a = ann.ok('post', f"/api/items/{task['id']}/assignments", dict(member_id=m['id'], weeks=6))['assignment']
+    line = ann.ok('post', f'/api/proposals/{pid}/nonlabor', dict(item='Publications', amounts=[1000, 0, 0]))['line']
+    snap = ann.ok('post', f'/api/proposals/{pid}/snapshots', dict(name='early'))['snapshot']
+    team['bob'].no('patch', f'/api/proposals/{pid}', dict(frozen=True), code='refused')     # only full editors and admins
+    p = freeze(ann, pid, snapshot_name='Frozen Nov 17, 2026')
+    assert p['frozen_at'] and p['frozen_by'] == 'ann@x.org'
+    assert [s['name'] for s in ann.ok('get', f'/api/proposals/{pid}/snapshots')['snapshots'] if s['kind'] == 'named'][0] == 'Frozen Nov 17, 2026'
+    before = full(ann, pid)
+    t = item(ann, pid, task['id']); prop = ann.ok('get', f'/api/proposals/{pid}')['proposal']
+    attempts = [('post', f'/api/proposals/{pid}/items', dict(title='New')),
+                ('patch', f"/api/items/{t['id']}", dict(version=t['version'], title='Renamed')),
+                ('patch', f"/api/items/{t['id']}", dict(version=t['version'], start_year=None, start_week=None, end_year=None, end_week=None)),
+                ('patch', f"/api/items/{t['id']}", dict(version=t['version'], parent_id=None, position=0)),
+                ('delete', f"/api/items/{t['id']}?confirm=1", None),
+                ('post', f"/api/items/{t['id']}/assignments", dict(is_team=True, weeks=1)),
+                ('patch', f"/api/assignments/{a['id']}", dict(version=a['version'], weeks=9)),
+                ('delete', f"/api/assignments/{a['id']}", None),
+                ('post', f"/api/proposals/{pid}/members", dict(person_id=team['people']['cat']['id'], role='co-I')),
+                ('patch', f"/api/members/{m['id']}", dict(version=m['version'], trips=[1, 0, 0])),
+                ('delete', f"/api/members/{m['id']}?confirm=1", None),
+                ('post', f'/api/proposals/{pid}/nonlabor', dict(item='More', amounts=[1, 0, 0])),
+                ('patch', f"/api/nonlabor/{line['id']}", dict(version=line['version'], item='Pubs')),
+                ('delete', f"/api/nonlabor/{line['id']}", None),
+                ('patch', f'/api/proposals/{pid}', dict(version=prop['version'], title='New title')),
+                ('patch', f'/api/proposals/{pid}', dict(version=prop['version'], n_years=4)),
+                ('post', f"/api/snapshots/{snap['id']}/restore", None),
+                ('post', f'/api/proposals/{pid}/undo', None),
+                ('delete', f"/api/proposals/{pid}?confirm_title=Test%20Proposal", None)]
+    for who in (ann, eve):
+        for method, path, body in attempts:
+            out = who.no(method, path, body, code='frozen')
+            assert 'is frozen' in out['message'] and 'freeze toggle' in out['message'], (method, path)
+    assert full(ann, pid) == before
+    ann.ok('post', f'/api/proposals/{pid}/snapshots', dict(name='still fine'))       # looking, snapshots and tables are fine
+    ann.ok('get', f'/api/proposals/{pid}/tables')
+    p = freeze(ann, pid, False)
+    assert p['frozen_at'] is None and p['frozen_by'] is None
+    undo(ann, pid, done='adding the budget line "Publications"')                     # freezing is not something Undo takes back
+    t = item(ann, pid, task['id'])
+    ann.ok('patch', f"/api/items/{t['id']}", dict(version=t['version'], title='Renamed'))
+
+
+def test_profile_changes_reach_a_frozen_plan_when_it_is_unfrozen(team):
+    ann, pid, p = team['ann'], team['pid'], team['people']
+    ann.ok('post', f"/api/proposals/{pid}/members", dict(person_id=p['cat']['id'], role='co-I'))     # Bobson co-I 1, Catson co-I 2
+    other = ann.ok('post', '/api/proposals', dict(title='Other', leads=[dict(person_id=p['ann']['id'], role='PI')]))['proposal']['id']
+    ann.ok('post', f"/api/proposals/{other}/members", dict(person_id=p['bob']['id'], role='co-I'))
+    ann.ok('post', f"/api/proposals/{other}/members", dict(person_id=p['cat']['id'], role='co-I'))
+    freeze(ann, pid)
+    roles = lambda q: {m['last']: m['short_id'] for m in ann.ok('get', f'/api/proposals/{q}')['members']}
+    assert roles(pid) == roles(other) == {'Annson': 'PI', 'Bobson': 'co-I 1', 'Catson': 'co-I 2'}
+    bob = ann.ok('get', '/api/people')['people'][1]
+    ann.ok('patch', f"/api/people/{bob['id']}", dict(version=bob['version'], last='Zed'))          # a profile change
+    cat = next(x for x in ann.ok('get', '/api/people')['people'] if x['last'] == 'Catson')
+    assert roles(other) == {'Annson': 'PI', 'Catson': 'co-I 1', 'Zed': 'co-I 2'}                  # unfrozen plans follow at once
+    assert roles(pid) == {'Annson': 'PI', 'Catson': 'co-I 2', 'Zed': 'co-I 1'}                    # the frozen one keeps its numbers
+    ann.ok('patch', f"/api/people/{cat['id']}", dict(version=cat['version'], us=False))           # Cat moves abroad
+    assert roles(other)['Catson'] == 'collab 1' and roles(pid)['Catson'] == 'co-I 2'
+    freeze(ann, pid, False)
+    assert roles(pid) == roles(other) == {'Annson': 'PI', 'Catson': 'collab 1', 'Zed': 'co-I 1'}
