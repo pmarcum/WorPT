@@ -8,7 +8,7 @@
 % Packages that your document has already loaded are not loaded again, and nothing here changes how the
 % rest of your document looks.
 \NeedsTeXFormat{LaTeX2e}
-\ProvidesPackage{worpt}[2026/11/07 WorPT tables]
+\ProvidesPackage{worpt}[2026/11/20 WorPT tables]
 
 \RequirePackage{array}      % column types
 \RequirePackage{multirow}   % header cells two rows tall
@@ -32,12 +32,14 @@
 \providecolor{mediumelectricblue}{rgb}{0.01,0.31,0.59}
 
 % A table centered in the space it is given, spaced as LaTeX spaces a long table: a big skip above it, and a big
-% skip below it unless it opens its float or minipage (where LaTeX leaves the space below out).
+% skip below it unless it opens its float or minipage (where LaTeX leaves the space below out). When it opens its float
+% or minipage, there is no big skip above it either: the float is already set apart from the text around it, and the
+% skip only took room (12pt, enough to push a full-page schedule and its caption onto a second page).
 % #1 is a command holding the column specification.
 \newif\ifWorPT@opens
 \newenvironment{WorPTtabular}[1]{%
-  \par\penalty\z@\vskip\bigskipamount
   \if@minipage\WorPT@openstrue\else\WorPT@opensfalse\fi
+  \par\penalty\z@\ifWorPT@opens\else\vskip\bigskipamount\fi
   \WorPTstraySpace{#1}%
   \noindent\hb@xt@\linewidth\bgroup\hfil\kern-\WorPTstray\WorPTcolorPadding\expandafter\tabular\expandafter{#1}}%
   {\endtabular\hfil\egroup\par

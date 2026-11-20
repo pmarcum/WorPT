@@ -51,9 +51,11 @@ Refer to <b>Customizations</b> section below to add personal preferences in the 
 %::::::::::::::::: start NOTANONschedule :::::::::::::::::::
 %\clearpage         % [optional] (could instead use \newpage, or comment out)
 \input{NOTANONschedule} % reset file parameters
+%\LandScapetrue               % [optional] turn the table sideways, on a page of its own
+%\def\SpaceBetweenRows{0.7}   % [optional] tighter rows (0.8 unless set); below about 0.65 the headings start to crowd
 
 \begin{NOTANONschedule}
-\caption{Resource-loaded project schedule. Tasks are listed (left side), with duration of task activity indicated in blue-colored timelines, in months, under quarter-year labels (1,2,3,4); a task with subtasks (indented below it) has a light blue timeline spanning theirs. Each team member has a column (label color: blue$=$funded/U.S., black$=$not funded/U.S., red$=$international), marked for each task they work on: \TeamLeadKey$=$task lead, \TeamFundedKey$=$funded by this grant, \TeamUnfundedKey$=$partly or wholly not funded by this grant. The bottom rows give each team member's funded and unfunded effort over the whole grant in FTE (1~FTE$=$12~months); ``Total FTE'' (right side) is each task's effort, funded and unfunded: in italics for a task with subtasks (theirs added up), and in bold for a task category (its tasks added up).}
+\caption{Resource-loaded project schedule. Blue bars give each task's months, under quarter-year labels (1--4); a light blue bar spans a task's subtasks (indented). Team columns (label color: blue$=$funded/U.S., black$=$not funded/U.S., red$=$international) mark \TeamLeadKey$=$task lead, \TeamFundedKey$=$funded by this grant, \TeamUnfundedKey$=$partly or wholly not funded by this grant. ``Total FTE'' (right; 1~FTE$=$12~months) is each task's effort, in italics for a task's subtasks added up and in bold for a category's tasks; the bottom rows give each member's funded and unfunded FTE.}
 \label{tab:NOTANONschedule}
 \end{NOTANONschedule}
 %:::::::::::::::::: end NOTANONschedule ::::::::::::::::::::

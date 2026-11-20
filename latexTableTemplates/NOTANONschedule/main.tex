@@ -111,14 +111,16 @@
 \def\[INSERTFILENAME]Columns{
 |>{\raggedright\arraybackslash\leavevmode}p{\WorPTtitleWidth} % title column: the width left over
 |*{\NumberYears}{@{}%                                % timeline: a column per month; faint lines between months, light ones between quarters
-p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\QuarterRule}%
-p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\QuarterRule}%
-p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\QuarterRule}%
-p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{}|}%
+>{\leavevmode}p{\WorPTmonthWidth}@{\MonthRule}>{\leavevmode}p{\WorPTmonthWidth}@{\MonthRule}>{\leavevmode}p{\WorPTmonthWidth}@{\QuarterRule}%
+>{\leavevmode}p{\WorPTmonthWidth}@{\MonthRule}>{\leavevmode}p{\WorPTmonthWidth}@{\MonthRule}>{\leavevmode}p{\WorPTmonthWidth}@{\QuarterRule}%
+>{\leavevmode}p{\WorPTmonthWidth}@{\MonthRule}>{\leavevmode}p{\WorPTmonthWidth}@{\MonthRule}>{\leavevmode}p{\WorPTmonthWidth}@{\QuarterRule}%
+>{\leavevmode}p{\WorPTmonthWidth}@{\MonthRule}>{\leavevmode}p{\WorPTmonthWidth}@{\MonthRule}>{\leavevmode}p{\WorPTmonthWidth}@{}|}%
 @{}*{\NumberTeamMinusOne}{>{\centering\arraybackslash\leavevmode}p{\WorPTteamWidth}@{\TeamRule}}% team: a column per member, light lines between
 >{\centering\arraybackslash\leavevmode}p{\WorPTteamWidth}@{}%
 |>{\centering\arraybackslash\leavevmode}p{\WorPTfteWidth}| % total fte column: as wide as its numbers
 % (Written this way for aastex and revtex, which misread a repeat inside a repeat, or a repeat that starts with | followed by @.)
+% Every column starts its cell with \leavevmode: aastex (revtex) makes a row taller, by most of a line, for each cell left
+% empty without it, and most month cells are empty (only colored).
 }
 
 %--- the widths: month columns wide enough for the timeline's labels (so the last month of a year is not stretched to
