@@ -8,10 +8,11 @@
 % Packages that your document has already loaded are not loaded again, and nothing here changes how the
 % rest of your document looks.
 \NeedsTeXFormat{LaTeX2e}
-\ProvidesPackage{worpt}[2026/11/20 WorPT tables]
+\ProvidesPackage{worpt}[2026/11/21 WorPT tables]
 
 \RequirePackage{array}      % column types
 \RequirePackage{multirow}   % header cells two rows tall
+\RequirePackage{longtable}  % the schedule, when it runs over several pages
 \RequirePackage{xcolor}     % colors
 \RequirePackage{colortbl}   % colored cells and rules
 \PassOptionsToPackage{figuresright}{rotating}   % every landscape table turned the same way
@@ -88,6 +89,120 @@
 \newif\ifWorPTlandscape
 
 % A table set where it stands, at the left margin (the travel and non-labor tables).
+% A table that runs over several pages, where it is written: \WorPTacrossPages{<columns command>}{<headings>}{<rows>}
+% {<foot>}{<caption and label>}{<a row above each later part>}{<a row under each part but the last>}{<number of columns>}.
+% The headings are repeated on each page; the foot (rows that end the table) and the caption come once, at the end. As
+% wide as the text, centered.
+% - longtable sets its headings and feet apart from the rows; each of them gets a hidden row (\kill) with a cell in every
+%   column, so their columns are as wide as the rows' on the first run too (without it, a heading made only of labels
+%   over several columns would have none of those columns' widths until longtable's reruns).
+% - The foot is the table's last rows, not longtable's last foot (longtable keeps room on each page only for the foot
+%   it puts under a part that continues, so a taller last foot could run off its page); the caption comes after the
+%   foot's closing line, inside the table, with no page break before it (the foot's rows keep with it on their own).
+% - The caption is the document's own table caption (as in a table float, so it looks like the other tables'
+%   captions); longtable has already counted the table, so the caption gets that number again.
+\newcommand\WorPTacrossPages[8]{%
+  \WorPTstraySpace{#1}\LTleft=-\WorPTstray plus 1fill\relax\LTright=0pt plus 1fill\relax   % takes back aastex's stray spaces, as above
+  \def\WorPT@kill{}\count@\@ne
+  \loop\ifnum\count@<#8\relax \expandafter\def\expandafter\WorPT@kill\expandafter{\WorPT@kill&}\advance\count@\@ne\repeat
+  \let\WorPT@caption\caption
+  \begingroup\LTpost\z@\WorPT@revtexColumns\let\WorPTlastLine\WorPT@lastLineAcrossPages
+  \@twocolumnfalse % (\WorPTbeginFullWidth has set one column; aastex's longtable would switch on its own, and back too early)
+  \expandafter\longtable\expandafter{#1}%
+  \WorPT@kill\kill#2\endfirsthead
+  \WorPT@kill\kill#6#2\endhead
+  \WorPT@kill\kill\hline#7\endfoot
+  \WorPT@kill\kill\endlastfoot
+  \expandafter#3#4% (the foot opened first: the rows' last line then sees the foot's first, and they make a double line)
+  \noalign{\penalty\@M\vbox{\def\@captype{table}\let\caption\WorPT@caption\addtocounter{table}\m@ne#5\par}}%
+  \endlongtable
+  \endgroup
+  \addvspace\bigskipamount}
+
+% revtex4-2 builds the columns of a long table so that, from about the eighth column on, what is set between a paragraph
+% column and the next (@{...}) is set twice, which makes those columns wider than they should be. aastex702, built on
+% the same code, fixed this: the end of a paragraph column (\@endpbox) is left as it is while the columns are built.
+% \WorPT@revtexColumns does the same, in revtex4-2 only, and only for the schedule's long table (inside its group).
+\def\WorPT@revtexColumns{\@ifclassloaded{revtex4-2}{\let\WorPT@mkpream\@mkpream\def\@mkpream##1{\let\@endpbox\relax\WorPT@mkpream{##1}}}{}}
+
+% The line that closes a table (the schedule's foot ends with it): \hline. In a table across pages, longtable's \hline
+% is two lines with a page break favored between them (which could leave the caption alone on the next page), so there
+% it is one line, drawn as colortbl draws longtable's lines, with no page break before it.
+\newcommand\WorPTlastLine{\hline}
+\def\WorPT@lastLineAcrossPages{\noalign{\penalty\@M}\multispan\LT@cols{\CT@arc@\leaders\hrule\@height\arrayrulewidth\hfill}\cr}
+
+% At the start of a row: no page break before it (in a table that runs over several pages; elsewhere it changes nothing).
+% aastex and revtex end every table row with a mark that allows a page break there; \unpenalty takes that mark
+% away, so the row's only mark is this one. (In other classes there is no such mark and \unpenalty does nothing.)
+\newcommand\WorPTkeepWithNext{\noalign{\unpenalty\penalty\@M}}
+
+% \WorPTifFitsPage{<settings>}{<columns command>}{<table>}{<caption and label>}{<if it fits>}{<if not>}: whether the table and
+% its caption, set as in a table float, fit on one page (the page's text height). In landscape mode (\ifWorPTlandscape)
+% the page is turned: the table is as wide as the text is tall, and must fit in the text's width. The trial is thrown
+% away: the table counter is put back, and what the caption and label write is not written.
+\newif\ifWorPT@fits
+\newdimen\WorPT@pageWidth \newdimen\WorPT@pageHeight
+\newcommand\WorPTifFitsPage[6]{%
+  \begingroup
+    \count@\c@table
+    \ifWorPTlandscape\WorPT@pageWidth\textheight\WorPT@pageHeight\textwidth\else\WorPT@pageWidth\textwidth\WorPT@pageHeight\textheight\fi
+    \setbox\z@\vbox{\color@begingroup\hsize\WorPT@pageWidth\linewidth\WorPT@pageWidth\@floatboxreset\def\@captype{table}#1%
+      \begin{WorPTtabular}{#2}#3\end{WorPTtabular}#4\color@endgroup}%
+    \global\c@table\count@
+    \ifdim\dimexpr\ht\z@+\dp\z@\relax>\WorPT@pageHeight\global\WorPT@fitsfalse\else\global\WorPT@fitstrue\fi
+  \endgroup
+  \ifWorPT@fits\expandafter\@firstoftwo\else\expandafter\@secondoftwo\fi{#5}{#6}}
+
+% Pages turned sideways, for a table in landscape mode that runs over several pages: what is inside starts on a new
+% page, is set as wide as the text is tall, and each of its pages is turned (as the lscape package does, which is not
+% loaded: in aastex and revtex, loading it turns every page of the document). The text after it starts on a new page.
+% \WorPT@endPage ends the page now: aastex and revtex end a page with messages to their page output, which wait for
+% TeX's next look at the page (which a penalty brings about at once; at the top of the next page it is dropped), so
+% that the page before is not turned and the last turned page is.
+\def\WorPT@endPage{\clearpage\penalty\z@}
+\newenvironment{WorPTlandscape}{%
+  \WorPT@endPage
+  \let\WorPT@makecol\@makecol\let\WorPT@makefcolumn\@makefcolumn
+  \vsize\textwidth\hsize\textheight\linewidth\hsize\columnwidth\hsize
+  \@colroom\vsize\textheight\vsize\@colht\vsize
+  \def\LS@rot{\setbox\@outputbox\vbox{\hbox{\rotatebox{90}{\box\@outputbox}}}}% aastex and revtex turn each page with it
+  \ifx\@makecol\@undefined\else                                                       % other classes: as lscape does
+    \def\@makecol{\WorPT@makecol\LS@rot}\def\@makefcolumn##1{\WorPT@makefcolumn{##1}\LS@rot}%
+  \fi}
+  {\WorPT@endPage
+   \global\@colht\textheight\global\vsize\textheight\global\@colroom\textheight}
+
+% A label centered where it is put, taking no width: for labels over several columns made wide enough for them.
+\newcommand\WorPTnoWidth[1]{\makebox[0pt]{#1}}
+
+% \WorPTbeginFullWidth ... \WorPTendFullWidth: in a two-column document, one column (the whole text width) in between,
+% for a table across pages. aastex and revtex switch where the table starts (the two columns above it are balanced)
+% and switch back after it, as their own longtable* does; other classes can only switch at a new page, so there the
+% table starts on a new page, and the text after it does too. In one column, they do nothing.
+\newif\ifWorPT@twoColumns
+\newcommand\WorPTbeginFullWidth{%
+  \@ifundefined{onecolumngrid@push}%
+    {\if@twocolumn\global\WorPT@twoColumnstrue\onecolumn\else\global\WorPT@twoColumnsfalse\fi}%
+    {\onecolumngrid@push}}
+\newcommand\WorPTendFullWidth{%
+  \@ifundefined{onecolumngrid@pop}{\ifWorPT@twoColumns\twocolumn\fi}{\onecolumngrid@pop}}
+
+% WorPTsidewaysTable: a table turned sideways, on a page of its own: rotating's sidewaystable*, a float. But rotating
+% sets it across both columns of a two-column document only when \if@twocolumn is true, which aastex631 and revtex4-2
+% (whose two columns are made another way) leave false; there the table would be set in one column and run past the
+% edges of the text. In those, it is set where it is written instead, on WorPT's own sideways page across both
+% columns (the two columns above it are balanced, and resume after it), as a float's contents are set.
+\newif\ifWorPT@ownSideways
+\newenvironment{WorPTsidewaysTable}{%
+  \WorPT@ownSidewaysfalse
+  \ifdim\columnwidth<\textwidth\if@twocolumn\else\WorPT@ownSidewaystrue\fi\fi
+  \ifWorPT@ownSideways
+    \par\WorPTbeginFullWidth\begin{WorPTlandscape}\@floatboxreset\def\@captype{table}\vspace*{\fill}%
+  \else
+    \begin{sidewaystable*}%
+  \fi}
+ {\ifWorPT@ownSideways\par\vspace*{\fill}\end{WorPTlandscape}\WorPTendFullWidth\else\end{sidewaystable*}\fi}
+
 \newenvironment{WorPTinlineTabular}[1]{\WorPTstraySpace{#1}\noindent\kern-\WorPTstray\WorPTcolorPadding\expandafter\tabular\expandafter{#1}}{\endtabular}
 
 % A colored cell is colored out to its lines, padding and all: colortbl colors \col@sep beyond the text on each side,

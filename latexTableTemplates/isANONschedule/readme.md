@@ -53,6 +53,7 @@ Refer to <b>Customizations</b> section below to add personal preferences in the 
 \input{isANONschedule} % reset file parameters
 %\LandScapetrue               % [optional] turn the table sideways, on a page of its own
 %\def\SpaceBetweenRows{0.7}   % [optional] tighter rows (0.8 unless set); below about 0.65 the headings start to crowd
+%\def\ScheduleAcrossPages{always} % [optional] auto (default): one page if it fits, else across pages; always; never
 
 \begin{isANONschedule}
 \caption{Resource-loaded project schedule. Blue bars give each task's months, under quarter-year labels (1--4); a light blue bar spans a task's subtasks (indented). Team columns (label color: blue$=$funded/U.S., black$=$not funded/U.S., red$=$international) mark \TeamLeadKey$=$task lead, \TeamFundedKey$=$funded by this grant, \TeamUnfundedKey$=$partly or wholly not funded by this grant. ``Total FTE'' (right; 1~FTE$=$12~months) is each task's effort, in italics for a task's subtasks added up and in bold for a category's tasks; the bottom rows give each member's funded and unfunded FTE.}
@@ -88,11 +89,23 @@ You can just comment out your added lines and recompile the document, if you wan
 <td><pre><code>
 \LandScapetrue          % will put the table in landscape mode
 </code></pre>
-Without this line, the table is set in landscape mode only when it needs to be: when the title column would be narrower than <code>\MinTitleWidth</code> (below).
+Without this line, the table is set in landscape mode only when it needs to be: when the title column would be narrower than <code>\MinTitleWidth</code> (below). In landscape mode the table is turned sideways, on a page of its own, a float like the other tables; in a two-column document in the aastex631 or revtex4-2 class (whose two columns rotating can't set a sideways table across), it is set where it is written instead, across both columns: the columns above it are balanced, and resume after it.
 <details>
 <summary>reference image</summary>
 <img src="https://lh3.googleusercontent.com/d/16SbKRxlDHWshgzt-tQNsjqqSOJeCXWm1" width=15%>
 </details>
+</td>
+</tr>
+
+<tr>
+<td><b>A schedule too tall for one page</b></td>
+<td><pre><code>
+\def\ScheduleAcrossPages{<mark>auto</mark>}   % auto, always or never
+\def\ContinuedFormat{<mark>\scriptsize\itshape</mark>}   % the "continued" notes
+\def\ContinuedBelowText{<mark>continued on next page</mark>}
+\def\ContinuedAboveText{<mark>\tablename~\thetable\ (continued)</mark>}
+</code></pre>
+With <code>auto</code> (the default), the schedule is on one page when it fits there, a table that floats like the others. When it doesn't fit, it is set where its paste-in block is in your text and runs on over as many pages as it needs: its headings are repeated at the top of each page, "continued on next page" is written under each part but the last and "Table N (continued)" above each part but the first, and the team's FTE rows and the caption come once, at the end. <code>always</code> sets it that way even when it would fit on one page; <code>never</code> keeps it on one page, as before. In landscape mode the same holds, on pages turned sideways: a schedule that fits is one sideways page, as before; one that doesn't starts on a page of its own and runs on over as many sideways pages as it needs, and your text resumes, upright, on the page after. In a two-column document, it runs across both columns: aastex and revtex start it below the text before it and resume the two columns under it; other classes (article, report) can only change columns at a new page, so there it starts on a new page, and the text after it does too. A page doesn't break right under a task category's title, or between a task and its first subtask, and the FTE rows and the caption stay together on the last page.
 </td>
 </tr>
 

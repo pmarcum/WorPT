@@ -32,9 +32,11 @@ def front(cls):
             '\\begin{abstract}An abstract.\\end{abstract}\n\\section{Text}Some text.\n\n') if 'aastex' in cls else ''
 
 
-# Writes the text block's left edges (odd and even pages) and width to the log, in points.
+# Writes the text block's left edges (odd and even pages) and width to the log, in points; then its top, its height
+# and the depth the last line on a page may have below it (\maxdepth).
 EDGES = ('\\makeatletter\\AtEndDocument{\\typeout{WORPT EDGES \\strip@pt\\dimexpr1in+\\hoffset+\\oddsidemargin\\relax\\space'
-         '\\strip@pt\\dimexpr1in+\\hoffset+\\evensidemargin\\relax\\space\\strip@pt\\textwidth}}\\makeatother\n')
+         '\\strip@pt\\dimexpr1in+\\hoffset+\\evensidemargin\\relax\\space\\strip@pt\\textwidth}'
+         '\\typeout{WORPT TOP \\strip@pt\\dimexpr1in+\\voffset+\\topmargin+\\headheight+\\headsep\\relax\\space\\strip@pt\\textheight\\space\\strip@pt\\maxdepth}}\\makeatother\n')
 
 
 def outside_text(folder, pdf):
@@ -45,6 +47,27 @@ def outside_text(folder, pdf):
     lo, hi = min(odd, even) * 72 / 72.27 - 1, (max(odd, even) + width) * 72 / 72.27 + 1         # TeX points to PDF points
     xml = subprocess.run(['pdftotext', '-bbox', pdf.name, '-'], cwd=folder, capture_output=True, text=True).stdout
     return [w for sideways, words in pages(xml) if not sideways for x0, y0, x1, y1, w in words if x0 < lo or x1 > hi]
+
+
+def outside_block(folder, pdf):
+    """Words printed outside the text block (left, right, above or below), on every page, sideways or not. As on any
+    page of text, the last line may reach below the block by \\maxdepth (on a page turned sideways, the block's right
+    side is the page's bottom). Left out: page numbers, and the lines the class prints in the margins of the first
+    page ("Draft version ..." and "Typeset using ..." in aastex)."""
+    log = pdf.with_suffix('.log').read_text(errors='replace')
+    odd, even, width = map(float, re.search(r'WORPT EDGES ([\d.]+) ([\d.]+) ([\d.]+)', log).groups())
+    top, height, depth = map(float, re.search(r'WORPT TOP ([\d.]+) ([\d.]+) ([\d.]+)', log).groups())
+    bp = 72 / 72.27                                                                                  # TeX points to PDF points
+    lo, hi, up, down = min(odd, even) * bp - 1, (max(odd, even) + width) * bp + 1, top * bp - 1, (top + height) * bp + 1
+    xml = subprocess.run(['pdftotext', '-bbox', pdf.name, '-'], cwd=folder, capture_output=True, text=True).stdout
+    out = []
+    for k, (sideways, words) in enumerate(pages(xml)):
+        margin_lines = [y0 for x0, y0, x1, y1, w in words if w in ('Draft', 'Typeset') and (y0 < up or y0 > down)]
+        right, bottom = (hi + depth * bp, down) if sideways else (hi, down + depth * bp)
+        out += [(k + 1, w) for x0, y0, x1, y1, w in words
+                if (x0 < lo or x1 > right or y0 < up or y1 > bottom) and not ((y0 > down or y1 < up) and w.isdigit())
+                and not any(abs(y0 - y) < 2 for y in margin_lines)]
+    return out
 
 
 def pages(xml):
@@ -182,3 +205,155 @@ def test_task_timeline_header_takes_one_line_from_two_years_on(cls, years, tmp_p
     lines = subprocess.run(['pdftotext', '-layout', 'doc.pdf', '-'], cwd=tmp_path, capture_output=True, text=True).stdout.splitlines()
     assert any('TASK TIMELINE' in l for l in lines) == (years > 1), (cls, years)
     assert not outside_text(tmp_path, tmp_path / 'doc.pdf')
+
+
+# ------------------------------------------------ a schedule too tall for one page
+def tall_plan(categories=5, tasks=9):
+    from worpt.model import Item
+    from test_tables import proposal, task, person
+    team = [person('a', 'PI', 'Alpha'), person('b', 'co-I(1)', 'Beta'), person('c', 'pd(1)', 'Gamma')]
+    return proposal([Item(f'Category {g}', children=[
+        Item(f'Task {g}.{t}', children=[task(f'Subtask {g}.{t}.{k}', [('a', 2, 0), ('c', 1, 1)], (1, 5 * k), (2, 10)) for k in (1, 2)])
+        if t % 3 == 0 else task(f'Task {g}.{t} doing something useful', [('a', 4, 0), ('b', 2, 0)], (1, t), (2, 20)) for t in range(1, tasks + 1)])
+        for g in range(1, categories + 1)], team, n_years=3)
+
+
+def schedule_doc(tmp_path, cls, P, extra=''):
+    shutil.copy(TEMPLATE_DIR / 'worpt.sty', tmp_path)
+    (tmp_path / 'isANONschedule.tex').write_text(build(P, ['isANONschedule'])['isANONschedule'])
+    block = paste_in('isANONschedule').replace('\\input{isANONschedule} % reset file parameters', '\\input{isANONschedule}\n' + extra)
+    (tmp_path / 'doc.tex').write_text(documentclass(cls) + '\n' + paste_in('worpt') + EDGES + '\\begin{document}\n' + front(cls) +
+                                      'Before the table, see Table~\\ref{tab:isANONschedule}.\n\n' + block + '\nAfter the table.\n\\end{document}\n')
+
+
+def compile_doc(tmp_path, runs=2):
+    for _ in range(runs): subprocess.run(['pdflatex', '-interaction=nonstopmode', 'doc.tex'], cwd=tmp_path, capture_output=True, timeout=300)
+    log = (tmp_path / 'doc.log').read_text(errors='replace')
+    text = subprocess.run(['pdftotext', 'doc.pdf', '-'], cwd=tmp_path, capture_output=True, text=True).stdout
+    return log, text
+
+
+@pytest.mark.parametrize('cls', ['article', '{aastex702}', '{aastex631}', 'revtex4-2'])
+def test_a_schedule_too_tall_for_a_page_runs_over_several(cls, tmp_path):
+    """Set where it is written, its headings on every page, "continued" notes at the breaks, the caption once at the end;
+    nothing runs past the edges, and \\ref finds it."""
+    if not works(cls): pytest.skip(f'{cls} does not work on this machine, even without WorPT')
+    if not shutil.which('pdftotext'): pytest.skip('pdftotext is not installed')
+    schedule_doc(tmp_path, cls, tall_plan())
+    log, text = compile_doc(tmp_path)
+    assert not [l for l in log.splitlines() if l.startswith('!')] and 'Overfull \\hbox' not in log and 'Float too large' not in log, cls
+    parts = text.count('TASK TITLES')
+    assert parts >= 2 and text.count('continued on next page') == parts - 1 and text.count('(continued)') == parts - 1, (cls, parts)
+    assert text.count('Resource-loaded project schedule') == 1 and 'Table ??' not in text and 'Table~??' not in text
+    on = lambda words: next(k for k, page in enumerate(text.split('\f')) if words in page)        # the page it is on
+    assert on('Before the table') == on('TASK TITLES') and on('Resource-loaded') <= on('After the table')   # set where it is written
+    assert on('Funded FTE') == on('Unfunded FTE') == on('Resource-loaded'), 'the foot and the caption on one page'
+    assert not outside_block(tmp_path, tmp_path / 'doc.pdf'), cls
+
+
+@pytest.mark.parametrize('cls', ['article', '{aastex702}', '{aastex631}', 'revtex4-2'])
+def test_a_landscape_schedule_too_tall_for_a_page_runs_over_sideways_pages(cls, tmp_path):
+    """In landscape mode, a schedule too tall for its sideways page runs on over more sideways pages, from a page of its
+    own: the text before it and after it stays upright (aastex and revtex turn every page if lscape is loaded, so
+    WorPT turns its own pages)."""
+    if not works(cls): pytest.skip(f'{cls} does not work on this machine, even without WorPT')
+    if not shutil.which('pdftotext'): pytest.skip('pdftotext is not installed')
+    schedule_doc(tmp_path, cls, tall_plan(6), '\\LandScapetrue')
+    log, text = compile_doc(tmp_path)
+    assert not [l for l in log.splitlines() if l.startswith('!')] and 'Overfull \\hbox' not in log and 'Float too large' not in log, cls
+    parts = text.count('TASK TITLES')
+    assert parts >= 2 and text.count('continued on next page') == parts - 1 and text.count('(continued)') == parts - 1, (cls, parts)
+    assert text.count('Resource-loaded project schedule') == 1 and 'Table ??' not in text
+    sideways = [s for s, words in pages(subprocess.run(['pdftotext', '-bbox', 'doc.pdf', '-'], cwd=tmp_path, capture_output=True, text=True).stdout)]
+    on = lambda words: next(k for k, page in enumerate(text.split('\f')) if words in page)
+    table = range(on('TASK TITLES'), on('Resource-loaded') + 1)
+    assert len(table) == parts and all(sideways[k] for k in table), sideways
+    assert not sideways[on('Before the table')] and not sideways[on('After the table')] and on('Before the table') < table[0] < table[-1] < on('After the table'), sideways
+    assert on('Funded FTE') == on('Unfunded FTE') == on('Resource-loaded'), 'the foot and the caption on one page'
+    assert not outside_block(tmp_path, tmp_path / 'doc.pdf'), cls
+
+
+@pytest.mark.parametrize('cls, landscape', [('article', ''), ('{aastex702}', ''), ('revtex4-2', ''), ('article', '\\LandScapetrue'), ('{aastex702}', '\\LandScapetrue')])
+def test_a_schedule_across_pages_is_right_on_the_first_run(cls, landscape, tmp_path):
+    """longtable usually needs reruns to line up its headings with its rows; every heading and foot here has a hidden row
+    giving each column its width, so the first run already looks like the last (gooTeX runs pdflatex once)."""
+    if not works(cls): pytest.skip(f'{cls} does not work on this machine, even without WorPT')
+    if not shutil.which('pdftotext'): pytest.skip('pdftotext is not installed')
+    schedule_doc(tmp_path, cls, tall_plan(), landscape)
+    where = lambda: [(round(x0, 1), round(y0, 1), w) for sideways, words in pages(subprocess.run(['pdftotext', '-bbox', 'doc.pdf', '-'], cwd=tmp_path, capture_output=True, text=True).stdout)
+                     for x0, y0, x1, y1, w in words if w in ('TASK', 'TIMELINE', 'YR1', 'YR2', 'YR3', 'TEAM', 'Funded', '4.60')]
+    compile_doc(tmp_path, 1); first = where()
+    compile_doc(tmp_path, 2); assert first == where() and len(first) > 8
+
+
+@pytest.mark.parametrize('cls', ['article', '{aastex702}', '{aastex631}', 'revtex4-2'])
+def test_a_schedule_across_pages_does_not_break_under_a_title(cls, tmp_path):
+    """No page ends right under a category's title, or between a task and its first subtask (aastex and revtex end every
+    row with a mark allowing a break; the schedule's own "no break here" has to take its place)."""
+    if not works(cls): pytest.skip(f'{cls} does not work on this machine, even without WorPT')
+    if not shutil.which('pdftotext'): pytest.skip('pdftotext is not installed')
+    ends = []
+    for categories in (4, 5, 6, 7):
+        schedule_doc(tmp_path, cls, tall_plan(categories))
+        compile_doc(tmp_path, 1)
+        text = subprocess.run(['pdftotext', '-layout', 'doc.pdf', '-'], cwd=tmp_path, capture_output=True, text=True).stdout
+        ends += [[l for l in page.splitlines() if re.search(r'Category \d|Task \d|Subtask \d', l)][-1].strip() for page in text.split('\f') if 'continued on next page' in page]
+    assert len(ends) >= 3, ends
+    assert not [e for e in ends if re.search(r'Category \d|Task \d+\.\d+(\s|$)', e) and 'doing something' not in e], ends
+
+
+@pytest.mark.parametrize('landscape', ['', '\\LandScapetrue'], ids=['portrait', 'landscape'])
+@pytest.mark.parametrize('cls', ['[twocolumn]{aastex702}', '[twocolumn]{aastex631}', '[reprint]{revtex4-2}', '[twocolumn]{article}'])
+def test_a_schedule_across_pages_in_two_columns(cls, landscape, tmp_path):
+    """In a two-column document, a schedule too tall for a page runs over pages across both columns. aastex and revtex
+    start it below the text before it and resume the two columns under it; other classes give it pages of its own. In
+    landscape mode its pages are turned sideways, and the pages before and after are not."""
+    if not works(cls): pytest.skip(f'{cls} does not work on this machine, even without WorPT')
+    if not shutil.which('pdftotext'): pytest.skip('pdftotext is not installed')
+    schedule_doc(tmp_path, cls, tall_plan(6), landscape)
+    log, text = compile_doc(tmp_path)
+    assert not [l for l in log.splitlines() if l.startswith('!')] and 'Overfull \\hbox' not in log and 'Float too large' not in log, cls
+    parts = text.count('TASK TITLES')
+    assert parts >= 2 and text.count('continued on next page') == parts - 1 and text.count('(continued)') == parts - 1, (cls, parts)
+    assert text.count('Resource-loaded project schedule') == 1 and '??' not in text
+    on = lambda words: next(k for k, page in enumerate(text.split('\f')) if words in page)
+    assert on('Funded FTE') == on('Unfunded FTE') == on('Resource-loaded'), 'the foot and the caption on one page'
+    sideways = [s for s, words in pages(subprocess.run(['pdftotext', '-bbox', 'doc.pdf', '-'], cwd=tmp_path, capture_output=True, text=True).stdout)]
+    table = range(on('TASK TITLES'), on('Resource-loaded') + 1)
+    assert all(sideways[k] for k in table) == bool(landscape) and not sideways[on('Before the table')] and not sideways[on('After the table')]
+    same_page = 'article' not in cls and not landscape                     # aastex and revtex switch columns within a page
+    assert (on('Before the table') == table[0]) == same_page and (on('After the table') == table[-1]) == same_page, (cls, landscape)
+    assert not outside_block(tmp_path, tmp_path / 'doc.pdf'), cls
+
+
+@pytest.mark.parametrize('name', ['isANONschedule', 'isANONtasks', 'NOTANONtasks', 'NOTANONhst', 'isANONtravel'])
+@pytest.mark.parametrize('cls', ['[twocolumn]{aastex702}', '[twocolumn]{aastex631}', '[reprint]{revtex4-2}', '[twocolumn]{article}'])
+def test_a_sideways_table_in_two_columns_stays_inside_the_text(cls, name, tmp_path):
+    """rotating sets a sideways table across both columns only when \\if@twocolumn is true; aastex631 and revtex4-2 leave
+    it false in a two-column document, so there WorPT sets the table on its own sideways page; either way, nothing of
+    it runs past the edges of the text."""
+    if not works(cls): pytest.skip(f'{cls} does not work on this machine, even without WorPT')
+    if not shutil.which('pdftotext'): pytest.skip('pdftotext is not installed')
+    shutil.copy(TEMPLATE_DIR / 'worpt.sty', tmp_path)
+    (tmp_path / f'{name}.tex').write_text(build(load(CASES[0]), [name])[name])
+    block = re.sub(r'(\\input\{' + name + r'\}[^\n]*\n)', lambda m: m.group(1) + '\\LandScapetrue\n', paste_in(name), count=1)
+    assert '\\LandScapetrue' in block
+    (tmp_path / 'doc.tex').write_text(documentclass(cls) + '\n' + paste_in('worpt') + EDGES + '\\begin{document}\n' + front(cls) +
+                                      'Before the table.\n\n' + block + '\nAfter the table.\n\\end{document}\n')
+    log, text = compile_doc(tmp_path)
+    assert not [l for l in log.splitlines() if l.startswith('!')] and 'Overfull \\hbox' not in log, cls
+    sideways = [s for s, words in pages(subprocess.run(['pdftotext', '-bbox', 'doc.pdf', '-'], cwd=tmp_path, capture_output=True, text=True).stdout)]
+    assert True in sideways and not sideways[0], sideways
+    assert not outside_block(tmp_path, tmp_path / 'doc.pdf'), (cls, name)
+
+
+@pytest.mark.parametrize('setting, tall, parts', [('', False, 1), ('always', False, 1), ('never', True, 1), ('always', True, 2)])
+def test_the_switch_for_a_schedule_across_pages(setting, tall, parts, tmp_path):
+    """auto (the default): one page when it fits; always: set where it is written, across pages if need be; never: one page."""
+    if not shutil.which('pdftotext'): pytest.skip('pdftotext is not installed')
+    schedule_doc(tmp_path, 'article', tall_plan() if tall else tall_plan(2, 4), f'\\def\\ScheduleAcrossPages{{{setting}}}' if setting else '')
+    log, text = compile_doc(tmp_path)
+    assert not [l for l in log.splitlines() if l.startswith('!')]
+    assert text.count('TASK TITLES') == parts and text.count('continued on next page') == parts - 1
+    assert ('Float too large' in log) == (setting == 'never'), 'never keeps a tall schedule on one page, as before'
+    assert ('longtable' in log.split('\\begin{document}')[-1] and 'LT@' in (tmp_path / 'doc.aux').read_text()) == (setting == 'always')

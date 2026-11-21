@@ -66,7 +66,7 @@
 \newenvironment{[INSERTFILENAME]}{%
 \[INSERTFILENAME]Layout
 \ifWorPTlandscape
-  \begin{sidewaystable*}
+  \begin{WorPTsidewaysTable}
 \else
   \begin{table*}[h!]  % \begin{table} needed to make bottom table caption have same width as table
 \fi
@@ -96,7 +96,7 @@
 \end{WorPTtabular}}
 {%
 \ifWorPTlandscape
-  \end{sidewaystable*}
+  \end{WorPTsidewaysTable}
 \else
   \end{table*}
 \fi

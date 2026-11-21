@@ -85,7 +85,7 @@ You can just comment out your added lines and recompile the document, if you wan
 <td><pre><code>
 \LandScapetrue          % will put the table in landscape mode
 </code></pre>
-Without this line, the table is set in landscape mode only when it needs to be: when the "Task" column would be narrower than <code>\MinTitleWidth</code> (below).
+Without this line, the table is set in landscape mode only when it needs to be: when the "Task" column would be narrower than <code>\MinTitleWidth</code> (below). In landscape mode the table is turned sideways, on a page of its own, a float like the other tables; in a two-column document in the aastex631 or revtex4-2 class (whose two columns rotating can't set a sideways table across), it is set where it is written instead, across both columns: the columns above it are balanced, and resume after it.
 <details>
 <summary>reference image</summary>
 <img src="https://lh3.googleusercontent.com/d/1vMs3teKHoqZGHGqHZj4HrtaZZp9Xq0Xa" width=20%>

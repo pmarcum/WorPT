@@ -16,6 +16,18 @@
 % ___________________________________________
 \LandScapefalse             % landscape mode OFF, unless the table needs it (see MinTitleWidth); \LandScapetrue always uses it
 
+%--- a schedule too tall for one page
+% auto: on one page when it fits there (a table that floats, like the others); when it doesn't, it is set where its
+%       paste-in block is, and runs on over as many pages as it needs, its headings repeated on each page and its
+%       caption at the end. always: set that way even when it would fit. never: always one page.
+% In landscape mode, it runs on over pages turned sideways, starting on a page of its own; the text after it starts on
+% a new page. In a two-column document it runs across both columns (in aastex and revtex it starts below the text
+% before it, and the two columns resume under it; in other classes it starts on a new page, and so does the text).
+\def\ScheduleAcrossPages{auto}
+\def\ContinuedFormat{\scriptsize\itshape}                % the "continued" notes where the table breaks
+\def\ContinuedBelowText{continued on next page}           % under each part but the last
+\def\ContinuedAboveText{\tablename~\thetable\ (continued)}  % above each part but the first
+
 %--- table column widths
 % The table is as wide as the page's text. Each team member has a narrow column, just wide enough for its label and the
 % numbers at its foot, both printed sideways; the title column gets the width that is left, and a title too long for it
@@ -120,6 +132,9 @@
 >{\centering\arraybackslash\leavevmode}p{\WorPTteamWidth}@{}%
 |>{\centering\arraybackslash\leavevmode}p{\WorPTfteWidth}| % total fte column: as wide as its numbers
 % (Written this way for aastex and revtex, which misread a repeat inside a repeat, or a repeat that starts with | followed by @.)
+% The labels over several columns (TASK TIMELINE, YR1, the quarters, TEAM) take no width of their own (\WorPTnoWidth):
+% the columns under them are made wide enough for them (below), and a table set across pages needs every column's
+% width to come from the columns alone to be right on the first run.
 % Every column starts its cell with \leavevmode: aastex (revtex) makes a row taller, by most of a line, for each cell left
 % empty without it, and most month cells are empty (only colored).
 }
@@ -174,47 +189,81 @@
   \fi
   \endgroup}
 
-\newenvironment{[INSERTFILENAME]}{%
-\[INSERTFILENAME]Layout
+%--- the environment: what is written inside it (the caption and label) is collected first, so that the table can be
+% set with it on one page or, when it runs over several, with it at the end
+\def\[INSERTFILENAME]Setup{%
+\renewcommand{\arraystretch}{\SpaceBetweenRows}% controls vertical row separation/spacing
+\setlength{\tabcolsep}{\SpaceBetweenColumns}}  % controls horizontal column separation/spacing
+\newenvironment{[INSERTFILENAME]}{\[INSERTFILENAME]Layout\def\[INSERTFILENAME]Caption{}\[INSERTFILENAME]Collect}{}
+\long\def\[INSERTFILENAME]Collect#1\end#2{%   % everything up to \end{[INSERTFILENAME]} (other environments' \end kept)
+\expandafter\def\expandafter\[INSERTFILENAME]Caption\expandafter{\[INSERTFILENAME]Caption#1}%
+\def\[INSERTFILENAME]Ending{#2}\def\[INSERTFILENAME]Me{[INSERTFILENAME]}%
+\ifx\[INSERTFILENAME]Ending\[INSERTFILENAME]Me
+  \expandafter\[INSERTFILENAME]Place
+\else
+  \expandafter\def\expandafter\[INSERTFILENAME]Caption\expandafter{\[INSERTFILENAME]Caption\end{#2}}%
+  \expandafter\[INSERTFILENAME]Collect
+\fi}
+\def\[INSERTFILENAME]Always{always}\def\[INSERTFILENAME]Auto{auto}
+\def\[INSERTFILENAME]Place{%
+\let\[INSERTFILENAME]Set\[INSERTFILENAME]OnePage
+\ifx\ScheduleAcrossPages\[INSERTFILENAME]Always \let\[INSERTFILENAME]Set\[INSERTFILENAME]AcrossPages \fi
+\ifx\ScheduleAcrossPages\[INSERTFILENAME]Auto
+  \WorPTifFitsPage{\[INSERTFILENAME]Setup}{\[INSERTFILENAME]Columns}{\[INSERTFILENAME]Body}{\[INSERTFILENAME]Caption}%
+    {}{\let\[INSERTFILENAME]Set\[INSERTFILENAME]AcrossPages}%
+\fi
+\[INSERTFILENAME]Set\end{[INSERTFILENAME]}}
+\def\[INSERTFILENAME]OnePage{%
 \ifWorPTlandscape
-  \begin{sidewaystable*}
+  \begin{WorPTsidewaysTable}
 \else
   \begin{table*}[h!]     % \begin{table} needed to make bottom table caption have same width as table
 \fi
-\renewcommand{\arraystretch}{\SpaceBetweenRows} % controls vertical row separation/spacing
-\setlength{\tabcolsep}{\SpaceBetweenColumns}    % controls horizontal column separation/spacing
-\begin{WorPTtabular}{\[INSERTFILENAME]Columns}\[INSERTFILENAME]Body\end{WorPTtabular}}
-{%
+\[INSERTFILENAME]Setup
+\begin{WorPTtabular}{\[INSERTFILENAME]Columns}\[INSERTFILENAME]Body\end{WorPTtabular}
+\[INSERTFILENAME]Caption
 \ifWorPTlandscape
-  \end{sidewaystable*}
+  \end{WorPTsidewaysTable}
 \else
   \end{table*}
-\fi
-}
+\fi}
+\def\[INSERTFILENAME]AcrossPages{%
+\par\WorPTbeginFullWidth
+\ifWorPTlandscape\begin{WorPTlandscape}\fi
+\begingroup\[INSERTFILENAME]Setup
+\WorPTacrossPages{\[INSERTFILENAME]Columns}{\[INSERTFILENAME]Head}{\[INSERTFILENAME]Rows}{\[INSERTFILENAME]Foot}{\[INSERTFILENAME]Caption}%
+  {\multicolumn{[INSERTLASTCOLUMN]}{@{}l@{}}{\ContinuedFormat\ContinuedAboveText}\\}%
+  {\multicolumn{[INSERTLASTCOLUMN]}{@{}r@{}}{\ContinuedFormat\ContinuedBelowText}\\}{[INSERTLASTCOLUMN]}%
+\endgroup
+\ifWorPTlandscape\end{WorPTlandscape}\fi
+\WorPTendFullWidth}
 
 %--- the "TASK TIMELINE" header over the timeline: on one line from two years on, else on two (chosen in the layout above)
 \def\[INSERTFILENAME]TimelineHeaderOneLine{%
 \cline{2-[INSERTNUMBERYEARSLICESPLUSONE]}
 \multicolumn{1}{c|}{} &                                                  % title column
-\multicolumn{[INSERTNUMBERYEARSLICES]}{c|}{\TaskTimelineHeaderFontsize{TASK TIMELINE}} & % schedule columns
+\multicolumn{[INSERTNUMBERYEARSLICES]}{c|}{\WorPTnoWidth{\TaskTimelineHeaderFontsize{TASK TIMELINE}}} & % schedule columns
 \multicolumn{[INSERTNUMBERTEAM]}{c}{} &                                  % team columns
 \multicolumn{1}{c}{}\\                                                   % total fte column
 \cline{2-[INSERTLASTCOLUMN]}}
 \def\[INSERTFILENAME]TimelineHeaderTwoLines{%
 \cline{2-[INSERTNUMBERYEARSLICESPLUSONE]}
 \multicolumn{1}{c|}{} &                                                  % title column
-\multicolumn{[INSERTNUMBERYEARSLICES]}{c|}{\TaskTimelineHeaderFontsize{TASK}} & % schedule columns
+\multicolumn{[INSERTNUMBERYEARSLICES]}{c|}{\WorPTnoWidth{\TaskTimelineHeaderFontsize{TASK}}} & % schedule columns
 \multicolumn{[INSERTNUMBERTEAM]}{c}{} &                                  % team columns
 \multicolumn{1}{c}{}\\                                                   % total fte column
 \multicolumn{1}{c|}{} &                                                    % title column
-\multicolumn{[INSERTNUMBERYEARSLICES]}{c|}{\TaskTimelineHeaderFontsize{TIMELINE}} & % schedule columns
+\multicolumn{[INSERTNUMBERYEARSLICES]}{c|}{\WorPTnoWidth{\TaskTimelineHeaderFontsize{TIMELINE}}} & % schedule columns
 \multicolumn{[INSERTNUMBERTEAM]}{c}{} &                                    % team columns
 \multicolumn{1}{c}{}\\                                                     % total fte column
 \cline{2-[INSERTLASTCOLUMN]}}
 \let\[INSERTFILENAME]TimelineHeader\[INSERTFILENAME]TimelineHeaderTwoLines
 
-%--- the table itself: measured once without its titles, then set
-\def\[INSERTFILENAME]Body{%
+%--- the table itself, in three parts (its headings, repeated on each page when it runs over several; its rows; its
+% foot, the team's FTE over the grant), measured once without its titles, then set
+\def\[INSERTFILENAME]Body{\[INSERTFILENAME]Head\expandafter\[INSERTFILENAME]Rows\[INSERTFILENAME]Foot}% (the foot opened
+% first, so that the rows' last line sees the foot's first line, as it did in a single table: they make a double line)
+\def\[INSERTFILENAME]Head{%
 
 % ------------------------- First line(s) of headers: TASK TIMELINE, on one line or two (see the layout above)
 \[INSERTFILENAME]TimelineHeader
@@ -222,14 +271,14 @@
 % -------------------------  Third line of headers
 \multicolumn{1}{c|}{}                                                 % title column
 [INSERTYEARLABELLIST] &                                               % year label list (YR1, YR2, ...)
-\multicolumn{[INSERTNUMBERTEAM]}{c|}{\TeamHeaderFontsize{TEAM}} &    % team columns
+\multicolumn{[INSERTNUMBERTEAM]}{c|}{\WorPTnoWidth{\TeamHeaderFontsize{TEAM}}} &    % team columns
 \multicolumn{1}{c|}{}\\                                              % total fte column
 \cline{1-1}
 
 % COMMENT: below template generates a single year label.  The script glues them together in a single string
 % COMMENT: and replaces the INSERTYEARLABELLIST above.
 [STARTYEARLABELTEMPLATE]
- & \multicolumn{[INSERTNUMBERSLICESPERYEAR]}{c|}{\YearHeaderFontsize{YR[INSERTYEARNUMBER]}}
+ & \multicolumn{[INSERTNUMBERSLICESPERYEAR]}{c|}{\WorPTnoWidth{\YearHeaderFontsize{YR[INSERTYEARNUMBER]}}}
 [ENDYEARLABELTEMPLATE]
 
 % -------------------------  Fourth line of headers
@@ -243,7 +292,7 @@
 % COMMENT: that follows it (INSERTLABELRULE: a quarter line, or the year line at the end of a year).
 % COMMENT: The script glues them together into single string and replaces the above INSERTYEARSLICELABELLIST
 [STARTYEARSLICELABELTEMPLATE]
- & \multicolumn{[INSERTSLICESPERLABEL]}{@{}c[INSERTLABELRULE]}{\YearSliceHeaderFontsize{[INSERTSLICENUMBER]}}
+ & \multicolumn{[INSERTSLICESPERLABEL]}{@{}c[INSERTLABELRULE]}{\WorPTnoWidth{\YearSliceHeaderFontsize{[INSERTSLICENUMBER]}}}
 [ENDYEARSLICELABELTEMPLATE]
 
 % COMMENT: below templates make a team member's column label, sideways, by the member's institution and funding.
@@ -257,19 +306,24 @@
 [STARTINTERNATIONALTEAMLABELTEMPLATE]
  & \rotatebox{90}{\InternationalTeam{[TEAMID]}}
 [ENDINTERNATIONALTEAMLABELTEMPLATE]
+}
 
 % begin main contents of table
+\def\[INSERTFILENAME]Rows{%
 [INSERTLISTOFCATEGORYSECTIONS]
+}
 
 % ------------------------- the team members' FTE over the whole grant, funded and unfunded
+\def\[INSERTFILENAME]Foot{%
 \hline
 \multicolumn{[INSERTNUMBERYEARSLICESPLUSONE]}{|r|}{\WorPTunlessMeasuring{\TeamFundedFteLabel}}
 [INSERTTEAMFUNDEDFTELIST] &      % each member's funded FTE
-\FteGrandTotalFormat{[INSERTFTEFUNDEDTOTAL]}\\
+\FteGrandTotalFormat{[INSERTFTEFUNDEDTOTAL]}\\\WorPTkeepWithNext % (the two rows stay together, and with the caption)
 \multicolumn{[INSERTNUMBERYEARSLICESPLUSONE]}{|r|}{\WorPTunlessMeasuring{\TeamUnfundedFteLabel}}
 [INSERTTEAMUNFUNDEDFTELIST] &    % each member's unfunded FTE
-\FteGrandTotalFormat{[INSERTFTEUNFUNDEDTOTAL]}\\
-\hline
+\FteGrandTotalFormat{[INSERTFTEUNFUNDEDTOTAL]}\\\WorPTkeepWithNext
+\WorPTlastLine % (\hline; in a table across pages, a line kept with the caption under it)
+}
 
 % COMMENT: below templates make one team member's FTE at the foot of the table, sideways: funded, unfunded, or zero.
 % COMMENT: The script glues them together in team order and replaces INSERTTEAMFUNDEDFTELIST and INSERTTEAMUNFUNDEDFTELIST.
@@ -291,7 +345,7 @@
 \WorPTfitTitle\TaskCategoryLabel{[INSERTCATEGORYLABEL]}{[INSERTCATEGORYTITLE]} % category identification
 [INSERTEMPTYYEARSLICESLIST] &  % empty year slices
 [INSERTEMPTYTEAMCELLSLIST]     % empty team cells
-\FteCategoryFormat{[INSERTCATEGORYFTE]}\\ % the category's total fte
+\FteCategoryFormat{[INSERTCATEGORYFTE]}\\\WorPTkeepWithNext % the category's total fte (no page break right under it)
 [INSERTTASKSUNDERTHISCATEGORY] % tasks under this category
 \hline
 [ENDCATEGORYSECTIONTEMPLATE]
@@ -319,7 +373,7 @@
 \WorPTfitTitle\TaskTitleLabel{[INSERTTASKLABEL]}{[INSERTTASKTITLE]} % title of this task
 [INSERTYEARSLICESLIST] &  % timeline for this task, spanning its subtasks'
 [INSERTTEAMCELLSFORTHISTASK]  % (its subtasks have the people)
-\FteRolledUpFormat{[INSERTFTETOTAL]}\\
+\FteRolledUpFormat{[INSERTFTETOTAL]}\\\WorPTkeepWithNext % (no page break between a task and its first subtask)
 [ENDPARENTTASKROWTEMPLATE]
 [STARTSUBTASKROWTEMPLATE]
 % begin task
@@ -355,8 +409,6 @@
 [STARTTEAMEMPTYCELLTEMPLATE]
 {} &
 [ENDTEAMEMPTYCELLTEMPLATE]
-
-}
 
 % COMMENT: The caption for this table requires variables (just as the isANONtravel did). The below template defines
 % COMMENT: the variables used in the caption formulation that is given in the github help page. Specifically,
