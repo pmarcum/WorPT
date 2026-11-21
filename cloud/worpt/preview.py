@@ -4,15 +4,16 @@ AASTeX this machine has (or article, if none compiles), and each page turned int
 Limits (agreed for a small, shared VM):
 - one compile at a time, across the whole server (a second request waits for the first);
 - 60 seconds at most per compile, then it is stopped and the dashboard says so;
-- the last 5 pictures are kept in memory, so a table that hasn't changed comes back at once; a restart forgets them.
+- pictures are kept on disk (CACHE_DIR, beside the database), named by everything that goes into them, so a table that
+  hasn't changed comes back at once, also after a restart; a picture not looked at for 30 days is deleted.
 Needs pdflatex and pdftocairo; without them, the dashboard says the preview isn't available here.
 """
-import base64, collections, fcntl, hashlib, os, pathlib, re, shutil, subprocess, tempfile, threading, time
+import base64, fcntl, hashlib, json, os, pathlib, re, shutil, subprocess, tempfile, time
 from .tables import paste_in, style
 
-LIMIT_SECONDS, KEEP, DPI = 60, 5, 192            # DPI: twice a screen's 96, so the picture is sharp on high-density screens
+LIMIT_SECONDS, KEEP_DAYS, DPI = 60, 30, 192      # DPI: twice a screen's 96, so the picture is sharp on high-density screens
 LOCK_FILE = pathlib.Path(tempfile.gettempdir()) / 'worpt-preview.lock'
-_kept, _kept_lock = collections.OrderedDict(), threading.Lock()
+CACHE_DIR = None                                 # set by the server: <database folder>/previews
 _cls = []                                        # the class found, once per run of the server
 
 
@@ -58,19 +59,39 @@ def render(name, latex):
     """{'pages': [base64 PNG, ...], 'document_class': ..., 'seconds': ...}, or {'error': message for people}."""
     if not available(): return dict(error='Previews need pdflatex and pdftocairo on the WorPT server, and this one has not got them.')
     cls = document_class()
-    key = hashlib.sha256('\0'.join((cls, name, latex, style())).encode()).hexdigest()
-    with _kept_lock:
-        if key in _kept: _kept.move_to_end(key); return _kept[key]
+    key = hashlib.sha256('\0'.join((cls, name, latex, style(), paste_in(name), str(DPI))).encode()).hexdigest()
+    kept = _kept(key)
+    if kept: return kept
     with open(LOCK_FILE, 'w') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)                       # one compile at a time, server-wide
-        with _kept_lock:                                       # it may have been made while this request waited
-            if key in _kept: return _kept[key]
+        kept = _kept(key)                                      # it may have been made while this request waited
+        if kept: return kept
         out = _compile(cls, name, latex)
-    if 'pages' in out:
-        with _kept_lock:
-            _kept[key] = out
-            while len(_kept) > KEEP: _kept.popitem(last=False)
+        if 'pages' in out: _keep(key, out)
     return out
+
+
+def _kept(key):
+    """A kept picture, or None; looking at it counts as using it (its 30 days start again)."""
+    f = CACHE_DIR and pathlib.Path(CACHE_DIR) / f'{key}.json'
+    if not f or not f.exists(): return None
+    try:
+        out = json.loads(f.read_text()); os.utime(f)
+        return out
+    except (OSError, ValueError):
+        return None                                            # unreadable: made again
+
+
+def _keep(key, out):
+    if not CACHE_DIR: return
+    d = pathlib.Path(CACHE_DIR); d.mkdir(parents=True, exist_ok=True)
+    tmp = d / f'.{key}.{os.getpid()}.tmp'
+    tmp.write_text(json.dumps(out)); tmp.replace(d / f'{key}.json')      # whole or not at all
+    old = time.time() - KEEP_DAYS * 86400
+    for f in d.glob('*.json'):
+        try:
+            if f.stat().st_mtime < old: f.unlink()
+        except OSError: pass
 
 
 def _compile(cls, name, latex):

@@ -36,6 +36,7 @@ def create_app(db_path=None, credential=None, read_credential=None):
     db_path = db_path or os.environ.get('WORPT_DB', '/home/bibman/worpt_data/worpt.db')
     pathlib.Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     store, app = Store(db_path), Flask(__name__)
+    preview.CACHE_DIR = pathlib.Path(db_path).parent / 'previews'      # table pictures, kept by content
     same = lambda given, secret: bool(secret) and hmac.compare_digest(given.encode(), secret.encode())
 
     def ok(**data): return jsonify(status='ok', **data)
@@ -229,8 +230,9 @@ def create_app(db_path=None, credential=None, read_credential=None):
         data = work_plan(pid)
         if name == 'worpt': return ok(name=name, latex=style(), block=paste_in(name), checks=[])
         out = build(store.model(pid, data)[0], [name])
-        # the dashboard (full key) also gets a picture of the table; gooTeX (read-only key) only needs the LaTeX
-        extra = dict(preview=preview.render(name, out[name])) if key() == 'full' else {}
+        # the dashboard (full key) always gets a picture of the table too; gooTeX (read-only key) when it asks, with ?preview=1
+        want = key() == 'full' or str(request.args.get('preview', '')).lower() in ('1', 'true', 'yes')
+        extra = dict(preview=preview.render(name, out[name])) if want else {}
         return ok(name=name, latex=out[name], block=paste_in(name), checks=checks_of(out), **extra)
 
     return app

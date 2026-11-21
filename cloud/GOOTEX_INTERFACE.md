@@ -120,6 +120,15 @@ Other read-only requests, if useful:
 | `GET /health` (no key) | `{"service":"worpt","status":"ok"}` when WorPT is up |
 | `GET /api/proposals/<ID>/tables` | `{"tables": [nine names], "style": "worpt"}` |
 | `GET /api/proposals/<ID>/tables/<name>` | `{"name", "latex", "block", "checks"}` for one table; `<name>` = `worpt` gives `worpt.sty` and its preamble line |
+| `GET /api/proposals/<ID>/tables/<name>?preview=1` | the same, plus `"preview"`: a picture of the table, `{"pages": [PNG, base64, one per page], "document_class", "seconds"}`, or `{"error": message for people}` |
+
+The picture is the table compiled on its own, with its default settings and suggested caption, in the newest
+AASTeX on the VM, at 192 dpi (twice a screen's resolution, so it is sharp shrunk to half size). It is not the table
+inside the document's own preamble, so row heights, fonts and the caption can differ from the compiled PDF: it is a
+thumbnail, and the PDF is the true view. Drawing one takes a few seconds, one at a time across WorPT (a second
+request waits), 60 seconds at most; WorPT keeps each picture on disk, so a table that has not changed comes back at
+once. So ask only when someone wants to see it (a click), never at compile time. To show a page in HTML:
+`<img src="data:image/png;base64,PAGE" style="width:100%">`.
 
 ## When something is wrong
 
