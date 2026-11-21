@@ -133,8 +133,16 @@
   \csname @floatboxreset\endcsname  % measured as set in a table: some classes (aastex) use a smaller font there
   \renewcommand{\arraystretch}{\SpaceBetweenRows}\setlength{\tabcolsep}{\SpaceBetweenColumns}%
   \global\WorPTmonthWidth=\TimelineWidth\relax
-  \sbox0{\TaskTimelineHeaderFontsize{TIMELINE}}\sbox2{\TaskTimelineHeaderFontsize{TASK}}%
-  \ifdim\wd2>\wd0 \setbox0\box2 \fi
+  % "TASK TIMELINE" over the timeline: on one line from two years on (the months are made wide enough for it, which
+  % takes next to nothing from the titles), on two lines (TASK, then TIMELINE) for a one-year plan
+  \ifnum\NumberYears>1
+    \sbox0{\TaskTimelineHeaderFontsize{TASK TIMELINE}}%
+    \global\let\[INSERTFILENAME]TimelineHeader\[INSERTFILENAME]TimelineHeaderOneLine
+  \else
+    \sbox0{\TaskTimelineHeaderFontsize{TIMELINE}}\sbox2{\TaskTimelineHeaderFontsize{TASK}}%
+    \ifdim\wd2>\wd0 \setbox0\box2 \fi
+    \global\let\[INSERTFILENAME]TimelineHeader\[INSERTFILENAME]TimelineHeaderTwoLines
+  \fi
   \[INSERTFILENAME]AtLeast\WorPTmonthWidth{\dimexpr(\wd0+2\tabcolsep-\numexpr12*\NumberYears-1\relax\arrayrulewidth)/\numexpr12*\NumberYears\relax\relax}%
   \sbox0{\YearHeaderFontsize{YR\NumberYears}}%
   \[INSERTFILENAME]AtLeast\WorPTmonthWidth{\dimexpr(\wd0+2\tabcolsep-11\arrayrulewidth)/12\relax}%
@@ -183,22 +191,32 @@
 \fi
 }
 
-%--- the table itself: measured once without its titles, then set
-\def\[INSERTFILENAME]Body{%
-
-% ------------------------- First line of headers
+%--- the "TASK TIMELINE" header over the timeline: on one line from two years on, else on two (chosen in the layout above)
+\def\[INSERTFILENAME]TimelineHeaderOneLine{%
+\cline{2-[INSERTNUMBERYEARSLICESPLUSONE]}
+\multicolumn{1}{c|}{} &                                                  % title column
+\multicolumn{[INSERTNUMBERYEARSLICES]}{c|}{\TaskTimelineHeaderFontsize{TASK TIMELINE}} & % schedule columns
+\multicolumn{[INSERTNUMBERTEAM]}{c}{} &                                  % team columns
+\multicolumn{1}{c}{}\\                                                   % total fte column
+\cline{2-[INSERTLASTCOLUMN]}}
+\def\[INSERTFILENAME]TimelineHeaderTwoLines{%
 \cline{2-[INSERTNUMBERYEARSLICESPLUSONE]}
 \multicolumn{1}{c|}{} &                                                  % title column
 \multicolumn{[INSERTNUMBERYEARSLICES]}{c|}{\TaskTimelineHeaderFontsize{TASK}} & % schedule columns
 \multicolumn{[INSERTNUMBERTEAM]}{c}{} &                                  % team columns
 \multicolumn{1}{c}{}\\                                                   % total fte column
-
-% ------------------------- Second line of headers
 \multicolumn{1}{c|}{} &                                                    % title column
 \multicolumn{[INSERTNUMBERYEARSLICES]}{c|}{\TaskTimelineHeaderFontsize{TIMELINE}} & % schedule columns
 \multicolumn{[INSERTNUMBERTEAM]}{c}{} &                                    % team columns
 \multicolumn{1}{c}{}\\                                                     % total fte column
-\cline{2-[INSERTLASTCOLUMN]}
+\cline{2-[INSERTLASTCOLUMN]}}
+\let\[INSERTFILENAME]TimelineHeader\[INSERTFILENAME]TimelineHeaderTwoLines
+
+%--- the table itself: measured once without its titles, then set
+\def\[INSERTFILENAME]Body{%
+
+% ------------------------- First line(s) of headers: TASK TIMELINE, on one line or two (see the layout above)
+\[INSERTFILENAME]TimelineHeader
 
 % -------------------------  Third line of headers
 \multicolumn{1}{c|}{}                                                 % title column

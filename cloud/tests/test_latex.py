@@ -162,3 +162,23 @@ def test_tables_turn_sideways_on_a_page_too_narrow_for_them(name, tmp_path):
     assert not [l for l in log.splitlines() if l.startswith('!')] and 'Overfull \\hbox' not in log and 'worpt Warning' not in log
     xml = subprocess.run(['pdftotext', '-bbox', 'doc.pdf', '-'], cwd=tmp_path, capture_output=True, text=True).stdout
     assert [sideways for sideways, words in pages(xml) if words] == [True], name
+
+
+@pytest.mark.parametrize('years', [1, 2, 3])
+@pytest.mark.parametrize('cls', ['article', '{aastex702}', '[twocolumn]{aastex702}', 'revtex4-2'])
+def test_task_timeline_header_takes_one_line_from_two_years_on(cls, years, tmp_path):
+    """Over a timeline of two years or more, "TASK TIMELINE" fits on one line (a header row saved); over one year it
+    takes two (TASK, then TIMELINE)."""
+    if not works(cls): pytest.skip(f'{cls} does not work on this machine, even without WorPT')
+    if not shutil.which('pdftotext'): pytest.skip('pdftotext is not installed')
+    import dataclasses
+    P = dataclasses.replace(load(CASES[0]), n_years=years)
+    shutil.copy(TEMPLATE_DIR / 'worpt.sty', tmp_path)
+    (tmp_path / 'isANONschedule.tex').write_text(build(P, ['isANONschedule'])['isANONschedule'])
+    (tmp_path / 'doc.tex').write_text(documentclass(cls) + '\n' + paste_in('worpt') + EDGES + '\\begin{document}\n' + front(cls) + paste_in('isANONschedule') + '\n\\end{document}\n')
+    subprocess.run(['pdflatex', '-interaction=nonstopmode', 'doc.tex'], cwd=tmp_path, capture_output=True, timeout=300)
+    log = (tmp_path / 'doc.log').read_text(errors='replace')
+    assert not [l for l in log.splitlines() if l.startswith('!')] and 'Overfull \\hbox' not in log
+    lines = subprocess.run(['pdftotext', '-layout', 'doc.pdf', '-'], cwd=tmp_path, capture_output=True, text=True).stdout.splitlines()
+    assert any('TASK TIMELINE' in l for l in lines) == (years > 1), (cls, years)
+    assert not outside_text(tmp_path, tmp_path / 'doc.pdf')

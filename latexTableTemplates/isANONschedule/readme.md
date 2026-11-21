@@ -103,7 +103,7 @@ Without this line, the table is set in landscape mode only when it needs to be: 
 \def\TimelineWidth{<mark>0.6ex</mark>}   % skinny timeline columns width (one per month)
 \def\TeamCellPadding{<mark>1pt</mark>}   % room beside the sideways label and numbers in a team member's column
 </code></pre>
-The table is always as wide as the page's text. Each team member's column is just wide enough for its label and the numbers at its foot, both printed sideways (plus <code>\TeamCellPadding</code>); a smaller font for them makes the columns narrower. The Total FTE column is as wide as its numbers, with its label sideways. The title column gets the width that is left. A title too long for it is cut short at a word, with "...": give the task a short title in WorPT to choose what shows. The month columns are made wider than <code>\TimelineWidth</code> if the timeline's labels need it.
+The table is always as wide as the page's text. Each team member's column is just wide enough for its label and the numbers at its foot, both printed sideways (plus <code>\TeamCellPadding</code>); a smaller font for them makes the columns narrower. The Total FTE column is as wide as its numbers, with its label sideways. The title column gets the width that is left. A title too long for it is cut short at a word, with "...": give the task a short title in WorPT to choose what shows. The month columns are made wider than <code>\TimelineWidth</code> if the timeline's labels need it. The "TASK TIMELINE" header takes one line over a timeline of two years or more (the months are widened, by a fraction of a point each, if it needs it), and two lines over a one-year timeline.
 </td>
 </tr>
 
