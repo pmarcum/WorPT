@@ -47,9 +47,10 @@
 %--- preferences of TASK label
 \def\TaskTitleLabel#1#2{~{\scriptsize{\textbf{#1}}}~{\color{mediumelectricblue}{\footnotesize\textbf{#2}}}} % Task title format for row item
 
-%--- preferences of SUBTASK label: indented under its task
+%--- preferences of SUBTASK label: indented under its task, in plain black (not bold, not blue), so that categories
+%    stand out first, then tasks, and subtasks stay in the background
 \def\SubtaskIndent{1em}
-\def\SubtaskTitleLabel#1#2{\hspace{\SubtaskIndent}\TaskTitleLabel{#1}{#2}} % Subtask title format for row item
+\def\SubtaskTitleLabel#1#2{\hspace{\SubtaskIndent}~{\scriptsize #1}~{\footnotesize #2}} % Subtask title format for row item
 
 %--- preferences of timeline color
 \def\TimelineColor{mediumelectricblue}          % Task Timeline cell color (a task, or a subtask)

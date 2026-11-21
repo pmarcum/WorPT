@@ -146,9 +146,10 @@ redefine as:<br>
 \def\TaskTitleLabel#1#2{~{<mark>\scriptsize{\textbf</mark>{#1}}}~
    {<mark>\color{mediumelectricblue}{\footnotesize\textbf</mark>{#2}}}} % Task title format for row item
 \def\SubtaskIndent{<mark>1em</mark>}                             % how far a subtask's title is indented
-\def\SubtaskTitleLabel#1#2{\hspace{\SubtaskIndent}\TaskTitleLabel{#1}{#2}} % Subtask title format
+\def\SubtaskTitleLabel#1#2{\hspace{\SubtaskIndent}~{<mark>\scriptsize</mark> #1}~
+   {<mark>\footnotesize</mark> #2}}                                     % Subtask title format: plain black
 </code></pre>
-For italic subtask titles, for example: <code>\def\SubtaskTitleLabel#1#2{\hspace{\SubtaskIndent}{\itshape\TaskTitleLabel{#1}{#2}}}</code>
+Subtasks are in plain black, neither bold nor blue, so a reader sees the categories first, then the tasks, and the subtasks only when looking closer. To give them the tasks' look instead: <code>\def\SubtaskTitleLabel#1#2{\hspace{\SubtaskIndent}\TaskTitleLabel{#1}{#2}}</code>; for italic subtask titles: <code>\def\SubtaskTitleLabel#1#2{\hspace{\SubtaskIndent}~{\itshape{\scriptsize #1}~{\footnotesize #2}}}</code>
 <details>
 <summary>reference image</summary>
 <img src="https://lh3.googleusercontent.com/d/1FptrYPilkvMpYVCh0EHQX5cKxFiZXUFh" width=50%>
