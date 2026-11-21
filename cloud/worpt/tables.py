@@ -20,7 +20,7 @@ from .effort import compute, label_tree, TEAM, WEEKS_PER_YEAR, WEEKS_PER_QUARTER
 
 TEMPLATE_DIR = pathlib.Path(os.environ.get('WORPT_TEMPLATES') or pathlib.Path(__file__).resolve().parents[2] / 'latexTableTemplates')
 ROUND_DOLLARS = 5
-TABLES = ('NOTANONteamSummaries', 'NOTANONtasks', 'NOTANONfte', 'NOTANONhst', 'NOTANONschedule',
+TABLES = ('NOTANONteamSummaries', 'NOTANONtasks', 'NOTANONfte', 'NOTANONhst', 'isANONschedule',
           'isANONfte', 'isANONtasks', 'isANONtravel', 'isANONnonlabor')
 
 
@@ -354,13 +354,13 @@ def schedule(c):
     """The resource-loaded schedule: each task's timeline, and a column per team member marking who leads the task and who
     works on it (funded, or partly or wholly unfunded), with each member's FTE over the grant at the foot. The Sheet
     version's template (used to check parity with it) lists assignments as "id weeks" instead; both are filled here."""
-    t = template('NOTANONschedule')
+    t = template('isANONschedule')
     grid = '[STARTTEAMLEADCELLTEMPLATE]' in t
     m = re.search(r'\\def\\SlicesPerYear\{(\d+)\}', t)        # columns per year: the template says (12, months); the Sheet's had quarters
     n, slices, ntypes = c['n'], int(m.group(1)) if m else 4, 3
     order = c['order']
     t = jsub(t, r'\[INSERTLATEXFILESUBDIRECTORY\]', c['p'].latex_subdir, every=False)
-    for k, v in (('FILENAME', 'NOTANONschedule'), ('NUMBERYEARSLICESPLUSFIVE', n * slices + 5), ('NUMBERYEARSLICESPLUSFOUR', n * slices + 4),
+    for k, v in (('FILENAME', 'isANONschedule'), ('NUMBERYEARSLICESPLUSFIVE', n * slices + 5), ('NUMBERYEARSLICESPLUSFOUR', n * slices + 4),
                  ('NUMBERYEARSLICESPLUSTHREE', n * slices + 3), ('NUMBERYEARSLICESPLUSTWO', n * slices + 2),
                  ('NUMBERYEARSLICESPLUSONE', n * slices + 1), ('NUMBERYEARSLICES', n * slices), ('NUMBERFTETYPES', ntypes),
                  ('NUMBERSLICESPERYEARMINUSTWO', slices - 2), ('NUMBERSLICESPERYEAR', slices), ('LASTYEARPLUSTWO', n + 2), ('LASTYEAR', n),
@@ -537,7 +537,7 @@ def nonlabor(c):
 def build(proposal, names=TABLES):
     """Return {table name: LaTeX text} plus the engine's checks under '_checks'."""
     c = prepare(proposal)
-    make = dict(NOTANONteamSummaries=team_summaries, NOTANONtasks=tasks_named, NOTANONhst=hst, NOTANONschedule=schedule,
+    make = dict(NOTANONteamSummaries=team_summaries, NOTANONtasks=tasks_named, NOTANONhst=hst, isANONschedule=schedule,
                 NOTANONfte=lambda c: fte(c, 'NOTANONfte'), isANONfte=lambda c: fte(c, 'isANONfte'), isANONtasks=tasks_anonymous,
                 isANONtravel=travel, isANONnonlabor=nonlabor)
     out = {name: make[name](c) for name in names}

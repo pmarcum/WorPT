@@ -110,7 +110,7 @@ def test_templates_leave_the_document_alone(path):
 
 @pytest.mark.parametrize('years', [1, 5])
 @pytest.mark.parametrize('cls', ['article', '{aastex631}', '{aastex702}', '[twocolumn]{aastex702}', 'revtex4-2'])
-@pytest.mark.parametrize('name', ['NOTANONschedule', 'NOTANONtasks'])
+@pytest.mark.parametrize('name', ['isANONschedule', 'NOTANONtasks'])
 def test_wide_tables_fit_the_page_with_one_line_titles(name, cls, years, tmp_path):
     """The schedule and the tasks table are as wide as the text (in landscape mode when they must be; across both
     columns of a two-column document), long titles are cut short with "...", and nothing runs past the edge."""

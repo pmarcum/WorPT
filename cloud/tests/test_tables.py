@@ -53,8 +53,8 @@ def test_fix2_team_weeks_count_each_unnamed_member(monkeypatch):
     """In the Sheet version's schedule, which lists each task's assignments as "id weeks"."""
     monkeypatch.setattr(tables, 'TEMPLATE_DIR', SHEET_TEMPLATES)
     m = [person('a', 'PI', 'Alpha'), person('b', 'co-I(1)', 'Beta'), person('c', 'co-I(2)', 'Gamma'), person('d', 'co-I(3)', 'Delta')]
-    out = build(proposal([Item('G', children=[task('t', [('a', 4, 0), ('team', 2, 0)])])], m), ['NOTANONschedule'])
-    assert re.search(r'\{T\}[^\n]*?6|T[^\n]{0,40}\b6\b', out['NOTANONschedule'])          # 3 unnamed people x 2 weeks
+    out = build(proposal([Item('G', children=[task('t', [('a', 4, 0), ('team', 2, 0)])])], m), ['isANONschedule'])
+    assert re.search(r'\{T\}[^\n]*?6|T[^\n]{0,40}\b6\b', out['isANONschedule'])          # 3 unnamed people x 2 weeks
 
 
 def test_fix3_hst_falls_back_to_the_pis_full_name():
@@ -83,10 +83,10 @@ def test_fix6_negligible_unfunded_effort_gets_the_minor_row():
 # ------------------------------------------------ subtasks
 def test_subtasks_appear_with_dotted_labels_and_parent_rolls_up():
     parent = Item('Parent task', children=[task('Sub one', [('a', 4, 0)], (1, 1), (1, 2)), task('Sub two', [('b', 2, 0)], (1, 3), (1, 4))])
-    out = build(proposal([Item('Goal', children=[parent])]), ['NOTANONtasks', 'isANONtasks', 'NOTANONschedule'])
-    for name in ('NOTANONtasks', 'isANONtasks', 'NOTANONschedule'):
+    out = build(proposal([Item('Goal', children=[parent])]), ['NOTANONtasks', 'isANONtasks', 'isANONschedule'])
+    for name in ('NOTANONtasks', 'isANONtasks', 'isANONschedule'):
         assert 'A1.1' in out[name] and 'A1.2' in out[name] and 'Parent task' in out[name], name
-    sched = out['NOTANONschedule']
+    sched = out['isANONschedule']
     parent_row = sched.split('{Parent task}')[1].split('% begin task')[0]
     assert '{' + fixed(6 / 52, 2) + '}' in parent_row and 'Mark{' not in parent_row        # rolled-up FTE, no people of its own
 
@@ -109,7 +109,7 @@ def test_schedule_marks_who_leads_and_who_works_on_each_task():
     goals = [Item('G', children=[task('t1', [('b', 4, 0), ('a', 2, 1), ('c', 1, 0)]),     # lead; some of a's weeks unfunded; c a collaborator
                                  task('t2', [('a', 3, 0), ('team', 1, 0)]),                 # team: everyone not named
                                  task('t3', [('d', 2, 0), ('e', 1, 0)])])]                  # an international lead
-    tex = build(proposal(goals, m), ['NOTANONschedule'])['NOTANONschedule']
+    tex = build(proposal(goals, m), ['isANONschedule'])['isANONschedule']
     order = re.findall(r'\\rotatebox\{90\}\{\\(\w+Team)\{([^}]*)\}\}', tex)          # the column labels
     labels = dict((pid, kind) for kind, pid in order)
     assert labels == dict(a='FundedUsTeam', b='FundedUsTeam', c='UnfundedUsTeam', d='InternationalTeam', e='FundedUsTeam')
@@ -122,7 +122,7 @@ def test_schedule_marks_who_leads_and_who_works_on_each_task():
 
 def test_schedule_foot_gives_each_members_funded_and_unfunded_fte():
     m = [person('a', 'PI', 'Alpha'), person('c', 'coll(1)', 'Gamma')]
-    tex = build(proposal([Item('G', children=[task('t', [('a', 26, 13), ('c', 52, 0)])])], m), ['NOTANONschedule'])['NOTANONschedule']
+    tex = build(proposal([Item('G', children=[task('t', [('a', 26, 13), ('c', 52, 0)])])], m), ['isANONschedule'])['isANONschedule']
     funded = tex.split('\\TeamFundedFteLabel')[-1].split('\\\\')[0]          # the foot rows (the labels are defined above them too)
     unfunded = tex.split('\\TeamUnfundedFteLabel')[-1].split('\\\\')[0]
     ids = re.findall(r'\\rotatebox\{90\}\{\\\w+Team\{([^}]*)\}\}', tex)
@@ -136,7 +136,7 @@ def test_schedule_sets_tasks_with_subtasks_apart():
     """A task with subtasks: light blue timeline over its subtasks' span and its FTE (theirs added up) in italics; its
     subtasks indented, with their own FTE as a task's; a category's row gives its FTE (its tasks added up), in bold."""
     parent = Item('Parent task', children=[task('Sub one', [('a', 4, 0)], (1, 1), (1, 10)), task('Sub two', [('b', 2, 0)], (1, 20), (1, 30))])
-    tex = build(proposal([Item('Goal', children=[parent, task('Alone', [('a', 1, 0)], (1, 40), (1, 44))])]), ['NOTANONschedule'])['NOTANONschedule']
+    tex = build(proposal([Item('Goal', children=[parent, task('Alone', [('a', 1, 0)], (1, 40), (1, 44))])]), ['isANONschedule'])['isANONschedule']
     rows = {re.search(r'\{(A[\d.]*)\}', r).group(1): r for r in tex.split('% begin task')[1:]}
     timeline = lambda r: re.findall(r'WorPTcellcolor\{\\(\w+)\}', r)
     assert timeline(rows['A1']) and set(timeline(rows['A1'])) == {'ParentTimelineColor'} and '\\FteRolledUpFormat{' + fixed(6 / 52, 2) + '}' in rows['A1']

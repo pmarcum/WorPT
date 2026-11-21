@@ -19,6 +19,8 @@ from worpt.tables import build, TABLES
 FIXTURES = pathlib.Path(__file__).parent / 'fixtures'
 SHEET_TEMPLATES = FIXTURES / 'sheet_templates'
 CASES = sorted(f.parent for f in FIXTURES.glob('*/proposal.json'))
+RENAMED = {'NOTANONschedule': 'isANONschedule'}     # the Sheet's names of tables WorPT has renamed since (expected/ keeps the Sheet's)
+SHEET_NAME = {new: old for old, new in RENAMED.items()}
 
 
 def load(folder):
@@ -48,11 +50,14 @@ def compare(folder):
     known = json.loads((folder / 'known_differences.json').read_text()) if (folder / 'known_differences.json').exists() else {}
     report = {}
     for f in sorted((folder / 'expected').glob('*.txt')):
-        if f.stem not in TABLES: continue
-        found = differences(f.read_text(), out[f.stem])
-        expected = [[k['old'], k['new']] for k in known.get(f.stem, [])]
-        report[f.stem] = dict(found=found, unexplained=[d for d in found if d not in expected],
-                              missing=[k for k in known.get(f.stem, []) if [k['old'], k['new']] not in found])
+        name = RENAMED.get(f.stem, f.stem)
+        if name not in TABLES: continue
+        named = lambda text: text.replace(f.stem, name)               # a renamed table's name is written in it too
+        found = differences(named(f.read_text()), out[name])
+        listed = [dict(k, old=[named(l) for l in k['old']], new=[named(l) for l in k['new']]) for k in known.get(f.stem, [])]
+        expected = [[k['old'], k['new']] for k in listed]
+        report[name] = dict(found=found, unexplained=[d for d in found if d not in expected],
+                            missing=[k for k in listed if [k['old'], k['new']] not in found])
     return report
 
 
@@ -69,10 +74,10 @@ if __name__ == '__main__':
     for folder in CASES:
         known = json.loads((folder / 'known_differences.json').read_text()) if (folder / 'known_differences.json').exists() else {}
         for table, r in compare(folder).items():
-            n_lines = len((folder / 'expected' / f'{table}.txt').read_text().splitlines())
+            n_lines = len((folder / 'expected' / f'{SHEET_NAME.get(table, table)}.txt').read_text().splitlines())
             status = 'identical' if not r['found'] else f"{len(r['found'])} difference(s), {len(r['unexplained'])} unexplained"
             print(f'{folder.name:10} {table:22} {n_lines:4} lines  {status}')
-            for k in known.get(table, []):
+            for k in known.get(SHEET_NAME.get(table, table), []):
                 print(f"{'':12}- {k['reason']}")
                 for line in k['old']: print(f"{'':14}old: {line[:150]}")
                 for line in k['new']: print(f"{'':14}new: {line[:150]}")

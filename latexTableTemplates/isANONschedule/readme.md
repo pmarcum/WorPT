@@ -4,14 +4,14 @@
 <table>
 <tr>
 <td>
-<font size="3"><b>NOTANONschedule</b></font>
+<font size="3"><b>isANONschedule</b></font>
 <br>
 <img src="https://lh3.googleusercontent.com/d/1rdPPWxa8nlGOFGYbZyQ6Frq9zj01w4Ww" width=75%>
 </td>
 <td>
 <details>
-<summary><b>NOTANONschedule</b> (description)</summary>
-<b>NOTANONschedule</b> is a resource-loaded project schedule showing project tasks with their timelines, and a column for each team member marking who leads each task and who works on it (funded by this grant, or partly or wholly unfunded). The table gives each task's total work effort, and each team member's funded and unfunded effort over the whole grant. Institutional affiliation (U.S. or international) is also indicated. The information in this table comes from the work plan in WorPT.
+<summary><b>isANONschedule</b> (description)</summary>
+<b>isANONschedule</b> is a resource-loaded project schedule showing project tasks with their timelines, and a column for each team member marking who leads each task and who works on it (funded by this grant, or partly or wholly unfunded). The table gives each task's total work effort, and each team member's funded and unfunded effort over the whole grant. Institutional affiliation (U.S. or international) is also indicated. The information in this table comes from the work plan in WorPT.
 </details>
 </td>
 </tr>
@@ -43,22 +43,22 @@ Add this line to the preamble of your document, as the last package loaded (afte
 <li>COPY the lines in the code block below, then</li>
 <li>PASTE into your document WHERE you want the content to appear, then</li>
 <li>MODIFY the editable lines you just pasted in your document as needed. The lines that may be edited (or even deleted altogether if not wanted) are indicated by highlight below. </li><br>
-Refer to <b>Customizations</b> section below to add personal preferences in the gap between \input and \begin{NOTANONschedule} lines below.
+Refer to <b>Customizations</b> section below to add personal preferences in the gap between \input and \begin{isANONschedule} lines below.
 
 </ol>
    
 <pre><code>
-%::::::::::::::::: start NOTANONschedule :::::::::::::::::::
+%::::::::::::::::: start isANONschedule :::::::::::::::::::
 %\clearpage         % [optional] (could instead use \newpage, or comment out)
-\input{NOTANONschedule} % reset file parameters
+\input{isANONschedule} % reset file parameters
 %\LandScapetrue               % [optional] turn the table sideways, on a page of its own
 %\def\SpaceBetweenRows{0.7}   % [optional] tighter rows (0.8 unless set); below about 0.65 the headings start to crowd
 
-\begin{NOTANONschedule}
+\begin{isANONschedule}
 \caption{Resource-loaded project schedule. Blue bars give each task's months, under quarter-year labels (1--4); a light blue bar spans a task's subtasks (indented). Team columns (label color: blue$=$funded/U.S., black$=$not funded/U.S., red$=$international) mark \TeamLeadKey$=$task lead, \TeamFundedKey$=$funded by this grant, \TeamUnfundedKey$=$partly or wholly not funded by this grant. ``Total FTE'' (right; 1~FTE$=$12~months) is each task's effort, in italics for a task's subtasks added up and in bold for a category's tasks; the bottom rows give each member's funded and unfunded FTE.}
-\label{tab:NOTANONschedule}
-\end{NOTANONschedule}
-%:::::::::::::::::: end NOTANONschedule ::::::::::::::::::::
+\label{tab:isANONschedule}
+\end{isANONschedule}
+%:::::::::::::::::: end isANONschedule ::::::::::::::::::::
 </code></pre>
 
 </details>
@@ -71,7 +71,7 @@ Refer to <b>Customizations</b> section below to add personal preferences in the 
 You can change column widths, column alignment, colors, font style using additional lines that are copy/pasted into your document. Specifically: 
 <ol>
 <li>COPY any or all lines in the code block below that are related to the formatting parameter that you want to edit. The lines below show default values. You will edit those values to make desired changes.</li>
-<li>PASTE the copied lines into your document into the gap <b>between</b> the \input and \begin{NOTANONschedule} lines. </li>
+<li>PASTE the copied lines into your document into the gap <b>between</b> the \input and \begin{isANONschedule} lines. </li>
 <li>EDIT the pasted lines in your document, as desired.</li>
 NOTE: THe lines are grouped into categories to help you locate what you need. You can PICK AND CHOOSE the lines you want to paste into your document; you do not have to copy/paste all of the lines below (unless noted) and do not have to copy all lines within a group.<br>
 <i>Highlights indicate what parts of the commands can be edited without breaking your LaTeX code.</i><br>
@@ -239,7 +239,7 @@ For more control over the table's layout (removing or adding vertical lines, cha
 ENTIRE code below into your document after the table's <code>\input</code> line, and change it there.<br>
 <u>IMPORTANT</u> keep the number of columns, <code>\NumberYears</code>, <code>\NumberTeamMinusOne</code>, <code>\WorPTtitleWidth</code>, <code>\WorPTmonthWidth</code>, <code>\WorPTteamWidth</code> and <code>\WorPTfteWidth</code> (WorPT works these out).
 <pre><code>
-\def\NOTANONscheduleColumns{%
+\def\isANONscheduleColumns{%
 <mark>|>{\raggedright\arraybackslash\leavevmode}p{\WorPTtitleWidth}</mark>% title column
 <mark>|*{\NumberYears}{@{}</mark>%                                      timeline: a column per month
 <mark>p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\MonthRule}p{\WorPTmonthWidth}@{\QuarterRule}</mark>%
@@ -273,5 +273,5 @@ NOTE: To return to default values, all I have to do is comment-out (put a "%" at
 --------------------------------------->
 <details>
 <summary><b>NUCLEAR OPTION</b> <i>[when nothing else works]</i></summary>
-If you just cannot get the table to look like you want it to look, you can always copy/paste the entire NOTANONschedule.tex file that appears in the WorPT subfolder, into your document, and then edit at-will.  Some of the WorPT files involve complicated LaTeX code, so be sure that you have a good mastery of LaTeX and know what you are doing before implementing this option!
+If you just cannot get the table to look like you want it to look, you can always copy/paste the entire isANONschedule.tex file that appears in the WorPT subfolder, into your document, and then edit at-will.  Some of the WorPT files involve complicated LaTeX code, so be sure that you have a good mastery of LaTeX and know what you are doing before implementing this option!
 </details>

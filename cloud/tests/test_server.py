@@ -200,7 +200,7 @@ def test_labels_come_from_roles_never_from_names(team):
                         ('sci-pi', 'Sci-PI')]:
         m = ann.ok('patch', f"/api/members/{team['bob_m']['id']}", dict(version=ann.ok('get', f'/api/proposals/{pid}')['members'][1]['version'], role=role))['member']
         assert m['short_id'] == label, (role, m)
-    assert 'Sci-PI' in ann.ok('get', f'/api/proposals/{pid}/tables/NOTANONschedule')['latex']
+    assert 'Sci-PI' in ann.ok('get', f'/api/proposals/{pid}/tables/isANONschedule')['latex']
 
 
 def roles(api, pid):
@@ -299,7 +299,7 @@ def test_older_labels_are_shortened_when_the_server_starts(tmp_path):
         c.execute("UPDATE members SET short_id = 'postdoc 1' WHERE role = 'pd(1)'"); c.execute("UPDATE members SET short_id = 'grad 1' WHERE role = 'gst(1)'")
     api = Api(create_app(str(db), KEY, READ).test_client(), 'ann@x.org', 'core')
     assert {m['short_id'] for m in api.ok('get', f'/api/proposals/{pid}')['members']} == {'PI', 'pd 1', 'gst 1'}
-    sched = api.ok('get', f'/api/proposals/{pid}/tables/NOTANONschedule')['latex']
+    sched = api.ok('get', f'/api/proposals/{pid}/tables/isANONschedule')['latex']
     assert '\\FundedUsTeam{pd 1}' in sched and 'TeamMark{\\TeamFundedColor}' in sched.split('% begin task')[1]   # still on the task
 
 
@@ -645,7 +645,7 @@ def test_restore_brings_the_whole_proposal_back_and_can_be_undone(team):
     team['bob'].no('post', f"/api/snapshots/{snap['id']}/restore")                  # not a full editor
     ann.ok('post', f"/api/snapshots/{snap['id']}/restore")
     assert plan_of(ann, pid) == before                                           # Cat (added later) is off the team again
-    tables = ann.ok('get', f'/api/proposals/{pid}/tables/NOTANONschedule')['latex']
+    tables = ann.ok('get', f'/api/proposals/{pid}/tables/isANONschedule')['latex']
     assert 'Goal A' in tables and 'co-I 1' in tables
     undo = next(s for s in ann.ok('get', f'/api/proposals/{pid}/snapshots')['snapshots'] if s['name'].startswith('Before restoring'))
     ann.ok('post', f"/api/snapshots/{undo['id']}/restore")
@@ -705,7 +705,7 @@ def test_short_titles_go_in_the_one_line_tables(team, tmp_path):
     task = ann.ok('patch', f"/api/items/{task['id']}", dict(version=task['version'], title='Calibrate the zero points of every field', short_title='  Calibrate fields  '))['item']
     assert task['short_title'] == 'Calibrate fields'
     tex = lambda name: ann.ok('get', f'/api/proposals/{pid}/tables/{name}')['latex']
-    assert '{Calibrate fields}' in tex('NOTANONschedule') and 'every field' not in tex('NOTANONschedule')
+    assert '{Calibrate fields}' in tex('isANONschedule') and 'every field' not in tex('isANONschedule')
     assert '{Calibrate fields}' in tex('NOTANONtasks')
     assert 'Calibrate the zero points of every field' in tex('isANONtasks')
     snap = ann.ok('post', f'/api/proposals/{pid}/snapshots', dict(name='with short'))['snapshot']
