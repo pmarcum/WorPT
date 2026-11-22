@@ -1046,3 +1046,33 @@ def test_profile_changes_reach_a_frozen_plan_when_it_is_unfrozen(team):
     assert roles(other)['Catson'] == 'collab 1' and roles(pid)['Catson'] == 'co-I 2'
     freeze(ann, pid, False)
     assert roles(pid) == roles(other) == {'Annson': 'PI', 'Catson': 'collab 1', 'Zed': 'co-I 1'}
+
+
+def test_the_dashboard_gets_what_the_tables_put_in_front_of_each_summary(team):
+    ann, pid = team['ann'], team['pid']
+    ann.ok('patch', f"/api/people/{team['people']['ann']['id']}", dict(version=1, prefix='Dr.', middle='Q.'))
+    d = ann.ok('get', f'/api/proposals/{pid}')
+    who = {m['short_id']: str(m['id']) for m in d['members']}
+    assert d['computed']['summary_starts'][who['PI']] == ['Dr. Ann Q. Annson, PI,', 'The PI']
+    assert d['computed']['summary_starts'][who['co-I 1']] == ['Bob Bobson, co-I(1),', 'Co-I 1']
+
+
+def test_summaries_drafted_with_the_name_in_front_lose_it_once(team, tmp_path):
+    """Summaries drafted before November 2026 started with the name the draft used ("Dr. Annson will lead ...", or the
+    first and last name when there is no prefix), which the table already puts in front. When the server starts, that
+    name is taken off once (and logged); text that starts any other way is left, and so is anything written later."""
+    import sqlite3
+    ann, pid, db = team['ann'], team['pid'], tmp_path / 'worpt.db'
+    ann.ok('patch', f"/api/people/{team['people']['ann']['id']}", dict(version=1, prefix='Dr.'))
+    aa, bb = ann.ok('get', f'/api/proposals/{pid}')['members']
+    ann.ok('patch', f"/api/members/{aa['id']}", dict(version=aa['version'], bio_summary='Dr. Annson will lead Task A1 (Goal A). She will also support A2.'))
+    ann.ok('patch', f"/api/members/{bb['id']}", dict(version=bb['version'], bio_summary='Bob Bobson leads the pipeline.'))
+    with sqlite3.connect(db) as c: c.execute("DELETE FROM upgrades WHERE name = 'summary_names'")   # as before this change
+    api = Api(create_app(str(db), KEY, READ).test_client(), 'ann@x.org', 'core')
+    d = api.ok('get', f'/api/proposals/{pid}')
+    assert [m['bio_summary'] for m in d['members']] == ['will lead Task A1 (Goal A). She will also support A2.', 'Bob Bobson leads the pipeline.']
+    assert api.ok('get', f'/api/proposals/{pid}/history')['history'][0]['user'] == 'worpt-server'
+    aa = d['members'][0]
+    api.ok('patch', f"/api/members/{aa['id']}", dict(version=aa['version'], bio_summary='Dr. Annson will lead it, as she asked.'))
+    api = Api(create_app(str(db), KEY, READ).test_client(), 'ann@x.org', 'core')
+    assert api.ok('get', f'/api/proposals/{pid}')['members'][0]['bio_summary'] == 'Dr. Annson will lead it, as she asked.'

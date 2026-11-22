@@ -16,11 +16,11 @@ timeline and FTE with no people of its own.
 import math, os, pathlib, re
 from decimal import Decimal, ROUND_HALF_UP
 import numpy as np
-from .effort import compute, label_tree, TEAM, WEEKS_PER_YEAR, WEEKS_PER_QUARTER, week_index
+from .effort import Check, compute, label_tree, TEAM, WEEKS_PER_YEAR, WEEKS_PER_QUARTER, week_index
 
 TEMPLATE_DIR = pathlib.Path(os.environ.get('WORPT_TEMPLATES') or pathlib.Path(__file__).resolve().parents[2] / 'latexTableTemplates')
 ROUND_DOLLARS = 5
-TABLES = ('NOTANONteamSummaries', 'NOTANONtasks', 'NOTANONfte', 'NOTANONhst', 'isANONschedule',
+TABLES = ('NOTANONteamSummaries', 'isANONteamSummaries', 'NOTANONtasks', 'NOTANONfte', 'NOTANONhst', 'isANONschedule',
           'isANONfte', 'isANONtasks', 'isANONtravel', 'isANONnonlabor', 'NOTANONworkEffort')
 
 
@@ -214,6 +214,113 @@ def team_summaries(c):
         s = jrep(s, '[INSERTNAME]', q['name'])
         s = jrep(s, '[INSERTROLE]', role)
         out.append(jrep(s, '[INSERTBIOSUMMARY]', q['m'].bio_summary))
+    _summary_checks(c, False)
+    return clean_up(jrep(t, '[INSERTSUMMARIES]', jsub('\n'.join(out), r'\\par *\Z', '', every=False)))
+
+
+# The anonymous team summaries call each person by their role, spelled out, with the same numbers as the anonymous tables.
+ANON_ONE = {'pi': 'The PI', 'sci-pi': 'The Science PI', 'admin-pi': 'The Admin-PI'}
+ANON_NUMBERED = {'co-i': 'Co-I', 'coi': 'Co-I', 'pd': 'Postdoc', 'gst': 'Grad student', 'ust': 'Undergrad', 'coll': 'Collaborator'}
+# Words after "her" that show it is not possessive ("with her and", "gave her the data"); before any other word it is.
+NOT_A_NOUN = set('''a an the and or but nor so yet to in on at by for from of with about as into onto over under through during
+    after before since until while when where that this these those which who whom whose will would can could shall should may
+    might must is are was were be been being has have had do does did not also too then than if because although though via per
+    within without across among between toward towards around up down out off back again both either neither each every all any
+    some more most very well here there now already still'''.split())
+TITLES = r'(?:(?:Dr|Prof|Professor|Mr|Mrs|Ms|Mx)\.?[\s~]+)'
+
+
+def anon_label(role):
+    """How the anonymous team summaries call a person: PI -> The PI, co-I(2) -> Co-I 2, coll(1) -> Collaborator 1,
+    ust(1) -> Undergrad 1; any other role as typed, after "The"."""
+    m = re.fullmatch(r'\s*([A-Za-z][A-Za-z-]*)\s*\(\s*(\d+)\s*\)\s*', role or '')
+    if m: return f'{ANON_NUMBERED.get(m.group(1).lower(), m.group(1))} {m.group(2)}'
+    return ANON_ONE.get((role or '').strip().lower(), 'The ' + (role or '').strip())
+
+
+def named_start(q, program):
+    """What the named team summaries put in front of a person's text: "Dr. Jane Q. Doe, PI," (full role names for HST)."""
+    role = q['full_role'] if re.search('hst', program, re.I) else q['newrole']
+    return ' '.join(f"{q['m'].prefix} {q['name']}, {role},".split())
+
+
+def summary_starts(p):
+    """{member id: (named start, anonymous label)}, for the dashboard to show in front of each team summary."""
+    c = dict(p=p, people={m.id: dict(m=m, newrole=new, full_role=full_role(m.role),
+                                     name=re.sub(r',\Z', '', f'{m.first} {m.middle} {m.last}, {m.suffix}'.strip())) for m, new in numbered_roles(p.members)})
+    return {mid: (named_start(q, p.program), anon_label(q['newrole'])) for mid, q in c['people'].items()}
+
+
+def _name_forms(m):
+    """The ways a person's name may be written, longest first: First Middle Last, First Last, Last."""
+    forms = [' '.join(x for x in (m.first, m.middle, m.last) if x), ' '.join(x for x in (m.first, m.last) if x), m.last]
+    return [f for f in dict.fromkeys(f.strip() for f in forms) if f]
+
+
+def _sentence_start(before):
+    return re.search(r'(\A|[.!?:]["\')\]}]*)\s*\Z', before) is not None
+
+
+def anonymize(text, me, people):
+    """A team summary without names or gendered pronouns. me: the paragraph's person; people: {member id: (Person, label)}.
+    Team members' names (with any title such as Dr.) become their labels; she, he, him and the like become the paragraph's
+    own label (her or his before a noun: the label's possessive); herself and himself become themself."""
+    out, shared = text, {}
+    for m, _ in people.values(): shared[m.last] = shared.get(m.last, 0) + 1
+    forms = sorted(((f, lab) for m, lab in people.values() for f in _name_forms(m) if f != m.last or shared[m.last] == 1),
+                   key=lambda x: -len(x[0]))
+    def put(label, at_start, possessive=False):
+        lab = label if at_start or not label.startswith('The ') else 'the' + label[3:]
+        return lab + ("'s" if possessive else '')
+    if forms:
+        rx = re.compile(r'(?<![\\\w])' + TITLES + '?(' + '|'.join(re.escape(f) for f, _ in forms) + r')(?!\w)')
+        label_of = dict(forms)
+        out = rx.sub(lambda h: put(label_of[h.group(1)], _sentence_start(h.string[:h.start()])), out)
+    label = people[me][1]
+    def pronoun(h):
+        word, low, after = h.group(0), h.group(0).lower(), h.string[h.end():]
+        start = word[0].isupper()
+        if word == 'He' and (not _sentence_start(h.string[:h.start()]) or re.match(r'[\s~]*(?:[IVX]+\b|\d|\+|\$|-)', after)):
+            return word                                              # helium (a capital He inside a sentence, He II, He-3)
+        if low in ('herself', 'himself'): return 'Themself' if start else 'themself'
+        if low in ('his', 'hers'): return put(label, start, True)
+        if low == 'her':                                             # possessive before a noun, a number or a LaTeX command
+            nxt = re.match(r'[\s~]+(?:([A-Za-z][\w-]*)|[\d\\${])', after)
+            return put(label, start, bool(nxt) and (nxt.group(1) is None or nxt.group(1).lower() not in NOT_A_NOUN))
+        return put(label, start)                                     # she, he, him
+    return re.sub(r"(?<![\\\w])(?:[Ss]he|[Hh]e|[Hh]im|[Hh]er|[Hh]is|[Hh]ers|[Hh]erself|[Hh]imself)(?![\w])", pronoun, out)
+
+
+def _summary_checks(c, anonymous):
+    """Warnings on the team summaries, added to the checks once per table kind."""
+    key = 'anon_summary_checks' if anonymous else 'summary_checks'
+    if c.get(key): return
+    c[key] = True
+    for pid in c['order']:
+        q = c['people'][pid]; text = (q['m'].bio_summary or '').strip()
+        if not anonymous:
+            pre = re.escape(q['m'].prefix.strip())
+            rest = re.sub(r'\A(?:' + TITLES + (r'|' + pre + r'[\s~]+' if pre else '') + ')', '', text)
+            if any(re.match(re.escape(f) + r'(?!\w)', rest) for f in _name_forms(q['m'])):
+                c['r']['checks'].append(Check('warn', pid, 'team summary starts with their name, which the table already puts in front of it', pid))
+            continue
+        anon = anonymize(text, pid, c['anon_people'])
+        left = [f for m, _ in c['anon_people'].values() for f in (m.first, m.last) if f and re.search(r'(?<![\\\w])' + re.escape(f) + r'(?!\w)', anon)]
+        left += [m.institution for m, _ in c['anon_people'].values() if m.institution.strip() and m.institution.strip().lower() in anon.lower()]
+        if left:
+            c['r']['checks'].append(Check('warn', pid, 'anonymous team summary still names ' + ', '.join(f'"{x}"' for x in dict.fromkeys(left)), pid))
+
+
+def team_summaries_anonymous(c):
+    t = jsub(template('isANONteamSummaries'), r'\[INSERTFILENAME\]', 'isANONteamSummaries')
+    t, para = extract(t, 'STARTSUMMARYTEMPLATE', 'ENDSUMMARYTEMPLATE')
+    c.setdefault('anon_people', {pid: (c['people'][pid]['m'], anon_label(c['people'][pid]['newrole'])) for pid in c['order']})
+    _summary_checks(c, True)
+    out = []
+    for pid in c['order']:
+        q = c['people'][pid]
+        s = jrep(para, '[INSERTLABEL]', c['anon_people'][pid][1])
+        out.append(jrep(s, '[INSERTBIOSUMMARY]', anonymize(q['m'].bio_summary, pid, c['anon_people'])))
     return clean_up(jrep(t, '[INSERTSUMMARIES]', jsub('\n'.join(out), r'\\par *\Z', '', every=False)))
 
 
@@ -588,7 +695,7 @@ def work_effort(c):
 def build(proposal, names=TABLES):
     """Return {table name: LaTeX text} plus the engine's checks under '_checks'."""
     c = prepare(proposal)
-    make = dict(NOTANONteamSummaries=team_summaries, NOTANONtasks=tasks_named, NOTANONhst=hst, isANONschedule=schedule,
+    make = dict(NOTANONteamSummaries=team_summaries, isANONteamSummaries=team_summaries_anonymous, NOTANONtasks=tasks_named, NOTANONhst=hst, isANONschedule=schedule,
                 NOTANONfte=lambda c: fte(c, 'NOTANONfte'), isANONfte=lambda c: fte(c, 'isANONfte'), isANONtasks=tasks_anonymous,
                 isANONtravel=travel, isANONnonlabor=nonlabor, NOTANONworkEffort=work_effort)
     out = {name: make[name](c) for name in names}

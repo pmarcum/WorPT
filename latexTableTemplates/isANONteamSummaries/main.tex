@@ -1,0 +1,24 @@
+%______________________________________
+% WorPT table "[INSERTFILENAME]". It needs \usepackage{worpt} in your preamble (worpt.sty comes with the tables).
+% How to put it in your document:
+% https://github.com/pmarcum/WorPT/blob/main/latexTableTemplates/[INSERTFILENAME]/readme.md
+%______________________________________
+
+
+% ___________________________________________
+%       Default formatting preferences
+% ___________________________________________
+
+%--- boldfaces the label (The PI, Co-I 1, Collaborator 2 ...) at the beginning of each paragraph
+\def\LabelFontstyle#1{\textbf{#1}}            % boldface the label at top of paragraph for that person
+
+% COMMENT: the below template formats the paragraph for each person
+[STARTSUMMARYTEMPLATE]
+\LabelFontstyle{[INSERTLABEL]} [INSERTBIOSUMMARY] \par
+[ENDSUMMARYTEMPLATE]
+
+\newenvironment{[INSERTFILENAME]}{%
+[INSERTSUMMARIES]
+}
+{%
+}

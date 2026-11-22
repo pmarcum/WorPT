@@ -79,7 +79,7 @@ Answer (always HTTP 200; look at `status`):
   "work_plan": {"id": "kM3vQ9x_T2bA", "title": "Mapping faint halos"},
   "files": {
     "NOTANONfte.tex": "...", "NOTANONhst.tex": "...", "isANONschedule.tex": "...",
-    "NOTANONtasks.tex": "...", "NOTANONteamSummaries.tex": "...", "isANONfte.tex": "...",
+    "NOTANONtasks.tex": "...", "NOTANONteamSummaries.tex": "...", "isANONteamSummaries.tex": "...", "isANONfte.tex": "...",
     "isANONnonlabor.tex": "...", "isANONtasks.tex": "...", "isANONtravel.tex": "...", "NOTANONworkEffort.tex": "...",
     "worpt.sty": "..."
   },

@@ -159,6 +159,9 @@ input.wk.on{border-color:#4a6a90}
 .tsum .roles{flex:1 1 200px;min-width:180px;display:flex;flex-direction:column;gap:3px;font-size:12px;line-height:1.4}
 .tsum .roles ul{margin:0 0 4px;padding-left:16px}
 .tsum .roles .btn{align-self:flex-start;margin-top:4px}
+/* the plan's part for this person: a box the size of the summary box beside it, made taller by dragging its lower right corner */
+.tsum .rbox{height:96px;min-height:40px;overflow:auto;resize:vertical;background:var(--bg);border:1px solid var(--border2);border-radius:5px;padding:6px 8px}
+.tsum-start{font-size:12px;margin-bottom:4px}
 .sg-details .dhead{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start}
 .sg-details.stack{gap:8px;padding:10px 12px}
 .info{display:inline-block;margin-left:5px;color:var(--muted);cursor:help;font-size:12px;line-height:1;text-transform:none;letter-spacing:0}  /* hover for help */
@@ -239,7 +242,8 @@ const S = {
 const TABS = [['plan', 'Plan'], ['team', 'Team'], ['budget', 'Travel & budget'], ['tables', 'Tables'], ['snapshots', 'Snapshots'], ['settings', 'Settings']];
 const TABLE_NAMES = {
   isANONschedule: ['Schedule', 'anonymous'], NOTANONtasks: ['Task list', 'named'], NOTANONfte: ['FTE by person', 'named'],
-  NOTANONteamSummaries: ['Team summaries', 'named'], NOTANONhst: ['HST roles', 'named'], isANONtasks: ['Task list', 'anonymous'],
+  NOTANONteamSummaries: ['Team summaries', 'named'], isANONteamSummaries: ['Team summaries', 'anonymous'],
+  NOTANONhst: ['HST roles', 'named'], isANONtasks: ['Task list', 'anonymous'],
   isANONfte: ['FTE by role', 'anonymous'], isANONtravel: ['Travel', 'anonymous'], isANONnonlabor: ['Non-labor budget', 'anonymous'],
   NOTANONworkEffort: ['Work effort', 'named'],
   worpt: ['worpt.sty', 'load once with \\usepackage{worpt}'],
@@ -1089,8 +1093,8 @@ function viewTeam() {
       '<div class="sub" style="margin-top:4px">shown as <b style="color:var(--text)">' + esc(m.short_id) + '</b></div></td>' +
       '<td><input type="checkbox" data-save="member:' + m.id + ':is_lead" aria-label="Full editor"' + (m.is_lead ? ' checked' : '') + v + '></td>' +
       '<td><input type="text" inputmode="decimal" data-num="dec" data-save="member:' + m.id + ':fte_accuracy" value="' + esc(m.fte_accuracy == null ? '' : m.fte_accuracy) + '" placeholder="0.05" aria-label="FTE accuracy"' + v + '></td>' +
-      '<td style="min-width:420px"><div class="tsum"><textarea data-save="member:' + m.id + ':bio_summary" aria-label="Team summary for ' + esc(personName(m)) + '"' + v + ' style="min-height:96px">' + esc(m.bio_summary) + '</textarea>' +
-      '<div class="roles">' + planSummary(m) + (can ? '<button type="button" class="btn" data-draft="' + m.id + '">Draft summary</button>' : '') + '</div></div></td>' +
+      '<td style="min-width:420px">' + summaryStart(m) + '<div class="tsum"><textarea data-save="member:' + m.id + ':bio_summary" aria-label="Team summary for ' + esc(personName(m)) + '"' + v + ' style="min-height:96px">' + esc(m.bio_summary) + '</textarea>' +
+      '<div class="roles"><div class="rbox">' + planSummary(m) + '</div>' + (can ? '<button type="button" class="btn" data-draft="' + m.id + '">Draft summary</button>' : '') + '</div></div></td>' +
       (hst ? '<td style="min-width:160px"><textarea data-save="member:' + m.id + ':task_summary" aria-label="HST role text"' + v + '>' + esc(m.task_summary) + '</textarea></td>' : '') +
       '<td>' + (can ? '<button type="button" class="btn danger" data-removemember="' + m.id + '">Remove…</button>' : '') + '</td></tr>';
   }).join('');
@@ -1147,17 +1151,22 @@ function planSummary(m) {
     (r.support.length ? '<div class="sub">Supports</div><ul>' + r.support.map(li).join('') + '</ul>' : '') +
     (r.lead.length || r.support.length ? '<div class="sub">FTE: ' + esc(fte) + '</div>' : '<div class="sub">Not on any task yet.</div>');
 }
-/** A first paragraph for the team summary, built from the plan and the person's profile (no AI): edit it freely. */
+/** What the tables put in front of a person's team summary, so the text is written to follow it. */
+function summaryStart(m) {
+  const st = (S.P.computed.summary_starts || {})[m.id];
+  return st ? '<div class="sub tsum-start">The tables start it with <b>' + esc(st[0]) + '</b> …, or, anonymous, <b>' + esc(st[1]) + '</b> …</div>' : '';
+}
+/** A first paragraph for the team summary, built from the plan and the person's profile (no AI): edit it freely. It
+ *  follows what the tables put in front of it ("Dr. Jane Q. Doe, PI," or "The PI"), so it starts with "will lead". */
 function draftSummary(m) {
   const r = planRoles(m);
   const join = xs => xs.length < 2 ? xs.join('') : xs.slice(0, -1).join(', ') + (xs.length > 2 ? ',' : '') + ' and ' + xs[xs.length - 1];
   const task = e => 'Task ' + e.label + ' (' + e.title + ')';
-  const name = m.prefix ? m.prefix + ' ' + m.last : personName(m);
-  const subject = { she: 'She', he: 'He', they: 'They' }[m.pronoun] || name;
+  const subject = { she: 'She', he: 'He', they: 'They' }[m.pronoun] || (m.prefix ? m.prefix + ' ' + m.last : personName(m));
   const expertise = join((m.expertise || '').split(/\s*;\s*/).filter(Boolean));
   const out = [];
-  if (r.lead.length) out.push(name + ' will lead ' + join(r.lead.map(task)) + (expertise ? ', drawing on expertise in ' + expertise : '') + '.');
-  if (r.support.length) out.push((r.lead.length ? subject + ' will also support ' : name + ' will support ') + join(r.support.map(task)) +
+  if (r.lead.length) out.push('will lead ' + join(r.lead.map(task)) + (expertise ? ', drawing on expertise in ' + expertise : '') + '.');
+  if (r.support.length) out.push((r.lead.length ? subject + ' will also support ' : 'will support ') + join(r.support.map(task)) +
     (!r.lead.length && expertise ? ', contributing expertise in ' + expertise : '') + '.');
   return out.join(' ');
 }

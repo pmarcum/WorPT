@@ -177,3 +177,41 @@ def test_work_effort_months_come_from_the_ftes_and_add_up():
     assert re.findall(r'\\WorkEffortSumCell\{([^}]*)\}', t) == ['6.0', '10.2', '1.3', z, z, '2.0', '6.0', '10.2', '3.3']
     spec = next(l for l in t.splitlines() if l.startswith('|>{\\columncolor'))                      # the year columns, shaded
     assert [spec.count(c) for c in ('OddYearColor', 'EvenYearColor', 'SumColor')] == [3, 3, 3] and '[INSERT' not in t
+
+
+# ------------------------------------------------ team summaries, named and anonymous
+def summaries_team():
+    pi = Person('PI', 'PI', True, last='Doe', first='Jane', middle='Q.', prefix='Dr.', institution='Lunar Institute',
+                bio_summary="will lead Task A1.1 (Photometry), drawing on her 20 years of work with Dr. Roe. She will also support Task A2.1.")
+    co = Person('co-I 1', 'co-I(1)', True, last='Roe', first='Rick', prefix='Prof.',
+                bio_summary="will lead Task A2.1. He works with Jane Doe's group; his He II maps and the He-3 data are his. He trained himself.")
+    gs = Person('gst 1', 'gst(1)', True, last='Poe', first='Pat', bio_summary='Pat Poe will support Task A1.1 at the Lunar Institute.')
+    cl = Person('collab 1', 'coll(1)', False, last='Moe', first='Mo', bio_summary='will support Task A2.1; we work with her and her team.')
+    return Proposal('T', 'NASA', 1, [cl, gs, co, pi], [Item('Goal', children=[task('T1', [('PI', 4, 0)])])])
+
+
+def test_anonymous_team_summaries_call_people_by_their_spelled_out_role():
+    """Each paragraph starts with the person's role, spelled out and numbered as in the anonymous tables; team members'
+    names in the text become their roles, and the gendered pronouns the paragraph's own role (possessive before a noun).
+    A capital He inside a sentence, or before an ionization stage or a number, is helium and stays."""
+    out = build(summaries_team(), ['isANONteamSummaries'])['isANONteamSummaries']
+    paras = re.findall(r'\\LabelFontstyle\{([^}]*)\} (.*?) *(?:\\par|\n\})', out, re.S)
+    assert [p[0] for p in paras] == ['The PI', 'Co-I 1', 'Grad student 1', 'Collaborator 1']       # the tables' order
+    text = dict(paras)
+    assert text['The PI'] == "will lead Task A1.1 (Photometry), drawing on the PI's 20 years of work with Co-I 1. The PI will also support Task A2.1."
+    assert text['Co-I 1'] == "will lead Task A2.1. Co-I 1 works with the PI's group; Co-I 1's He II maps and the He-3 data are Co-I 1's. Co-I 1 trained themself."
+    assert text['Collaborator 1'] == 'will support Task A2.1; we work with Collaborator 1 and Collaborator 1\'s team.'
+    assert not re.search(r'Jane|Doe|Rick|Roe|\b[Ss]he\b|\bher\b|\bhis\b', out)
+    assert [tables.anon_label(r) for r in ('PI', 'Sci-PI', 'Admin-PI', 'co-I(2)', 'pd(1)', 'gst(3)', 'ust(1)', 'coll(4)')] == \
+        ['The PI', 'The Science PI', 'The Admin-PI', 'Co-I 2', 'Postdoc 1', 'Grad student 3', 'Undergrad 1', 'Collaborator 4']
+
+
+def test_team_summaries_warn_about_a_repeated_name_and_what_anonymizing_leaves():
+    """The named table warns when a summary starts with the person's name (the table already puts it in front); the
+    anonymous one when a paragraph still has a team member's first or last name, or institution, after anonymizing."""
+    checks = build(summaries_team(), ['NOTANONteamSummaries', 'isANONteamSummaries'])['_checks']
+    said = sorted((c.item, c.message) for c in checks if 'summary' in c.message)
+    assert said == [('gst 1', 'anonymous team summary still names "Lunar Institute"'),
+                    ('gst 1', 'team summary starts with their name, which the table already puts in front of it')]
+    named = build(summaries_team(), ['NOTANONteamSummaries'])['NOTANONteamSummaries']
+    assert 'Dr. \\NameFontstyle{Jane Q. Doe}, \\NameFontstyle{PI}, will lead Task A1.1' in named

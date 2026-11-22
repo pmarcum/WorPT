@@ -16,7 +16,7 @@ import hashlib, hmac, logging, os, pathlib, sys
 from flask import Flask, jsonify, request
 from worpt.store import Store, User, WorptError
 from worpt.effort import compute, label_tree
-from worpt.tables import build, paste_in, style, travel_summary, TABLES
+from worpt.tables import build, paste_in, style, summary_starts, travel_summary, TABLES
 from worpt.about import about
 from worpt import preview
 
@@ -85,6 +85,7 @@ def create_app(db_path=None, credential=None, read_credential=None):
             items={iid: dict(label=lab, fte=r['items'][lab]['fte'].tolist(), start=r['items'][lab]['start'], end=r['items'][lab]['end'])
                    for iid, lab in label_of.items()},
             project_total=r['project_total'].tolist(), travel=travel_summary(prop),
+            summary_starts={member_of[s]: v for s, v in summary_starts(prop).items()},   # [named start, anonymous label]
             checks=[dict(level=c.level, item=c.item, message=c.message, **{k: getattr(c, k) for k in ('person', 'weeks') if getattr(c, k) is not None})
                     for c in r['checks']])
 

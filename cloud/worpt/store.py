@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS steps (
   state TEXT NOT NULL DEFAULT 'done', undoes INTEGER);
 CREATE INDEX IF NOT EXISTS steps_user ON steps (user, proposal_id, state, id);
 CREATE TABLE IF NOT EXISTS top_ids (tbl TEXT PRIMARY KEY, top INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS upgrades (name TEXT PRIMARY KEY, done_at TEXT NOT NULL);
 """
 LEVELS = ('goal', 'task', 'subtask')
 TRAVEL_DEFAULT = dict(airfare=[0, 0, 0], perdiem=[0, 0, 0], conference=[0, 0, 0], ground=[0, 0, 0], days=[0, 0])
@@ -170,6 +171,10 @@ class Store:
                                      'WHERE p.frozen_at IS NULL').fetchall():
                 self.renumber_roles(db, User('worpt-server', 'admin'), pid)
             db.execute('CREATE INDEX IF NOT EXISTS history_step ON history (step)')
+            # one-time changes to what is stored, each made once (a later edit that looks the same is left alone)
+            for name, upgrade in (('summary_names', self.drop_summary_names),):
+                if not db.execute('SELECT 1 FROM upgrades WHERE name = ?', (name,)).fetchone():
+                    upgrade(db); db.execute('INSERT INTO upgrades (name, done_at) VALUES (?, ?)', (name, now()))
             for tbl in ID_TABLES:                   # the highest number each kind of row has ever had, deleted rows included
                 top = max(db.execute(f'SELECT coalesce(max(id), 0) FROM {tbl}').fetchone()[0],
                           db.execute('SELECT coalesce(max(CAST(row_id AS INTEGER)), 0) FROM history WHERE tbl = ?', (tbl,)).fetchone()[0])
@@ -463,6 +468,21 @@ class Store:
             return {'deleted': p['title']}
 
     # ------------------------------------------------ team members
+    def drop_summary_names(self, db):
+        """Team summaries drafted before November 2026 started with the person's name ("Dr. Doe will lead ..."), which the
+        team summaries table already puts in front of them ("Dr. Jane Q. Doe, PI, Dr. Doe will lead ..."). Take that name
+        off where a summary starts with exactly the name the draft wrote, followed by the draft's "will lead" or "will
+        support"; work plans that are frozen are left as they are."""
+        server = User('worpt-server', 'admin')
+        rows = self.all(db, 'SELECT m.id, m.proposal_id, m.bio_summary, p.prefix, p.first, p.last FROM members m '
+                            'JOIN people p ON p.id = m.person_id JOIN proposals q ON q.id = m.proposal_id WHERE q.frozen_at IS NULL ORDER BY m.id')
+        for r in rows:
+            name = f"{r['prefix']} {r['last']}" if r['prefix'] else (' '.join(x for x in (r['first'], r['last']) if x) or '(no name)')
+            if not re.match(re.escape(name) + r' will (?:lead|support) ', r['bio_summary']): continue
+            before = self.get(db, 'members', r['id'], 'team member')
+            db.execute('UPDATE members SET bio_summary = ?, version = version + 1 WHERE id = ?', (r['bio_summary'][len(name) + 1:], r['id']))
+            self.log(db, server, r['proposal_id'], 'members', r['id'], 'update', before, self.get(db, 'members', r['id'], 'team member'))
+
     def renumber_roles(self, db, user, proposal_id, edit=None, write=None):
         """Number the numbered roles 1, 2, ... within each kind, in the tables' order (by kind of role, then by last name;
         see tables.team_order), so the numbers never leave gaps; labels follow.
