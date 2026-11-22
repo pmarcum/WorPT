@@ -357,3 +357,66 @@ def test_the_switch_for_a_schedule_across_pages(setting, tall, parts, tmp_path):
     assert text.count('TASK TITLES') == parts and text.count('continued on next page') == parts - 1
     assert ('Float too large' in log) == (setting == 'never'), 'never keeps a tall schedule on one page, as before'
     assert ('longtable' in log.split('\\begin{document}')[-1] and 'LT@' in (tmp_path / 'doc.aux').read_text()) == (setting == 'always')
+
+
+# ------------------------------------------------ the work-effort table (NASA's Table of Work Effort)
+def work_effort_doc(tmp_path, cls, P, extra=''):
+    shutil.copy(TEMPLATE_DIR / 'worpt.sty', tmp_path)
+    (tmp_path / 'NOTANONworkEffort.tex').write_text(build(P, ['NOTANONworkEffort'])['NOTANONworkEffort'])
+    block = paste_in('NOTANONworkEffort').replace('\\input{NOTANONworkEffort} % reset file parameters', '\\input{NOTANONworkEffort}\n' + extra)
+    (tmp_path / 'doc.tex').write_text(documentclass(cls) + '\n' + paste_in('worpt') + EDGES + '\\begin{document}\n' + front(cls) +
+                                      'Before the table, see Table~\\ref{tab:NOTANONworkEffort}.\n\n' + block + '\nAfter the table.\n\\end{document}\n')
+
+
+def work_effort_plan(years, people=0):
+    """A real plan over `years` years, with months on other funded projects; or `people` copies of its team, no tasks."""
+    import copy, dataclasses
+    P = dataclasses.replace(load(CASES[1]), n_years=years)
+    for m in P.members: m.other_months = [1.5] * years
+    if not people: return P
+    team = []
+    for k in range(people):
+        m = copy.deepcopy(P.members[k % len(P.members)]); m.id, m.last, m.role = f'x{k}', f'Person{k:02d}', 'co-I(1)' if k else 'PI'
+        team.append(m)
+    return dataclasses.replace(P, members=team, goals=[])
+
+
+@pytest.mark.parametrize('years', [1, 3, 5])
+@pytest.mark.parametrize('cls', ['article', '{aastex702}', '{aastex631}', 'revtex4-2', '[twocolumn]{aastex702}', '[reprint]{revtex4-2}'])
+def test_the_work_effort_table_fits_the_page(cls, years, tmp_path):
+    """As wide as the text, upright or sideways (narrower spacing, then landscape mode, then smaller headings over the
+    months, as needed), with nothing past the edges; five years fit in aastex and revtex (not in plain article, whose
+    text is narrow: there WorPT warns)."""
+    if not works(cls): pytest.skip(f'{cls} does not work on this machine, even without WorPT')
+    if not shutil.which('pdftotext'): pytest.skip('pdftotext is not installed')
+    work_effort_doc(tmp_path, cls, work_effort_plan(years))
+    log, text = compile_doc(tmp_path)
+    assert not [l for l in log.splitlines() if l.startswith('!')], cls
+    if cls == 'article' and years == 5:
+        assert 'The work effort table is wider than the page' in log    # (the log wraps the rest of the line)
+        return
+    assert 'Overfull \\hbox' not in log and 'worpt Warning' not in log, (cls, years)
+    assert text.count('Commitment (months per year)') == 1 and 'Sum of work effort' in text and '??' not in text
+    assert not outside_block(tmp_path, tmp_path / 'doc.pdf'), (cls, years)
+
+
+@pytest.mark.parametrize('landscape', ['', '\\LandScapetrue'], ids=['portrait', 'landscape'])
+@pytest.mark.parametrize('cls', ['article', '{aastex702}', '[twocolumn]{aastex702}', 'revtex4-2'])
+def test_a_work_effort_table_for_a_large_team_runs_over_pages(cls, landscape, tmp_path):
+    """Its headings repeated on each page, "continued" notes at the breaks; the sums, the Comments row and the caption
+    together at the end; right on the first run; nothing past the edges."""
+    if not works(cls): pytest.skip(f'{cls} does not work on this machine, even without WorPT')
+    if not shutil.which('pdftotext'): pytest.skip('pdftotext is not installed')
+    work_effort_doc(tmp_path, cls, work_effort_plan(1, people=70), landscape)
+    where = lambda: [(round(x0, 1), round(y0, 1), w) for sideways, words in pages(subprocess.run(['pdftotext', '-bbox', 'doc.pdf', '-'], cwd=tmp_path, capture_output=True, text=True).stdout)
+                     for x0, y0, x1, y1, w in words if w in ('Name', 'Role', 'Commitment', 'Year', 'Sum', 'Comments:', 'Person00', 'Person69')]
+    log, text = compile_doc(tmp_path, 1); first = where()
+    log, text = compile_doc(tmp_path, 2)
+    assert first == where(), 'the first run already looks like the last'
+    assert not [l for l in log.splitlines() if l.startswith('!')] and 'Overfull \\hbox' not in log, cls
+    parts = text.count('Commitment (months per year)')
+    assert parts >= 2 and text.count('continued on next page') == parts - 1 and text.count('(continued)') == parts - 1, (cls, parts)
+    on = lambda words: next(k for k, page in enumerate(text.split('\f')) if words in page)
+    assert on('Sum of work effort') == on('Comments:') == on('Table of work effort'), 'the end of the table on one page'
+    assert text.count('Table of work effort') == 1 and '??' not in text
+    assert not outside_block(tmp_path, tmp_path / 'doc.pdf'), cls

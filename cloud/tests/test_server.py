@@ -5,7 +5,7 @@ Covers the credential gate, the permission rules, every kind of change, conflict
 previews, history, and that tables read through the API are identical to the tables built directly
 from the parity fixtures (so storing a proposal loses nothing).
 """
-import json, pathlib, sys
+import json, pathlib, re, sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 import pytest
 from worpt_server import create_app
@@ -605,6 +605,27 @@ def test_any_member_edits_trips_but_not_other_member_fields(team):
     bob.no('patch', f"/api/members/{m['id']}", dict(version=1, task_summary='x'))
 
 
+
+def test_any_member_enters_months_on_other_funded_projects(team):
+    """The months each person has committed to other currently funded projects (per year) may be entered by anyone on
+    the work plan, as trips may; they reach the work-effort table, can be undone, and come back with a snapshot."""
+    ann, bob, pid = team['ann'], team['bob'], team['pid']
+    aa = ann.ok('get', f'/api/proposals/{pid}')['members'][0]
+    assert aa['other_months'] == []
+    aa = bob.ok('patch', f"/api/members/{aa['id']}", dict(version=aa['version'], other_months=[1, 2.5, '']))['member']
+    assert aa['other_months'] == [1.0, 2.5, 0.0]
+    assert you(bob, pid)['undo'] == "changing Ann Annson's months on other funded projects"
+    latex = ann.ok('get', f'/api/proposals/{pid}/tables/NOTANONworkEffort')['latex']
+    assert re.search(r'Ann +Annson', latex) and '\\MonthsFormat{2.5}' in latex and '\\WorkEffortSumCell{3.5}' in latex
+    for bad in (['x', 1, 2], 'twelve', 3):
+        bob.no('patch', f"/api/members/{aa['id']}", dict(version=aa['version'], other_months=bad), code='invalid')
+    snap = ann.ok('post', f'/api/proposals/{pid}/snapshots', dict(name='with months'))['snapshot']
+    undo(bob, pid)
+    assert ann.ok('get', f'/api/proposals/{pid}')['members'][0]['other_months'] == []
+    ann.ok('post', f"/api/snapshots/{snap['id']}/restore")
+    assert ann.ok('get', f'/api/proposals/{pid}')['members'][0]['other_months'] == [1.0, 2.5, 0.0]
+
+
 # ------------------------------------------------ snapshots
 def plan_of(api, pid):
     """The parts of a proposal a restore brings back, without ids and versions."""
@@ -983,6 +1004,7 @@ def test_a_frozen_plan_can_t_be_changed_in_any_way(team):
                 ('delete', f"/api/assignments/{a['id']}", None),
                 ('post', f"/api/proposals/{pid}/members", dict(person_id=team['people']['cat']['id'], role='co-I')),
                 ('patch', f"/api/members/{m['id']}", dict(version=m['version'], trips=[1, 0, 0])),
+                ('patch', f"/api/members/{m['id']}", dict(version=m['version'], other_months=[1, 0, 0])),
                 ('delete', f"/api/members/{m['id']}?confirm=1", None),
                 ('post', f'/api/proposals/{pid}/nonlabor', dict(item='More', amounts=[1, 0, 0])),
                 ('patch', f"/api/nonlabor/{line['id']}", dict(version=line['version'], item='Pubs')),

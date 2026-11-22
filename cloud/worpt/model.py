@@ -16,6 +16,7 @@ class Person(Member):
     bio_summary: str = ''     # role/background narrative (team summaries table)
     task_summary: str = ''    # short HST-style role text (HST table)
     trips: list = field(default_factory=list)   # per year: [domestic trips, international trips]
+    other_months: list = field(default_factory=list)   # per year: months committed to other currently funded projects
 
 
 @dataclass

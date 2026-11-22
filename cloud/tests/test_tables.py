@@ -7,8 +7,9 @@ from worpt.tables import build, jrep, jsub, fixed, dollars, general, team_order,
 from test_parity_tables import SHEET_TEMPLATES
 
 
-def person(pid, role, last, us=True, trips=()):
-    return Person(pid, role, us, last=last, first=last[0], institution='Inst', position='scientist', trips=[list(t) for t in trips])
+def person(pid, role, last, us=True, trips=(), other_months=()):
+    return Person(pid, role, us, last=last, first=last[0], institution='Inst', position='scientist', trips=[list(t) for t in trips],
+                  other_months=list(other_months))
 
 
 def proposal(goals, members=None, n_years=1, **kw):
@@ -155,3 +156,24 @@ def test_team_order_by_kind_of_role_then_last_name():
          person('g1', 'gst(1)', 'Moss'), person('a', 'Admin-PI', 'Yu'), person('c1', 'co-I(2)', 'Cole'), person('p1', 'pd(1)', 'Abel'),
          person('c0', 'co-I(1)', 'Adams'), person('pi', 'PI', 'Zimmer'), person('k1', 'coll(1)', 'Aaron')]
     assert [x.id for x in team_order(m)] == ['pi', 'a', 's', 'c0', 'c1', 'p1', 'g1', 'u1', 'o', 'k1', 'c2']
+
+
+# ------------------------------------------------ the work-effort table (NASA's Table of Work Effort)
+def test_work_effort_months_come_from_the_ftes_and_add_up():
+    """NASA Support = funded FTE x 12, Total = all FTE x 12, to one decimal; Other Funded Projects as entered (to one
+    decimal); the Sum columns add each person's years and the bottom row the team, using the months as shown; no
+    months at all is \\ZeroMonths; roles as NASA names them, the team in the tables' order."""
+    members = [person('c', 'coll(1)', 'Gamma', us=False, other_months=[0.25]), person('b', 'co-I(1)', 'Beta'),
+               person('a', 'PI', 'Alpha', other_months=[1, 2])]
+    goals = [Item('Goal', children=[task('T1', [('a', 26, 0), ('b', 13, 13), ('c', 5.2, 0)], start=(1, 1), end=(1, 52))])]
+    t = build(proposal(goals, members, n_years=2), ['NOTANONworkEffort'])['NOTANONworkEffort']
+    rows = {m.group(1): m.group(2) for m in re.finditer(r'\\NameFormat\{\\WorPTunlessMeasuring\{[A-Z] +(\w+)\}\} & \\RoleFormat\{([^}]*)\}', t)}
+    assert list(rows) == ['Alpha', 'Beta', 'Gamma'] and rows == {'Alpha': 'PI', 'Beta': 'Co-I', 'Gamma': 'Collaborator'}
+    cells = lambda who: re.findall(r'\\MonthsFormat\{([^}]*)\}', next(l for l in t.splitlines() if who in l))
+    z = '\\ZeroMonths'
+    assert cells('Alpha') == ['6.0', '6.0', '1.0', z, z, '2.0', '6.0', '6.0', '3.0']     # year 1, year 2, sum
+    assert cells('Beta') == [z, '3.0', z, z, z, z, z, '3.0', z]                          # wholly unfunded
+    assert cells('Gamma') == [z, '1.2', '0.3', z, z, z, z, '1.2', '0.3']                 # a collaborator: no NASA support
+    assert re.findall(r'\\WorkEffortSumCell\{([^}]*)\}', t) == ['6.0', '10.2', '1.3', z, z, '2.0', '6.0', '10.2', '3.3']
+    spec = next(l for l in t.splitlines() if l.startswith('|>{\\columncolor'))                      # the year columns, shaded
+    assert [spec.count(c) for c in ('OddYearColor', 'EvenYearColor', 'SumColor')] == [3, 3, 3] and '[INSERT' not in t

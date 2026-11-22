@@ -85,6 +85,7 @@
 \newdimen\WorPTfteWidth     % the schedule's Total FTE column
 \newdimen\WorPTcolumnSpace  % the travel table's spacing between columns, made smaller if the table needs it to fit
 \newdimen\WorPTspanWidth    % the text width of a banner across a whole table (the tasks table's category rows)
+\newdimen\WorPTnumberWidth  % the work-effort table's month columns: as wide as their widest number or heading word
 \newsavebox\WorPTmeasureBox
 \newif\ifWorPTlandscape
 
@@ -106,7 +107,7 @@
   \def\WorPT@kill{}\count@\@ne
   \loop\ifnum\count@<#8\relax \expandafter\def\expandafter\WorPT@kill\expandafter{\WorPT@kill&}\advance\count@\@ne\repeat
   \let\WorPT@caption\caption
-  \begingroup\LTpost\z@\WorPT@revtexColumns\let\WorPTlastLine\WorPT@lastLineAcrossPages
+  \begingroup\LTpost\z@\WorPT@revtexColumns\let\WorPTlastLine\WorPT@lastLineAcrossPages\let\WorPTkeptLine\WorPT@keptLineAcrossPages
   \@twocolumnfalse % (\WorPTbeginFullWidth has set one column; aastex's longtable would switch on its own, and back too early)
   \expandafter\longtable\expandafter{#1}%
   \WorPT@kill\kill#2\endfirsthead
@@ -130,6 +131,10 @@
 % it is one line, drawn as colortbl draws longtable's lines, with no page break before it.
 \newcommand\WorPTlastLine{\hline}
 \def\WorPT@lastLineAcrossPages{\noalign{\penalty\@M}\multispan\LT@cols{\CT@arc@\leaders\hrule\@height\arrayrulewidth\hfill}\cr}
+% \WorPTkeptLine: a line between rows that stay on one page (the work-effort table's sums and comments): \hline, or in
+% a table across pages the same single line, with no page break before it or after it.
+\newcommand\WorPTkeptLine{\hline}
+\def\WorPT@keptLineAcrossPages{\WorPT@lastLineAcrossPages\noalign{\penalty\@M}}
 
 % At the start of a row: no page break before it (in a table that runs over several pages; elsewhere it changes nothing).
 % aastex and revtex end every table row with a mark that allows a page break there; \unpenalty takes that mark
@@ -202,6 +207,56 @@
     \begin{sidewaystable*}%
   \fi}
  {\ifWorPT@ownSideways\par\vspace*{\fill}\end{WorPTlandscape}\WorPTendFullWidth\else\end{sidewaystable*}\fi}
+
+% \WorPTtableEnvironment{<name>}{<setting>}{<number of columns>}: the environment <name> for a table that is one float
+% when it fits on a page and otherwise runs over as many pages as it needs, where it is written (\WorPTacrossPages).
+% <setting> is a command holding auto (the default: one page when it fits), always (across pages even when it would
+% fit) or never (one page). In landscape mode the pages are turned sideways (WorPTlandscape); in a two-column document
+% the table runs across both columns (\WorPTbeginFullWidth). The table's template gives the commands \<name>Layout
+% (works out the widths, before anything is set), \<name>Setup (row and column spacing), \<name>Columns,
+% \<name>Head, \<name>Rows and \<name>Foot (its headings, rows and closing rows) and \<name>Body (all three), and the
+% "continued" notes \ContinuedFormat, \ContinuedAboveText and \ContinuedBelowText. What is written inside the
+% environment (the caption and label) is collected first, so that it can go under the table on one page or at the end
+% of the last one.
+\newcommand\WorPTtableEnvironment[3]{%
+  \newenvironment{#1}{\csname #1Layout\endcsname\def\WorPT@collected{}\def\WorPT@name{#1}\def\WorPT@setting{#2}%
+    \def\WorPT@columnCount{#3}\WorPT@collect}{}}
+\long\def\WorPT@collect#1\end#2{% everything up to \end{<name>} (other environments' \end kept)
+  \expandafter\def\expandafter\WorPT@collected\expandafter{\WorPT@collected#1}%
+  \def\WorPT@ending{#2}%
+  \ifx\WorPT@ending\WorPT@name
+    \expandafter\WorPT@place
+  \else
+    \expandafter\def\expandafter\WorPT@collected\expandafter{\WorPT@collected\end{#2}}%
+    \expandafter\WorPT@collect
+  \fi}
+\def\WorPT@always{always}\def\WorPT@auto{auto}
+\def\WorPT@place{%
+  \def\WorPT@as##1{\expandafter\let\csname WorPT@##1\expandafter\endcsname\csname\WorPT@name##1\endcsname}%
+  \WorPT@as{Setup}\WorPT@as{Columns}\WorPT@as{Head}\WorPT@as{Rows}\WorPT@as{Foot}\WorPT@as{Body}%
+  \let\WorPT@set\WorPT@onePage
+  \expandafter\ifx\WorPT@setting\WorPT@always \let\WorPT@set\WorPT@severalPages \fi
+  \expandafter\ifx\WorPT@setting\WorPT@auto
+    \WorPTifFitsPage{\WorPT@Setup}{\WorPT@Columns}{\WorPT@Body}{\WorPT@collected}{}{\let\WorPT@set\WorPT@severalPages}%
+  \fi
+  \edef\WorPT@end{\noexpand\end{\WorPT@name}}%
+  \WorPT@set\WorPT@end}
+\def\WorPT@onePage{%
+  \ifWorPTlandscape\begin{WorPTsidewaysTable}\else\begin{table*}[h!]\fi
+  \WorPT@Setup
+  \begin{WorPTtabular}{\WorPT@Columns}\WorPT@Body\end{WorPTtabular}
+  \WorPT@collected
+  \ifWorPTlandscape\end{WorPTsidewaysTable}\else\end{table*}\fi}
+\def\WorPT@severalPages{%
+  \par\WorPTbeginFullWidth
+  \ifWorPTlandscape\begin{WorPTlandscape}\fi
+  \begingroup\WorPT@Setup
+  \WorPTacrossPages{\WorPT@Columns}{\WorPT@Head}{\WorPT@Rows}{\WorPT@Foot}{\WorPT@collected}%
+    {\multicolumn{\WorPT@columnCount}{@{}l@{}}{\ContinuedFormat\ContinuedAboveText}\\}%
+    {\multicolumn{\WorPT@columnCount}{@{}r@{}}{\ContinuedFormat\ContinuedBelowText}\\}{\WorPT@columnCount}%
+  \endgroup
+  \ifWorPTlandscape\end{WorPTlandscape}\fi
+  \WorPTendFullWidth}
 
 \newenvironment{WorPTinlineTabular}[1]{\WorPTstraySpace{#1}\noindent\kern-\WorPTstray\WorPTcolorPadding\expandafter\tabular\expandafter{#1}}{\endtabular}
 

@@ -189,54 +189,12 @@
   \fi
   \endgroup}
 
-%--- the environment: what is written inside it (the caption and label) is collected first, so that the table can be
-% set with it on one page or, when it runs over several, with it at the end
+%--- the environment (worpt.sty): one float when the table fits on a page; otherwise set where it is written, across
+% as many pages as it needs (\ScheduleAcrossPages: auto, always or never)
 \def\[INSERTFILENAME]Setup{%
 \renewcommand{\arraystretch}{\SpaceBetweenRows}% controls vertical row separation/spacing
 \setlength{\tabcolsep}{\SpaceBetweenColumns}}  % controls horizontal column separation/spacing
-\newenvironment{[INSERTFILENAME]}{\[INSERTFILENAME]Layout\def\[INSERTFILENAME]Caption{}\[INSERTFILENAME]Collect}{}
-\long\def\[INSERTFILENAME]Collect#1\end#2{%   % everything up to \end{[INSERTFILENAME]} (other environments' \end kept)
-\expandafter\def\expandafter\[INSERTFILENAME]Caption\expandafter{\[INSERTFILENAME]Caption#1}%
-\def\[INSERTFILENAME]Ending{#2}\def\[INSERTFILENAME]Me{[INSERTFILENAME]}%
-\ifx\[INSERTFILENAME]Ending\[INSERTFILENAME]Me
-  \expandafter\[INSERTFILENAME]Place
-\else
-  \expandafter\def\expandafter\[INSERTFILENAME]Caption\expandafter{\[INSERTFILENAME]Caption\end{#2}}%
-  \expandafter\[INSERTFILENAME]Collect
-\fi}
-\def\[INSERTFILENAME]Always{always}\def\[INSERTFILENAME]Auto{auto}
-\def\[INSERTFILENAME]Place{%
-\let\[INSERTFILENAME]Set\[INSERTFILENAME]OnePage
-\ifx\ScheduleAcrossPages\[INSERTFILENAME]Always \let\[INSERTFILENAME]Set\[INSERTFILENAME]AcrossPages \fi
-\ifx\ScheduleAcrossPages\[INSERTFILENAME]Auto
-  \WorPTifFitsPage{\[INSERTFILENAME]Setup}{\[INSERTFILENAME]Columns}{\[INSERTFILENAME]Body}{\[INSERTFILENAME]Caption}%
-    {}{\let\[INSERTFILENAME]Set\[INSERTFILENAME]AcrossPages}%
-\fi
-\[INSERTFILENAME]Set\end{[INSERTFILENAME]}}
-\def\[INSERTFILENAME]OnePage{%
-\ifWorPTlandscape
-  \begin{WorPTsidewaysTable}
-\else
-  \begin{table*}[h!]     % \begin{table} needed to make bottom table caption have same width as table
-\fi
-\[INSERTFILENAME]Setup
-\begin{WorPTtabular}{\[INSERTFILENAME]Columns}\[INSERTFILENAME]Body\end{WorPTtabular}
-\[INSERTFILENAME]Caption
-\ifWorPTlandscape
-  \end{WorPTsidewaysTable}
-\else
-  \end{table*}
-\fi}
-\def\[INSERTFILENAME]AcrossPages{%
-\par\WorPTbeginFullWidth
-\ifWorPTlandscape\begin{WorPTlandscape}\fi
-\begingroup\[INSERTFILENAME]Setup
-\WorPTacrossPages{\[INSERTFILENAME]Columns}{\[INSERTFILENAME]Head}{\[INSERTFILENAME]Rows}{\[INSERTFILENAME]Foot}{\[INSERTFILENAME]Caption}%
-  {\multicolumn{[INSERTLASTCOLUMN]}{@{}l@{}}{\ContinuedFormat\ContinuedAboveText}\\}%
-  {\multicolumn{[INSERTLASTCOLUMN]}{@{}r@{}}{\ContinuedFormat\ContinuedBelowText}\\}{[INSERTLASTCOLUMN]}%
-\endgroup
-\ifWorPTlandscape\end{WorPTlandscape}\fi
-\WorPTendFullWidth}
+\WorPTtableEnvironment{[INSERTFILENAME]}{\ScheduleAcrossPages}{[INSERTLASTCOLUMN]}
 
 %--- the "TASK TIMELINE" header over the timeline: on one line from two years on, else on two (chosen in the layout above)
 \def\[INSERTFILENAME]TimelineHeaderOneLine{%

@@ -21,7 +21,7 @@ from .effort import compute, label_tree, TEAM, WEEKS_PER_YEAR, WEEKS_PER_QUARTER
 TEMPLATE_DIR = pathlib.Path(os.environ.get('WORPT_TEMPLATES') or pathlib.Path(__file__).resolve().parents[2] / 'latexTableTemplates')
 ROUND_DOLLARS = 5
 TABLES = ('NOTANONteamSummaries', 'NOTANONtasks', 'NOTANONfte', 'NOTANONhst', 'isANONschedule',
-          'isANONfte', 'isANONtasks', 'isANONtravel', 'isANONnonlabor')
+          'isANONfte', 'isANONtasks', 'isANONtravel', 'isANONnonlabor', 'NOTANONworkEffort')
 
 
 # ------------------------------------------------ JavaScript-compatible text helpers
@@ -534,12 +534,63 @@ def nonlabor(c):
     return jrep(t, '[INTSUMALLYEARS]', dollars(sum(round5(v) for v in intl)))
 
 
+# The roles as NASA's Table of Work Effort names them (no numbers): a role's kind is its short form without a number.
+WORK_EFFORT_ROLES = {'pi': 'PI', 'principal-investigator': 'PI', 'sci-pi': 'Science PI', 'science-pi': 'Science PI',
+                     'admin-pi': 'Admin PI', 'administrative-pi': 'Admin PI', 'co-i': 'Co-I', 'coi': 'Co-I', 'coll': 'Collaborator',
+                     'pd': 'Postdoc', 'gst': 'Grad Student', 'ust': 'Undergrad Student'}
+
+
+def work_effort_role(role):
+    base = re.sub(r'[\s_]+', '-', re.sub(r'\(\s*\d+\s*\)\s*$', '', role or '').strip().lower())
+    return WORK_EFFORT_ROLES.get(base, re.sub(r'\(\s*\d+\s*\)\s*$', '', role or '').strip())
+
+
+def work_effort(c):
+    """NASA's Table of Work Effort: for each team member and each year, the months funded by this proposal (NASA
+    Support), all their months on this project (Total), and their months on other currently funded projects (as entered
+    in WorPT); then the sums over the years, and over the team. Months are the FTE the other tables show, times 12, to
+    one decimal; the sums add up the months shown."""
+    name, n = 'NOTANONworkEffort', c['n']
+    t = template(name)
+    tp = {}
+    for key, tag in (('cols', 'YEARCOLUMNS'), ('year', 'YEARHEADER'), ('project', 'THISPROJECTHEADER'), ('month', 'MONTHHEADER'),
+                     ('person', 'PERSON'), ('months', 'MONTHS'), ('sums', 'SUMMONTHS')):
+        t, tp[key] = extract(t, f'START{tag}TEMPLATE', f'END{tag}TEMPLATE')
+    tenth = lambda v: Decimal(fixed(v, 1))
+    shown = lambda v: '\\ZeroMonths' if v == 0 else str(v)
+    colors = ['\\WorkEffortOddYearColor' if y % 2 == 0 else '\\WorkEffortEvenYearColor' for y in range(n)] + ['\\WorkEffortSumColor']
+    labels = [f'\\YearLabel{{{y + 1}}}' for y in range(n)] + ['\\SumLabel']
+    groups = lambda tpl: ''.join(tpl.replace('[INSERTYEARCOLOR]', col).replace('[INSERTYEARLABEL]', lab) for col, lab in zip(colors, labels))
+    def cells(tpl, triples):
+        return ''.join(jrep(jrep(jrep(tpl, '[INSERTNASASUPPORT]', shown(a)), '[INSERTTOTAL]', shown(b)), '[INSERTOTHERFUNDED]', shown(o)) for a, b, o in triples)
+    rows, team, numbers = [], [[Decimal(0)] * 3 for _ in range(n + 1)], []
+    for pid in c['order']:
+        q = c['people'][pid]
+        fte = c['r']['person_year'][q['idx']]
+        other = list(q['m'].other_months or [])[:n] + [0] * max(0, n - len(q['m'].other_months or []))
+        years = [(tenth(fte[y][2] * 12), tenth(fte[y][0] * 12), tenth(other[y])) for y in range(n)]
+        triples = years + [tuple(sum((yr[k] for yr in years), Decimal(0)) for k in range(3))]
+        for y, tr in enumerate(triples):
+            team[y] = [a + b for a, b in zip(team[y], tr)]
+        numbers += [v for tr in triples for v in tr]
+        s = jrep(jrep(tp['person'], '[INSERTNAME]', q['name']), '[INSERTROLE]', work_effort_role(q['m'].role))
+        rows.append(jrep(s, '[INSERTMONTHS]', cells(tp['months'], triples)))
+    numbers += [v for tr in team for v in tr]
+    for k, v in (('[INSERTFILENAME]', name), ('[INSERTLASTYEAR]', n), ('[INSERTLASTCOLUMN]', 2 + 3 * (n + 1)),
+                 ('[INSERTNUMBERCOLUMNS]', 3 * (n + 1)), ('[INSERTWIDESTNUMBER]', max((str(v) for v in numbers if v), key=len, default='0')),
+                 ('[INSERTYEARCOLUMNS]', groups(tp['cols'])), ('[INSERTYEARHEADERS]', groups(tp['year'])),
+                 ('[INSERTTHISPROJECTHEADERS]', groups(tp['project'])), ('[INSERTMONTHHEADERS]', tp['month'] * (n + 1)),
+                 ('[INSERTPERSONROWS]', '\n'.join(rows)), ('[INSERTSUMMONTHS]', cells(tp['sums'], team))):
+        t = t.replace(k, str(v))
+    return t
+
+
 def build(proposal, names=TABLES):
     """Return {table name: LaTeX text} plus the engine's checks under '_checks'."""
     c = prepare(proposal)
     make = dict(NOTANONteamSummaries=team_summaries, NOTANONtasks=tasks_named, NOTANONhst=hst, isANONschedule=schedule,
                 NOTANONfte=lambda c: fte(c, 'NOTANONfte'), isANONfte=lambda c: fte(c, 'isANONfte'), isANONtasks=tasks_anonymous,
-                isANONtravel=travel, isANONnonlabor=nonlabor)
+                isANONtravel=travel, isANONnonlabor=nonlabor, NOTANONworkEffort=work_effort)
     out = {name: make[name](c) for name in names}
     out['_checks'] = c['r']['checks']
     return out

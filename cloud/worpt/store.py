@@ -13,7 +13,8 @@ Row ids are never used twice, so a deleted row comes back under its own id.
 Who may do what (agreed 5 November 2026):
   * admin (ADMIN_EMAILS) and core (CORE_MEMBERS) may create proposals; access-code users may not.
   * admins see every proposal; everyone else sees the proposals they are on.
-  * anyone on a proposal may edit its plan (goals, tasks, effort, budget and travel, including each member's trips);
+  * anyone on a proposal may edit its plan (goals, tasks, effort, budget and travel, including each member's trips, and
+    each member's months on other funded projects);
     leads and admins manage its team and leads.
   * a proposal always keeps at least one lead; leads and admins may delete it, after typing its title.
   * a profile may be edited by its owner, leads of any proposal the person is on, core members and admins.
@@ -71,11 +72,12 @@ TRAVEL_DEFAULT = dict(airfare=[0, 0, 0], perdiem=[0, 0, 0], conference=[0, 0, 0]
 EDITABLE = dict(
     people=('email', 'first', 'middle', 'last', 'prefix', 'suffix', 'institution', 'position', 'us', 'expertise', 'pronoun'),
     proposals=('title', 'program', 'n_years', 'rounding', 'travel'),
-    members=('role', 'is_lead', 'fte_accuracy', 'bio_summary', 'task_summary', 'trips'),     # short_id follows the role
+    members=('role', 'is_lead', 'fte_accuracy', 'bio_summary', 'task_summary', 'trips', 'other_months'),     # short_id follows the role
     items=('title', 'short_title', 'description', 'start_year', 'start_week', 'end_year', 'end_week'),
     assignments=('member_id', 'is_team', 'is_lead', 'weeks', 'unfunded'),
     nonlabor=('item', 'amounts'))
-JSON_COLS = {'travel', 'trips', 'amounts'}
+JSON_COLS = {'travel', 'trips', 'other_months', 'amounts'}
+PLAN_MEMBER_FIELDS = {'trips', 'other_months'}     # a member's fields anyone on the proposal may edit; the rest are the team's
 DERIVED = dict(members=('short_id',))           # set by the server itself, never taken from a request
 PRONOUNS = ('', 'he', 'she', 'they')
 AUTO_SNAPSHOT_DAYS = 60          # automatic snapshots are kept this long; named ones until someone deletes them
@@ -84,7 +86,8 @@ ADDED_COLUMNS = [('people', 'expertise', "TEXT NOT NULL DEFAULT ''"), ('people',
                  ('items', 'start_week', 'INTEGER'), ('items', 'end_week', 'INTEGER'), ('items', 'short_title', "TEXT NOT NULL DEFAULT ''"),
                  ('items', 'description', "TEXT NOT NULL DEFAULT ''"),   # a note on what the item stands for; shown in the dashboard only
                  ('history', 'step', 'INTEGER'),                         # the step (request) a change was part of, for undo
-                 ('proposals', 'frozen_at', 'TEXT'), ('proposals', 'frozen_by', 'TEXT')]   # a frozen work plan can't be changed
+                 ('proposals', 'frozen_at', 'TEXT'), ('proposals', 'frozen_by', 'TEXT'),   # a frozen work plan can't be changed
+                 ('members', 'other_months', "TEXT NOT NULL DEFAULT '[]'")]   # per year: months on other currently funded projects
 ID_TABLES = ('people', 'members', 'items', 'assignments', 'nonlabor')      # numbered rows; a number is never used twice
 TIMELINE = ('start_year', 'start_week', 'end_year', 'end_week')
 
@@ -494,6 +497,11 @@ class Store:
                                  proposal_id, f['short_id'], member_id or -1)
                 if other: raise WorptError(f'Someone on this work plan is already {other["role"]}; only one person can have that role.', 'duplicate')
         if 'is_lead' in f: f['is_lead'] = 1 if f['is_lead'] else 0
+        if 'other_months' in f:                                         # a number for each year
+            given = f['other_months']
+            try: f['other_months'] = [float(v or 0) for v in given] if isinstance(given, list) else None
+            except (TypeError, ValueError): f['other_months'] = None
+            if f['other_months'] is None: raise WorptError('Months on other funded projects must be numbers, one for each year.', 'invalid')
         return f
 
     def add_member_db(self, db, user, proposal_id, fields):
@@ -516,8 +524,9 @@ class Store:
     def update_member(self, user, member_id, version, fields):
         with self.connect() as db:
             m = self.get(db, 'members', member_id, 'team member')
-            # trips are part of the budget, which anyone on the proposal may edit; everything else about a member is the team's
-            self.proposal(db, user, m['proposal_id'], need='view' if set(fields) <= {'trips'} else 'team', change=True)
+            # trips (part of the budget) and months on other funded projects may be edited by anyone on the proposal;
+            # everything else about a member is the team's
+            self.proposal(db, user, m['proposal_id'], need='view' if set(fields) <= PLAN_MEMBER_FIELDS else 'team', change=True)
             person = self.get(db, 'people', m['person_id'], 'profile')
             f = self.check_member_fields(db, m['proposal_id'], dict(fields), member_id, person)
             if m['is_lead'] and 'is_lead' in f and not f['is_lead']: self.keep_a_lead(db, m)
@@ -857,7 +866,8 @@ class Store:
             for m, role in numbered_roles(back):
                 member_id[m['id']] = self.insert_row(db, user, 'members', dict(
                     id=own('members', m['id']), proposal_id=pid, person_id=m['person_id'], short_id=role_label(role), role=role, is_lead=int(m['is_lead']),
-                    fte_accuracy=m['fte_accuracy'], bio_summary=m['bio_summary'], task_summary=m['task_summary'], trips=m['trips']), pid)['id']
+                    fte_accuracy=m['fte_accuracy'], bio_summary=m['bio_summary'], task_summary=m['task_summary'], trips=m['trips'],
+                    other_months=m.get('other_months') or []), pid)['id']
             item_id, pending = {}, [weeks_from_quarters(dict(i)) for i in data['items']]   # snapshots saved before weeks have quarters
             while pending:                                                  # parents before their children
                 ready = [i for i in pending if i['parent_id'] is None or i['parent_id'] in item_id]
@@ -976,7 +986,7 @@ class Store:
             if not self.can_edit_person(db, user, h['row_id'] and int(h['row_id'])):
                 raise WorptError("You can edit your own profile, or the profiles of people on work plans where you are a full editor.")
         elif h['proposal_id'] == s['proposal_id']:
-            team = h['tbl'] == 'members' and not set(changes) <= {'trips'}
+            team = h['tbl'] == 'members' and not set(changes) <= PLAN_MEMBER_FIELDS
             self.proposal(db, user, h['proposal_id'], need='team' if team else 'view')
 
     def plan_of_row(self, db, tbl, row):
@@ -1120,6 +1130,7 @@ class Store:
             if act == 'insert': return f'adding {n} to the team'
             if act == 'delete': return f'taking {n} off the team'
             if changed == {'trips'}: return f"changing {n}'s trips"
+            if changed == {'other_months'}: return f"changing {n}'s months on other funded projects"
             if 'is_lead' in changed: return f'changing whether {n} is a full editor'
             if 'role' in changed: return f"changing {n}'s role"
             return f"changing {n}'s team details"
@@ -1141,7 +1152,8 @@ class Store:
         p, short = data['proposal'], {m['id']: m['short_id'] for m in data['members']}
         members = [Person(m['short_id'], m['role'], m['us'], m['fte_accuracy'], last=m['last'], first=m['first'], middle=m['middle'],
                           prefix=m['prefix'], suffix=m['suffix'], institution=m['institution'], position=m['position'],
-                          bio_summary=m['bio_summary'], task_summary=m['task_summary'], trips=m['trips']) for m in data['members']]
+                          bio_summary=m['bio_summary'], task_summary=m['task_summary'], trips=m['trips'],
+                          other_months=m.get('other_months') or []) for m in data['members']]
         nodes = {i['id']: Item(i['title'], short_title=i.get('short_title', ''), start=(i['start_year'], i['start_week']) if i['start_year'] and i['start_week'] else None,
                                end=(i['end_year'], i['end_week']) if i['end_year'] and i['end_week'] else None) for i in data['items']}
         for a in data['assignments']:

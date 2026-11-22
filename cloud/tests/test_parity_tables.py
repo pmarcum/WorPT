@@ -45,7 +45,7 @@ def differences(old, new):
 
 def compare(folder):
     now, tables.TEMPLATE_DIR = tables.TEMPLATE_DIR, SHEET_TEMPLATES
-    try: out = build(load(folder))
+    try: out = build(load(folder), tuple(n for n in TABLES if (SHEET_TEMPLATES / n).is_dir()))   # tables new since have none
     finally: tables.TEMPLATE_DIR = now
     known = json.loads((folder / 'known_differences.json').read_text()) if (folder / 'known_differences.json').exists() else {}
     report = {}

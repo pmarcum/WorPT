@@ -241,6 +241,7 @@ const TABLE_NAMES = {
   isANONschedule: ['Schedule', 'anonymous'], NOTANONtasks: ['Task list', 'named'], NOTANONfte: ['FTE by person', 'named'],
   NOTANONteamSummaries: ['Team summaries', 'named'], NOTANONhst: ['HST roles', 'named'], isANONtasks: ['Task list', 'anonymous'],
   isANONfte: ['FTE by role', 'anonymous'], isANONtravel: ['Travel', 'anonymous'], isANONnonlabor: ['Non-labor budget', 'anonymous'],
+  NOTANONworkEffort: ['Work effort (NASA)', 'named'],
   worpt: ['worpt.sty', 'load once with \\usepackage{worpt}'],
 };
 const POLL_MS = 10000;
@@ -1104,7 +1105,26 @@ function viewTeam() {
     '<p class="hint">WorPT numbers co-Is, postdocs, grad and undergrad students, and collaborators by itself (co-I 1, co-I 2…), in order of last name, as in the tables, and closes the gap when someone leaves. The PI, Sci-PI and Admin-PI are one person each. People at non-US institutions are always collaborators. Each person is shown by their role, never their name, so the plan and tables can stay anonymous.</p></fieldset>' : '';
   return '<div class="card"><h2 class="h2">Team</h2>' + (can ? '' : '<p class="hint" style="margin:0 0 8px">Only this work plan\'s full editors (and admins) change the team; you can see it here.</p>') +
     '<div class="scroll"><table class="t"><thead><tr><th>Person</th><th>Role</th><th>Full editor</th><th>FTE accuracy</th><th>Team summary, and their part in the plan</th>' + (hst ? '<th>HST role text</th>' : '') + '<th></th></tr></thead><tbody>' +
-    (rows || '<tr><td colspan="7" class="muted">No one yet.</td></tr>') + '</tbody></table></div>' + add + '</div>';
+    (rows || '<tr><td colspan="7" class="muted">No one yet.</td></tr>') + '</tbody></table></div>' + add + '</div>' + viewOtherMonths();
+}
+
+/** Each person's months per year on other currently funded projects (for NASA's Table of Work Effort); anyone on the
+ *  plan may enter them, as trips. Under each box: their months on this project that year (all, and funded), for comparison. */
+function viewOtherMonths() {
+  const P = S.P, ny = P.proposal.n_years, years = Array.from({ length: ny }, (_, y) => y);
+  const mo = x => (Math.round((+x || 0) * 120) / 10).toFixed(1);                 // FTE -> months, one decimal
+  const rows = P.members.map(m => {
+    const c = (P.computed.people[m.id] || { per_year: [] });
+    return '<tr><td>' + esc(personName(m)) + '<div class="sub">' + esc(idRole(m)) + '</div></td>' + years.map(y => {
+      const v = (m.other_months || [])[y], f = c.per_year[y] || [0, 0, 0];
+      return '<td><input type="text" inputmode="decimal" data-num="dec" data-other="' + m.id + ':' + y + '" data-key="other:' + m.id + ':' + y + '" value="' + esc(v ? v : '') + '" placeholder="0" style="width:64px" aria-label="' + esc(personName(m)) + ' year ' + (y + 1) + ' months on other funded projects">' +
+        '<div class="sub" title="Months on this project in year ' + (y + 1) + ': all, and funded by this proposal">this project ' + mo(f[0]) + ' (' + mo(f[2]) + ' funded)</div></td>';
+    }).join('') + '</tr>';
+  }).join('');
+  return '<div class="card"><h2 class="h2">Months on other currently funded projects</h2>' +
+    '<p class="hint" style="margin:0 0 8px">For NASA\'s Table of Work Effort (the NOTANONworkEffort table): the months per year each person has committed to other <b>currently</b> funded projects (those in their Current and Pending Support; not pending ones). Anyone on this work plan may enter them.</p>' +
+    '<div class="scroll"><table class="t"><thead><tr><th>Person</th>' + years.map(y => '<th>Year ' + (y + 1) + ' (months)</th>').join('') + '</tr></thead><tbody>' +
+    (rows || '<tr><td class="muted">No team members yet.</td></tr>') + '</tbody></table></div></div>';
 }
 
 /** What the plan says about one member: the tasks they lead, the tasks they support (by name or through "team"), and their FTE. */
@@ -1521,12 +1541,18 @@ function wire() {
       if (where) await change('updateItem', it.id, Object.assign(dest, { effort_destination: where })); else render();
     }
   });
-  // Grouped fields: a member's trips, the travel assumptions and a budget line's amounts save as one list.
+  // Grouped fields: a member's trips and months on other funded projects, the travel assumptions and a budget line's amounts save as one list.
   app.querySelectorAll('[data-trip]').forEach(el => el.onchange = () => attempt(() => {
     const [mid, y, j] = el.dataset.trip.split(':').map(Number), m = memberById(mid), ny = S.P.proposal.n_years;
     const trips = Array.from({ length: ny }, (_, k) => ((m.trips || [])[k] || [0, 0]).slice(0, 2).map(v => +v || 0));
     trips[y][j] = num(el.value) || 0;
     return change('updateMember', mid, { version: m.version, trips });
+  }));
+  app.querySelectorAll('[data-other]').forEach(el => el.onchange = () => attempt(() => {
+    const [mid, y] = el.dataset.other.split(':').map(Number), m = memberById(mid);
+    const months = Array.from({ length: S.P.proposal.n_years }, (_, k) => +((m.other_months || [])[k] || 0));
+    months[y] = num(el.value) || 0;
+    return change('updateMember', mid, { version: m.version, other_months: months });
   }));
   app.querySelectorAll('[data-travel]').forEach(el => el.onchange = () => attempt(() => {
     const [k, i] = el.dataset.travel.split(':'), p = S.P.proposal, tr = JSON.parse(JSON.stringify(p.travel || {}));

@@ -80,7 +80,7 @@ Answer (always HTTP 200; look at `status`):
   "files": {
     "NOTANONfte.tex": "...", "NOTANONhst.tex": "...", "isANONschedule.tex": "...",
     "NOTANONtasks.tex": "...", "NOTANONteamSummaries.tex": "...", "isANONfte.tex": "...",
-    "isANONnonlabor.tex": "...", "isANONtasks.tex": "...", "isANONtravel.tex": "...",
+    "isANONnonlabor.tex": "...", "isANONtasks.tex": "...", "isANONtravel.tex": "...", "NOTANONworkEffort.tex": "...",
     "worpt.sty": "..."
   },
   "blocks": {
