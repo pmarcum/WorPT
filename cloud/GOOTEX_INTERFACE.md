@@ -5,8 +5,8 @@ and what a document needs in order to use it. WorPT's side is finished and teste
 
 ## What the link does
 
-A WorPT work plan produces nine LaTeX tables (team, tasks, effort, schedule, travel, budget) and one
-package file, `worpt.sty`, that every table needs. gooTeX fetches those ten files from WorPT for the
+A WorPT work plan produces LaTeX tables (team, tasks, effort, schedule, travel, budget), a file listing
+its planned papers, and one package file, `worpt.sty`, that every table needs. gooTeX fetches those files from WorPT for the
 work plan a document names, writes them where the document's LaTeX can find them, and compiles as
 usual. The document itself only loads `worpt.sty` once and has a short paste-in block per table, which
 WorPT also hands out, so gooTeX can insert and update those too.
@@ -81,6 +81,7 @@ Answer (always HTTP 200; look at `status`):
     "NOTANONfte.tex": "...", "NOTANONhst.tex": "...", "isANONschedule.tex": "...",
     "NOTANONtasks.tex": "...", "NOTANONteamSummaries.tex": "...", "isANONteamSummaries.tex": "...", "isANONfte.tex": "...",
     "isANONnonlabor.tex": "...", "isANONtasks.tex": "...", "isANONtravel.tex": "...", "NOTANONworkEffort.tex": "...",
+    "isANONpapers.tex": "...",
     "worpt.sty": "..."
   },
   "blocks": {
@@ -102,7 +103,7 @@ Answer (always HTTP 200; look at `status`):
   replacing their block would undo the edit, so how and when gooTeX refreshes a block is gooTeX's choice.
   `blocks["worpt"]` is the preamble line, `\usepackage{worpt}`, which goes after all other packages.
   These are the same blocks the readmes show, and every one compiles with `worpt.sty` alone.
-- `digest`: a fingerprint of all ten files and the blocks together. It changes whenever any of them
+- `digest`: a fingerprint of all the files and the blocks together. It changes whenever any of them
   changes: an edit to the plan, to a person's profile (names and institutions appear in the tables), or
   a WorPT update to the table templates. gooTeX can keep the last digest and skip rewriting the files
   when it is the same. Don't use anything else (such as a time) to decide whether the files are current.
@@ -118,7 +119,7 @@ Other read-only requests, if useful:
 | Request | Answer |
 |---|---|
 | `GET /health` (no key) | `{"service":"worpt","status":"ok"}` when WorPT is up |
-| `GET /api/proposals/<ID>/tables` | `{"tables": [nine names], "style": "worpt"}` |
+| `GET /api/proposals/<ID>/tables` | `{"tables": [the table names], "style": "worpt"}` |
 | `GET /api/proposals/<ID>/tables/<name>` | `{"name", "latex", "block", "checks"}` for one table; `<name>` = `worpt` gives `worpt.sty` and its preamble line |
 | `GET /api/proposals/<ID>/tables/<name>?preview=1` | the same, plus `"preview"`: a picture of the table, `{"pages": [PNG, base64, one per page], "document_class", "seconds"}`, or `{"error": message for people}` |
 
@@ -148,7 +149,8 @@ fetch, if gooTeX kept them, and tell the person the tables may be out of date.
 
 ## Where to put the files
 
-LaTeX has to find `worpt.sty` for `\usepackage{worpt}` and each table for `\input{<table>}`. The
+LaTeX has to find `worpt.sty` for `\usepackage{worpt}` and each table for `\input{<table>}`; `worpt.sty`
+also reads `isANONpapers.tex` by itself at `\begin{document}` (for `\papertitle{N}`), so it goes with the others. The
 readmes' paste-in blocks use bare names, so the simplest arrangement is the same folder as the
 document's main `.tex` file during the compile. If gooTeX prefers a subfolder, add it to the search
 path (for example `TEXINPUTS=./worpt//:` in the compile's environment) rather than changing the names.

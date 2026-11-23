@@ -21,7 +21,7 @@ from .effort import Check, compute, label_tree, TEAM, WEEKS_PER_YEAR, WEEKS_PER_
 TEMPLATE_DIR = pathlib.Path(os.environ.get('WORPT_TEMPLATES') or pathlib.Path(__file__).resolve().parents[2] / 'latexTableTemplates')
 ROUND_DOLLARS = 5
 TABLES = ('NOTANONteamSummaries', 'isANONteamSummaries', 'NOTANONtasks', 'NOTANONfte', 'NOTANONhst', 'isANONschedule',
-          'isANONfte', 'isANONtasks', 'isANONtravel', 'isANONnonlabor', 'NOTANONworkEffort')
+          'isANONfte', 'isANONtasks', 'isANONtravel', 'isANONnonlabor', 'NOTANONworkEffort', 'isANONpapers')
 
 
 # ------------------------------------------------ JavaScript-compatible text helpers
@@ -692,12 +692,40 @@ def work_effort(c):
     return t
 
 
+# ------------------------------------------------ planned papers
+PAPER = re.compile(r'\s*paper\s*(\d+)\s*:\s*(.*?)\s*\Z', re.I | re.S)
+
+
+def planned_papers(goals):
+    """The work plan's papers: its categories, tasks and subtasks titled "Paper N: title" (any capitals, any spaces), as
+    {N: (title, label)} in number order, and the checks: a number used more than once (the first in the plan keeps it)
+    and a "Paper N:" with no title after it."""
+    found, checks = {}, []
+    for lab, depth, it, parent in label_tree(goals):
+        m = PAPER.match(it.title or '')
+        if not m: continue
+        n, title = int(m.group(1)), m.group(2)
+        if not title: checks.append(Check('warn', lab, f'is titled "Paper {n}:" with nothing after it, so Paper {n} has no title'))
+        if n in found:
+            checks.append(Check('warn', lab, f'is also titled "Paper {n}:", like {found[n][1]}; Paper {n} keeps {found[n][1]}\'s title'))
+        else:
+            found[n] = (title, lab)
+    return dict(sorted(found.items())), checks
+
+
+def papers(c):
+    found, checks = planned_papers(c['p'].goals)
+    c['r']['checks'].extend(checks)
+    lines = ''.join(f'\\WorPTpaper{{{n}}}{{{title}}}   % {lab}\n' for n, (title, lab) in found.items())
+    return template('isANONpapers').replace('[INSERTFILENAME]', 'isANONpapers').replace('[INSERTPAPERS]', lines.rstrip('\n'))
+
+
 def build(proposal, names=TABLES):
     """Return {table name: LaTeX text} plus the engine's checks under '_checks'."""
     c = prepare(proposal)
     make = dict(NOTANONteamSummaries=team_summaries, isANONteamSummaries=team_summaries_anonymous, NOTANONtasks=tasks_named, NOTANONhst=hst, isANONschedule=schedule,
                 NOTANONfte=lambda c: fte(c, 'NOTANONfte'), isANONfte=lambda c: fte(c, 'isANONfte'), isANONtasks=tasks_anonymous,
-                isANONtravel=travel, isANONnonlabor=nonlabor, NOTANONworkEffort=work_effort)
+                isANONtravel=travel, isANONnonlabor=nonlabor, NOTANONworkEffort=work_effort, isANONpapers=papers)
     out = {name: make[name](c) for name in names}
     out['_checks'] = c['r']['checks']
     return out

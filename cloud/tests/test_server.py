@@ -1076,3 +1076,17 @@ def test_summaries_drafted_with_the_name_in_front_lose_it_once(team, tmp_path):
     api.ok('patch', f"/api/members/{aa['id']}", dict(version=aa['version'], bio_summary='Dr. Annson will lead it, as she asked.'))
     api = Api(create_app(str(db), KEY, READ).test_client(), 'ann@x.org', 'core')
     assert api.ok('get', f'/api/proposals/{pid}')['members'][0]['bio_summary'] == 'Dr. Annson will lead it, as she asked.'
+
+
+def test_planned_papers_problems_show_on_the_dashboard_and_in_gootex(team):
+    """Two items titled with the same paper number, or a "Paper N:" with no title, are listed with the plan's other
+    problems on the dashboard, and in the checks gooTeX gets with the files, which include isANONpapers.tex."""
+    ann, pid = team['ann'], team['pid']
+    goal = ann.ok('post', f'/api/proposals/{pid}/items', dict(title='Papers'))['item']
+    for t in ('Paper 1: Deep imaging', 'paper 1: Another', 'Paper 2:'):
+        ann.ok('post', f'/api/proposals/{pid}/items', dict(title=t, parent_id=goal['id']))
+    said = {c['message'] for c in ann.ok('get', f'/api/proposals/{pid}')['computed']['checks'] if 'Paper' in c['message']}
+    assert len(said) == 2 and any('also titled "Paper 1:"' in m for m in said) and any('Paper 2 has no title' in m for m in said)
+    out = ann.ok('get', f'/api/proposals/{pid}/tables?files=1')
+    assert '\\WorPTpaper{1}{Deep imaging}' in out['files']['isANONpapers.tex'] and 'isANONpapers' in out['blocks']
+    assert {c['message'] for c in out['checks'] if 'Paper' in c['message']} == said

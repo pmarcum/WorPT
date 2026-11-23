@@ -215,3 +215,23 @@ def test_team_summaries_warn_about_a_repeated_name_and_what_anonymizing_leaves()
                     ('gst 1', 'team summary starts with their name, which the table already puts in front of it')]
     named = build(summaries_team(), ['NOTANONteamSummaries'])['NOTANONteamSummaries']
     assert 'Dr. \\NameFontstyle{Jane Q. Doe}, \\NameFontstyle{PI}, will lead Task A1.1' in named
+
+
+# ------------------------------------------------ planned papers
+def test_planned_papers_come_from_items_titled_paper_n():
+    """Any category, task or subtask titled "Paper N: title" (any capitals, any spaces) is paper N; the file lists them in
+    number order, whatever their place in the plan. A number used twice keeps the first item's title, with a warning,
+    and a "Paper N:" with nothing after it is warned about too. Numbers need not follow on from each other."""
+    goals = [Item('Paper 5: A review', children=[
+                 Item('Write paper 2 later'), Item('paper 2 :  Halo light profiles of $M_\\star$ galaxies'),
+                 Item('Observations', children=[Item('PAPER 1:Deep imaging'), Item('Paper 1: Another'), Item('Paper 3:')]),
+                 Item('Paper one: not a number')])]
+    out = build(Proposal('T', 'NASA', 1, [Person('PI', 'PI', True, last='Doe')], goals), ['isANONpapers'])
+    assert re.findall(r'^\\WorPTpaper\{(\d+)\}\{(.*)\}   % (\S+)$', out['isANONpapers'], re.M) == [
+        ('1', 'Deep imaging', 'A3.1'), ('2', 'Halo light profiles of $M_\\star$ galaxies', 'A2'), ('3', '', 'A3.3'), ('5', 'A review', 'A')]
+    assert out['isANONpapers'].index('\\WorPTresetPapers') < out['isANONpapers'].index('\\WorPTpaper{1}')
+    said = [(c.item, c.message) for c in out['_checks'] if 'Paper' in c.message]
+    assert said == [('A3.2', 'is also titled "Paper 1:", like A3.1; Paper 1 keeps A3.1\'s title'),
+                    ('A3.3', 'is titled "Paper 3:" with nothing after it, so Paper 3 has no title')]
+    none = build(Proposal('T', 'NASA', 1, [Person('PI', 'PI', True, last='Doe')], [Item('Goal')]), ['isANONpapers'])['isANONpapers']
+    assert '\\WorPTresetPapers' in none and '\\WorPTpaper{' not in none

@@ -31,7 +31,8 @@ Rounding is to the nearest step by default (`rounding='nearest'`); `rounding='up
 ## Tables — `worpt/tables.py`
 
 `build(proposal)` returns the LaTeX for the schedule, task lists (named and anonymous), FTE tables
-(named and anonymous), HST table, team summaries (named and anonymous), travel and non-labor budget tables, using the
+(named and anonymous), HST table, team summaries (named and anonymous), travel and non-labor budget tables, and the planned papers
+(tasks titled "Paper N: title", for `\papertitle{N}` and `\listplannedpapers`), using the
 templates in `latexTableTemplates/`. The data a proposal holds is described in `worpt/model.py`.
 Subtasks appear as A1.1, A1.2 …; a task with subtasks shows their combined timeline and FTE.
 

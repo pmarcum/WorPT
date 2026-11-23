@@ -420,3 +420,40 @@ def test_a_work_effort_table_for_a_large_team_runs_over_pages(cls, landscape, tm
     assert on('Sum of work effort') == on('Comments:') == on('Table of work effort'), 'the end of the table on one page'
     assert text.count('Table of work effort') == 1 and '??' not in text
     assert not outside_block(tmp_path, tmp_path / 'doc.pdf'), cls
+
+
+@pytest.mark.parametrize('cls', ['article', '{aastex702}', '[twocolumn]{aastex702}', '{aastex631}', 'revtex4-2'])
+def test_planned_papers_in_the_text_and_listed(cls, tmp_path):
+    """\\papertitle{N} gives paper N's title anywhere, before or after the list, with hyperref too (headings, contents,
+    PDF bookmarks); an unknown number gives ?? and a warning. \\listplannedpapers lists them in number order, each once
+    even though the file is read twice (at \\begin{document} and by the paste-in block)."""
+    if not works(cls): pytest.skip(f'{cls} does not work on this machine, even without WorPT')
+    if not shutil.which('pdftotext'): pytest.skip('pdftotext is not installed')
+    from worpt.model import Item, Person, Proposal
+    goals = [Item('Science', children=[Item('Paper 2: Halo light profiles and $M_\\star$'), Item('Paper 1: Deep imaging of faint halos'),
+                                       Item('Paper 12: ' + 'A long title that wraps onto a second line of the list ' * 2)])]
+    out = build(Proposal('T', 'NASA', 1, [Person('PI', 'PI', True, last='Doe')], goals), ['isANONpapers'])
+    (tmp_path / 'isANONpapers.tex').write_text(out['isANONpapers']); shutil.copy(TEMPLATE_DIR / 'worpt.sty', tmp_path)
+    (tmp_path / 'doc.tex').write_text(documentclass(cls) + '\n\\usepackage{hyperref}\n' + paste_in('worpt') + EDGES + '\\begin{document}\n' + front(cls) +
+        '\\tableofcontents\n\\section{On \\papertitle{1}}\nFirst: \\textit{\\papertitle{2}}. Unknown: \\papertitle{7}.\n\n' +
+        paste_in('isANONpapers') + '\nAfter: \\papertitle{12}\n\\end{document}\n')
+    log, text = compile_doc(tmp_path)
+    assert not [l for l in log.splitlines() if l.startswith('!')], cls
+    assert 'There is no Paper 7 in the work plan' in log and text.count('??') == 1
+    flat = ' '.join(text.split())
+    assert re.search(r'First: Halo light profiles and M. ?\. Unknown: \?\?', flat), flat
+    assert re.search(r'Paper 1: Deep imaging of faint halos Paper 2: Halo light profiles and M. ?Paper 12: A long title', flat), flat
+    assert flat.count('Paper 1:') == 1 and flat.count('Paper 12:') == 1
+    assert flat.lower().count('deep imaging of faint halos') == 3        # contents, heading and list
+    assert 'Deep imaging of faint halos' in (tmp_path / 'doc.out').read_text(encoding='latin-1').replace('\\000', '').replace('\\040', ' ')
+    assert not outside_block(tmp_path, tmp_path / 'doc.pdf'), cls
+
+
+def test_a_work_plan_with_no_papers_says_so_where_the_list_goes(tmp_path):
+    from worpt.model import Item, Person, Proposal
+    out = build(Proposal('T', 'NASA', 1, [Person('PI', 'PI', True, last='Doe')], [Item('Goal')]), ['isANONpapers'])
+    (tmp_path / 'isANONpapers.tex').write_text(out['isANONpapers']); shutil.copy(TEMPLATE_DIR / 'worpt.sty', tmp_path)
+    (tmp_path / 'doc.tex').write_text('\\documentclass{article}\n' + paste_in('worpt') + '\\begin{document}\n' + paste_in('isANONpapers') + '\\end{document}\n')
+    log, text = compile_doc(tmp_path, runs=1)
+    assert not [l for l in log.splitlines() if l.startswith('!')]
+    assert 'no planned papers: the work plan has no tasks titled' in ' '.join(text.split()) and 'there are no planned papers to list' in ''.join(log.splitlines())
