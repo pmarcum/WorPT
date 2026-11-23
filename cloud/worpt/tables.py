@@ -13,7 +13,7 @@ matches the Sheet's output line for line, except for the deliberate corrections 
 New: subtasks (A1.1, A1.2 ...) appear as task rows; a task that has subtasks shows its rolled-up
 timeline and FTE with no people of its own.
 """
-import math, os, pathlib, re
+import dataclasses, math, os, pathlib, re
 from decimal import Decimal, ROUND_HALF_UP
 import numpy as np
 from .effort import Check, compute, label_tree, TEAM, WEEKS_PER_YEAR, WEEKS_PER_QUARTER, week_index
@@ -720,9 +720,29 @@ def papers(c):
     return template('isANONpapers').replace('[INSERTFILENAME]', 'isANONpapers').replace('[INSERTPAPERS]', lines.rstrip('\n'))
 
 
+PERSON_TEXT = ('last', 'first', 'middle', 'prefix', 'suffix', 'institution', 'position', 'bio_summary', 'task_summary')
+
+
+def latex_text(s):
+    """Typed text as LaTeX: a bare &, % or # (one without a backslash in front) is written \\&, \\%, \\#, so that
+    "Validation & Scaling" or "50% of the time" print as typed instead of breaking the table (in LaTeX they would start
+    a new column, comment out the rest of the line, or name a macro argument). Everything else is left as written,
+    LaTeX included (\\&, $M_\\star$, \\textit{...})."""
+    return re.sub(r'(?<!\\)([&%#])', r'\\\1', s) if s else s
+
+
+def as_latex_text(p):
+    """The proposal with the text people type (names, institutions, positions, summaries, titles, non-labor items) made
+    LaTeX by latex_text."""
+    def item(it): return dataclasses.replace(it, title=latex_text(it.title), short_title=latex_text(it.short_title), children=[item(k) for k in it.children])
+    def person(m): return dataclasses.replace(m, **{f: latex_text(getattr(m, f)) for f in PERSON_TEXT if hasattr(m, f)})
+    return dataclasses.replace(p, members=[person(m) for m in p.members], goals=[item(g) for g in p.goals],
+                               nonlabor=[dataclasses.replace(n, item=latex_text(n.item)) for n in p.nonlabor])
+
+
 def build(proposal, names=TABLES):
     """Return {table name: LaTeX text} plus the engine's checks under '_checks'."""
-    c = prepare(proposal)
+    c = prepare(as_latex_text(proposal))
     make = dict(NOTANONteamSummaries=team_summaries, isANONteamSummaries=team_summaries_anonymous, NOTANONtasks=tasks_named, NOTANONhst=hst, isANONschedule=schedule,
                 NOTANONfte=lambda c: fte(c, 'NOTANONfte'), isANONfte=lambda c: fte(c, 'isANONfte'), isANONtasks=tasks_anonymous,
                 isANONtravel=travel, isANONnonlabor=nonlabor, NOTANONworkEffort=work_effort, isANONpapers=papers)

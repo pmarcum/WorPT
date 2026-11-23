@@ -457,3 +457,24 @@ def test_a_work_plan_with_no_papers_says_so_where_the_list_goes(tmp_path):
     log, text = compile_doc(tmp_path, runs=1)
     assert not [l for l in log.splitlines() if l.startswith('!')]
     assert 'no planned papers: the work plan has no tasks titled' in ' '.join(text.split()) and 'there are no planned papers to list' in ''.join(log.splitlines())
+
+
+def test_typed_ampersand_percent_and_hash_compile_in_every_table(tmp_path):
+    """A title, name, institution, summary or non-labor item typed with a bare &, % or # compiles in every table and
+    prints as typed (task B1.3 "Astrophysical Validation & Scaling" stopped a whole document)."""
+    if not works('{aastex702}'): pytest.skip('aastex702 does not work on this machine')
+    from worpt.model import Item, NonlaborItem, Person, Proposal
+    from test_tables import task
+    pi = Person('PI', 'PI', True, last='Doe & Roe', first='Jane', institution='Lab #3 & Co', position='50% PI',
+                bio_summary='will lead A1 & A2 (50%).', task_summary='#1 & #2', trips=[[1, 0]])
+    goals = [Item('Science & Tests', children=[task('Validation & Scaling', [('PI', 4, 0)]), task('Paper 1: Halos & 100% #1', [('PI', 2, 0)])])]
+    out = build(Proposal('T', 'NASA', 1, [pi], goals, nonlabor=[NonlaborItem('Materials & Supplies', [100])]))
+    shutil.copy(TEMPLATE_DIR / 'worpt.sty', tmp_path)
+    for name in TABLES: (tmp_path / f'{name}.tex').write_text(out[name])
+    (tmp_path / 'doc.tex').write_text(documentclass('{aastex702}') + '\n' + paste_in('worpt') + '\\begin{document}\n' +
+                                      '\n'.join('\\clearpage\n' + paste_in(n) for n in TABLES) + '\n\\end{document}\n')
+    log, text = compile_doc(tmp_path)
+    assert not [l for l in log.splitlines() if l.startswith('!')], [l for l in log.splitlines() if l.startswith('!')][:3]
+    flat = ' '.join(text.split())
+    for typed in ('Validation & Scaling', 'Science & Tests', 'Halos & 100% #1', 'A1 & A2 (50%)', 'Lab #3 & Co', 'Materials & Supplies', 'Doe & Roe'):
+        assert typed in flat, typed

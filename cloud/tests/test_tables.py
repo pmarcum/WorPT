@@ -235,3 +235,19 @@ def test_planned_papers_come_from_items_titled_paper_n():
                     ('A3.3', 'is titled "Paper 3:" with nothing after it, so Paper 3 has no title')]
     none = build(Proposal('T', 'NASA', 1, [Person('PI', 'PI', True, last='Doe')], [Item('Goal')]), ['isANONpapers'])['isANONpapers']
     assert '\\WorPTresetPapers' in none and '\\WorPTpaper{' not in none
+
+
+def test_a_bare_ampersand_percent_or_hash_in_typed_text_is_written_as_latex():
+    """Typed text with a bare &, % or # ("Validation & Scaling", "50% of the time") is written \\&, \\%, \\# in every
+    table, where it would otherwise start a new column, comment out the rest of the line or break a macro; text already
+    written as LaTeX (\\&, $M_\\star$) is left as it is."""
+    pi = Person('PI', 'PI', True, last='Doe & Roe', first='Jane', institution='Lab #3 & Co', position='50% PI',
+                bio_summary='will lead A1 & A2 (50%), \\& more on $M_\\star$.', task_summary='#1 & #2')
+    goals = [Item('Science & Tests', children=[task('Validation & Scaling', [('PI', 4, 0)]), task('Paper 1: Halos & 100% #1', [('PI', 2, 0)])])]
+    P = Proposal('T', 'NASA', 1, [pi], goals, nonlabor=[NonlaborItem('Materials & Supplies', [100])])
+    out = build(P)
+    for name, want in (('isANONschedule', 'Validation \\& Scaling'), ('isANONtasks', 'Science \\& Tests'), ('isANONpapers', '{Halos \\& 100\\% \\#1}'),
+                       ('NOTANONteamSummaries', 'will lead A1 \\& A2 (50\\%), \\& more on $M_\\star$.'), ('NOTANONhst', 'Lab \\#3 \\& Co'),
+                       ('isANONnonlabor', 'Materials \\& Supplies'), ('NOTANONfte', 'Doe \\& Roe')):
+        assert want in out[name], (name, want)
+    assert 'Validation & Scaling' not in ''.join(out[n] for n in TABLES)

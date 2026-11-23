@@ -35,6 +35,8 @@ Rounding is to the nearest step by default (`rounding='nearest'`); `rounding='up
 (tasks titled "Paper N: title", for `\papertitle{N}` and `\listplannedpapers`), using the
 templates in `latexTableTemplates/`. The data a proposal holds is described in `worpt/model.py`.
 Subtasks appear as A1.1, A1.2 …; a task with subtasks shows their combined timeline and FTE.
+Typed text (titles, names, institutions, positions, summaries, non-labor items) may use LaTeX; a bare `&`, `%`
+or `#` in it (one without a backslash in front) is written `\&`, `\%`, `\#`, so it prints as typed.
 
 Corrections compared with the Google Sheet version (each is covered by a test):
 
