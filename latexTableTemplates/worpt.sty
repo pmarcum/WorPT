@@ -8,7 +8,7 @@
 % Packages that your document has already loaded are not loaded again, and nothing here changes how the
 % rest of your document looks.
 \NeedsTeXFormat{LaTeX2e}
-\ProvidesPackage{worpt}[2026/11/22 WorPT tables]
+\ProvidesPackage{worpt}[2026/11/23 WorPT tables]
 
 \RequirePackage{array}      % column types
 \RequirePackage{multirow}   % header cells two rows tall
@@ -287,50 +287,40 @@
   \end{tikzpicture}}}
 
 % ------------------------------------------------ planned papers
-% The work plan's papers are its tasks and subtasks titled "Paper N: title", each with the description typed for it in
-% WorPT's plan. WorPT writes them to isANONpapers.tex (\WorPTpaper{N}{title}{description}, in number order), which is
-% read at \begin{document}: \papertitle{N} and \paperdescription{N} print paper N's title and description anywhere in
-% the document, and \listplannedpapers lists the papers ("Paper 1: title description" ...). Settings, after
+% The work plan's papers are its tasks and subtasks titled "Paper: title". WorPT numbers them by when they finish (the
+% quarter their timeline ends) and writes them to isANONpapers.tex, \WorPTpaper{N}{year}{quarter}{title}{description}
+% in number order; \listplannedpapers lists them: "Paper 1 (Year 2, Q3): title description" ... Settings, after
 % \usepackage{worpt} or just before \listplannedpapers:
-\newcommand\PlannedPaperLabel[1]{\textbf{Paper~#1:}}   % the label in front of each paper in the list (#1 is its number;
-                                                       % \textbf{Publication~\WorPTRoman{#1}:} gives Publication I: ...)
-\newcommand\PlannedPaperFormat[1]{\emph{#1}}           % each title in the list
-\newcommand\PlannedPaperDescriptionFormat[1]{#1}       % each description in the list
-\newcommand\PlannedPaperSeparator{ }                   % between a title and its description in the list
+\newcommand\PlannedPaperLabel[1]{\textbf{Paper~#1}}    % each paper's label (#1 is its number;
+                                                       % \textbf{Publication~\WorPTRoman{#1}} gives Publication I ...)
+\newif\ifPlannedPaperDates \PlannedPaperDatestrue      % \PlannedPaperDatesfalse leaves out when each paper finishes
+\newcommand\PlannedPaperDate[2]{Year~#1, Q#2}          % when a paper finishes (#1 the year, #2 the quarter)
+\newcommand\PlannedPaperDateFormat[1]{ (#1)}           % how that date follows the label
+\newcommand\PlannedPaperLabelEnd{:}                    % after the label (and date)
+\newcommand\PlannedPaperFormat[1]{\emph{#1}}           % each title
 \newif\ifPlannedPaperDescriptions \PlannedPaperDescriptionstrue   % \PlannedPaperDescriptionsfalse lists the titles only
-\newcommand\PlannedPapersSpace{\itemsep}               % space between papers in the list (a length)
-\newcommand\NoPlannedPapersText{\textbf{??} (no planned papers: the work plan has no tasks titled ``Paper N: title'')}
+\newcommand\PlannedPaperSeparator{ }                   % between a title and its description
+\newcommand\PlannedPaperDescriptionFormat[1]{#1}       % each description
+\newcommand\PlannedPapersIndent{1.5em}                 % how far a paper's later lines are indented
+\newcommand\PlannedPapersSpace{\itemsep}               % space between papers (a length)
+\newcommand\NoPlannedPapersText{\textbf{??} (no planned papers: the work plan has no tasks titled ``Paper: title'')}
 \newcommand\WorPTRoman[1]{\@Roman{#1}}                 % a number in capital Roman numerals: 3 gives III
-\newdimen\WorPTpaperLabelWidth
-\newcommand\WorPT@papers{}                             % \do{N} for each paper, in number order
-\newcommand\WorPTresetPapers{\def\do##1{\global\expandafter\let\csname WorPT@paper@##1\endcsname\@undefined
-    \global\expandafter\let\csname WorPT@paperDescription@##1\endcsname\@undefined}\WorPT@papers
-  \gdef\WorPT@papers{}}
-\newcommand\WorPTpaper[3]{\@ifundefined{WorPT@paper@#1}{\g@addto@macro\WorPT@papers{\do{#1}}}{}%
-  \expandafter\gdef\csname WorPT@paper@#1\endcsname{#2}\expandafter\gdef\csname WorPT@paperDescription@#1\endcsname{#3}}
-% \papertitle{N} and \paperdescription{N} become the text itself, so it is treated as if typed there (made capitals in a
-% heading that is, say); a paper with no description gives nothing
-\newcommand\papertitle[1]{\ifcsname WorPT@paper@#1\endcsname\csname WorPT@paper@#1\expandafter\endcsname\else\WorPT@noPaper{#1}\fi}
-\newcommand\paperdescription[1]{\ifcsname WorPT@paper@#1\endcsname\csname WorPT@paperDescription@#1\expandafter\endcsname\else\WorPT@noPaper{#1}\fi}
-\DeclareRobustCommand\WorPT@noPaper[1]{\textbf{??}\PackageWarning{worpt}{There is no Paper #1 in the work plan (its tasks titled "Paper N: title")}}
+\newcommand\WorPT@papers{}                             % \WorPT@listPaper{...} for each paper, in number order
+\newcommand\WorPTresetPapers{\gdef\WorPT@papers{}}
+\newcommand\WorPTpaper[5]{\g@addto@macro\WorPT@papers{\WorPT@listPaper{#1}{#2}{#3}{#4}{#5}}}
+\newcommand\WorPT@listPaper[5]{\item[]\PlannedPaperLabel{#1}%
+  \ifPlannedPaperDates\if\relax\detokenize{#2}\relax\else\PlannedPaperDateFormat{\PlannedPaperDate{#2}{#3}}\fi\fi
+  \PlannedPaperLabelEnd\ \PlannedPaperFormat{#4}%
+  \ifPlannedPaperDescriptions\if\relax\detokenize{#5}\relax\else\PlannedPaperSeparator\PlannedPaperDescriptionFormat{#5}\fi\fi}
 \newcommand\listplannedpapers{%
   \ifx\WorPT@papers\@empty
-    \NoPlannedPapersText\PackageWarning{worpt}{The work plan has no tasks titled "Paper N: title", so there are no planned papers to list}%
-  \else\begingroup
-    \WorPTpaperLabelWidth\z@
-    \def\do##1{\settowidth\@tempdima{\PlannedPaperLabel{##1}}\ifdim\@tempdima>\WorPTpaperLabelWidth \WorPTpaperLabelWidth\@tempdima\fi}%
-    \WorPT@papers
-    \begin{list}{}{\labelwidth\WorPTpaperLabelWidth \leftmargin\labelwidth \advance\leftmargin\labelsep
-                   \itemsep\PlannedPapersSpace \def\makelabel##1{##1\hfil}}%
-      \def\do##1{\item[\PlannedPaperLabel{##1}]\PlannedPaperFormat{\@nameuse{WorPT@paper@##1}}%
-        \ifPlannedPaperDescriptions\expandafter\ifx\csname WorPT@paperDescription@##1\endcsname\@empty\else
-          \PlannedPaperSeparator\PlannedPaperDescriptionFormat{\@nameuse{WorPT@paperDescription@##1}}\fi\fi}%
+    \NoPlannedPapersText\PackageWarning{worpt}{The work plan has no tasks titled "Paper: title", so there are no planned papers to list}%
+  \else
+    \begin{list}{}{\leftmargin\PlannedPapersIndent \itemindent-\leftmargin \labelwidth\z@ \labelsep\z@
+                   \itemsep\PlannedPapersSpace \def\makelabel##1{##1}}%
       \WorPT@papers
     \end{list}%
-  \endgroup\fi}
-\AtBeginDocument{%
-  \InputIfFileExists{isANONpapers.tex}{}{}%
-  \ifdefined\pdfstringdefDisableCommands\pdfstringdefDisableCommands{\def\WorPT@noPaper#1{??}}\fi}   % in PDF bookmarks (hyperref)
+  \fi}
 
 % Used by the travel table's caption; your document's own definition wins.
 \providecommand\smallIndent{\textcolor{white}{$--$}}

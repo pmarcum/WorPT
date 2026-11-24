@@ -80,14 +80,16 @@ def create_app(db_path=None, credential=None, read_credential=None):
         r = compute(prop.members, prop.goals, prop.n_years, prop.weeks_per_fte, prop.rounding)
         label_of = {node_ids[id(it)]: lab for lab, _, it, _ in label_tree(prop.goals)}
         member_of = {m['short_id']: m['id'] for m in data['members']}
+        papers, paper_checks = planned_papers(prop.goals)
         return dict(
             people={member_of[s]: dict(per_year=r['person_year'][i].tolist(), total=r['person_total'][i].tolist()) for i, s in enumerate(r['ids'])},
             items={iid: dict(label=lab, fte=r['items'][lab]['fte'].tolist(), start=r['items'][lab]['start'], end=r['items'][lab]['end'])
                    for iid, lab in label_of.items()},
             project_total=r['project_total'].tolist(), travel=travel_summary(prop),
             summary_starts={member_of[s]: v for s, v in summary_starts(prop).items()},   # [named start, anonymous label]
+            papers={node_ids[id(f['item'])]: [f['n'], f['year'], f['quarter']] for f in papers},   # WorPT's number and finish quarter
             checks=[dict(level=c.level, item=c.item, message=c.message, **{k: getattr(c, k) for k in ('person', 'weeks') if getattr(c, k) is not None})
-                    for c in r['checks'] + planned_papers(prop.goals)[1]])   # with the planned papers' (Paper N: titles)
+                    for c in r['checks'] + paper_checks])   # with the planned papers' (Paper: titles)
 
     # ------------------------------------------------ routes
     @app.get('/health')

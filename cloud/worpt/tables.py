@@ -693,30 +693,52 @@ def work_effort(c):
 
 
 # ------------------------------------------------ planned papers
-PAPER = re.compile(r'\s*paper\s*(\d+)\s*:\s*(.*?)\s*\Z', re.I | re.S)
+PAPER = re.compile(r'\s*paper\s*\d*\s*:\s*(.*?)\s*\Z', re.I | re.S)    # "Paper: title"; a number before the colon is ignored
+
+
+def finish(it):
+    """When an item's work ends, (year, week): its own timeline's end, or the latest of its subtasks'; None if no timeline."""
+    ends = [e for e in [it.end] + [finish(k) for k in it.children] if e]
+    return max(ends) if ends else None
 
 
 def planned_papers(goals):
-    """The work plan's papers: its categories, tasks and subtasks titled "Paper N: title" (any capitals, any spaces), as
-    {N: (title, label, description)} in number order, and the checks: a number used more than once (the first in the plan keeps it)
-    and a "Paper N:" with no title after it."""
-    found, checks = {}, []
-    for lab, depth, it, parent in label_tree(goals):
+    """The work plan's papers: its categories, tasks and subtasks titled "Paper: title" (any capitals, any spaces; a
+    number typed before the colon is ignored), numbered 1, 2 ... by when they finish (the quarter their timeline ends),
+    earliest first; papers finishing in the same quarter keep the plan's order, and papers with no timeline come last.
+    Returns the papers in that order, as dicts (n, title, label, description, year, quarter, item), and the checks: a
+    paper with no timeline, and a "Paper:" with no title after it."""
+    found, checks = [], []
+    for order, (lab, depth, it, parent) in enumerate(label_tree(goals)):
         m = PAPER.match(it.title or '')
         if not m: continue
-        n, title = int(m.group(1)), m.group(2)
-        if not title: checks.append(Check('warn', lab, f'is titled "Paper {n}:" with nothing after it, so Paper {n} has no title'))
-        if n in found:
-            checks.append(Check('warn', lab, f'is also titled "Paper {n}:", like {found[n][1]}; Paper {n} keeps {found[n][1]}\'s title'))
-        else:
-            found[n] = (title, lab, (it.description or '').strip())
-    return dict(sorted(found.items())), checks
+        end = finish(it)
+        yq = (end[0], (end[1] - 1) // WEEKS_PER_QUARTER + 1) if end else None
+        if not m.group(1): checks.append(Check('warn', lab, 'is titled "Paper:" with nothing after it, so the paper has no title'))
+        if not yq: checks.append(Check('warn', lab, 'is a paper with no timeline, so it is listed last in the planned papers, with no finish date'))
+        found.append(((yq is None, yq or (0, 0), order), dict(title=m.group(1), label=lab, description=(it.description or '').strip(),
+                                                              year=yq[0] if yq else None, quarter=yq[1] if yq else None, item=it)))
+    papers = [dict(n=k + 1, **f) for k, (_, f) in enumerate(sorted(found, key=lambda f: f[0]))]
+    return papers, checks
+
+
+def with_paper_numbers(goals, papers):
+    """The goals with each paper titled "Paper N: title" (its short title too, when that starts "Paper:"), N being
+    WorPT's number for it, so every table names the papers as the papers list numbers them."""
+    number = {id(f['item']): f['n'] for f in papers}
+    def item(it):
+        kids = [item(k) for k in it.children]
+        if id(it) not in number: return dataclasses.replace(it, children=kids)
+        n, short = number[id(it)], PAPER.match(it.short_title or '')
+        return dataclasses.replace(it, title=f'Paper {n}: ' + PAPER.match(it.title).group(1), children=kids,
+                                   short_title=f'Paper {n}: ' + short.group(1) if short else it.short_title)
+    return [item(g) for g in goals]
 
 
 def papers(c):
-    found, checks = planned_papers(c['p'].goals)
-    c['r']['checks'].extend(checks)
-    lines = ''.join(f'\\WorPTpaper{{{n}}}{{{title}}}{{{desc}}}   % {lab}\n' for n, (title, lab, desc) in found.items())
+    c['r']['checks'].extend(c['paper_checks'])
+    lines = ''.join(f"\\WorPTpaper{{{f['n']}}}{{{f['year'] or ''}}}{{{f['quarter'] or ''}}}{{{f['title']}}}{{{f['description']}}}   % {f['label']}\n"
+                    for f in c['papers'])
     return template('isANONpapers').replace('[INSERTFILENAME]', 'isANONpapers').replace('[INSERTPAPERS]', lines.rstrip('\n'))
 
 
@@ -743,7 +765,10 @@ def as_latex_text(p):
 
 def build(proposal, names=TABLES):
     """Return {table name: LaTeX text} plus the engine's checks under '_checks'."""
-    c = prepare(as_latex_text(proposal))
+    p = as_latex_text(proposal)
+    found, paper_checks = planned_papers(p.goals)
+    c = prepare(dataclasses.replace(p, goals=with_paper_numbers(p.goals, found)))
+    c.update(papers=found, paper_checks=paper_checks)
     make = dict(NOTANONteamSummaries=team_summaries, isANONteamSummaries=team_summaries_anonymous, NOTANONtasks=tasks_named, NOTANONhst=hst, isANONschedule=schedule,
                 NOTANONfte=lambda c: fte(c, 'NOTANONfte'), isANONfte=lambda c: fte(c, 'isANONfte'), isANONtasks=tasks_anonymous,
                 isANONtravel=travel, isANONnonlabor=nonlabor, NOTANONworkEffort=work_effort, isANONpapers=papers)

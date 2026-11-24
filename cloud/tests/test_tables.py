@@ -218,23 +218,6 @@ def test_team_summaries_warn_about_a_repeated_name_and_what_anonymizing_leaves()
 
 
 # ------------------------------------------------ planned papers
-def test_planned_papers_come_from_items_titled_paper_n():
-    """Any category, task or subtask titled "Paper N: title" (any capitals, any spaces) is paper N; the file lists them in
-    number order, whatever their place in the plan. A number used twice keeps the first item's title, with a warning,
-    and a "Paper N:" with nothing after it is warned about too. Numbers need not follow on from each other."""
-    goals = [Item('Paper 5: A review', children=[
-                 Item('Write paper 2 later'), Item('paper 2 :  Halo light profiles of $M_\\star$ galaxies'),
-                 Item('Observations', children=[Item('PAPER 1:Deep imaging'), Item('Paper 1: Another'), Item('Paper 3:')]),
-                 Item('Paper one: not a number')])]
-    out = build(Proposal('T', 'NASA', 1, [Person('PI', 'PI', True, last='Doe')], goals), ['isANONpapers'])
-    assert re.findall(r'^\\WorPTpaper\{(\d+)\}\{(.*)\}\{\}   % (\S+)$', out['isANONpapers'], re.M) == [
-        ('1', 'Deep imaging', 'A3.1'), ('2', 'Halo light profiles of $M_\\star$ galaxies', 'A2'), ('3', '', 'A3.3'), ('5', 'A review', 'A')]
-    assert out['isANONpapers'].index('\\WorPTresetPapers') < out['isANONpapers'].index('\\WorPTpaper{1}')
-    said = [(c.item, c.message) for c in out['_checks'] if 'Paper' in c.message]
-    assert said == [('A3.2', 'is also titled "Paper 1:", like A3.1; Paper 1 keeps A3.1\'s title'),
-                    ('A3.3', 'is titled "Paper 3:" with nothing after it, so Paper 3 has no title')]
-    none = build(Proposal('T', 'NASA', 1, [Person('PI', 'PI', True, last='Doe')], [Item('Goal')]), ['isANONpapers'])['isANONpapers']
-    assert '\\WorPTresetPapers' in none and '\\WorPTpaper{' not in none
 
 
 def test_a_bare_ampersand_percent_or_hash_in_typed_text_is_written_as_latex():
@@ -253,11 +236,46 @@ def test_a_bare_ampersand_percent_or_hash_in_typed_text_is_written_as_latex():
     assert 'Validation & Scaling' not in ''.join(out[n] for n in TABLES)
 
 
-def test_a_papers_description_is_the_one_typed_for_it_in_the_plan():
-    """Each paper's description is the Description typed for its item in the plan (LaTeX, a bare & written \\&, its
-    paragraphs kept); the descriptions of other items are not printed anywhere."""
-    goals = [Item('Science', description='Not a paper: stays in the dashboard', children=[
-                 Item('Paper 1: Halos', description='We will map halos & tails\n\nwith \\RST.'), Item('Paper 2: Streams')])]
-    out = build(Proposal('T', 'NASA', 1, [Person('PI', 'PI', True, last='Doe')], goals))
-    assert '\\WorPTpaper{1}{Halos}{We will map halos \\& tails\n\nwith \\RST.}   % A1\n\\WorPTpaper{2}{Streams}{}   % A2' in out['isANONpapers']
+def papers_plan():
+    """Papers spread over a plan out of time order: typed numbers to ignore, a paper with subtasks, two finishing in the
+    same quarter, one with no timeline and one with no title."""
+    W = lambda y, w: (y, w)
+    return [Item('Science', children=[
+                task('Paper 7: Late review', [('PI', 2, 0)], start=W(3, 1), end=W(3, 40)),                     # Y3 Q4
+                Item('paper:Halos & tails', description='We map halos & tails\n\nwith \\RST.', children=[
+                    task('Imaging', [('PI', 2, 0)], start=W(1, 1), end=W(1, 10)), task('Write-up', [('PI', 2, 0)], start=W(1, 20), end=W(2, 3))]),  # Y2 Q1
+                task('Paper 1 : Streams', [('PI', 2, 0)], start=W(2, 1), end=W(2, 12)),                       # Y2 Q1, after Halos
+                Item('Paper: Undated'),
+                task('Paper 2: First', [('PI', 2, 0)], start=W(1, 1), end=W(1, 26)),                          # Y1 Q2
+                task('Paper:', [('PI', 1, 0)], start=W(1, 1), end=W(1, 52)),                                  # Y1 Q4, no title
+                task('Papers to read', [('PI', 1, 0)])])]
+
+
+def test_planned_papers_are_numbered_by_when_they_finish():
+    """Items titled "Paper: title" (a typed number ignored) are numbered 1, 2 ... by the quarter their timeline ends (a
+    task with subtasks: when its last subtask ends), earliest first; the same quarter keeps the plan's order; no
+    timeline comes last. Each line has the number, the finish year and quarter, the title and the description."""
+    out = build(Proposal('T', 'NASA', 3, [Person('PI', 'PI', True, last='Doe')], papers_plan()))
+    lines = re.findall(r'^\\WorPTpaper\{(\d+)\}\{(\d*)\}\{(\d*)\}\{(.*?)\}\{(.*?)\}   % (\S+)$', out['isANONpapers'], re.M | re.S)
+    assert lines == [('1', '1', '2', 'First', '', 'A5'), ('2', '1', '4', '', '', 'A6'), ('3', '2', '1', 'Halos \\& tails', 'We map halos \\& tails\n\nwith \\RST.', 'A2'),
+                     ('4', '2', '1', 'Streams', '', 'A3'), ('5', '3', '4', 'Late review', '', 'A1'), ('6', '', '', 'Undated', '', 'A4')]
+    said = sorted((c.item, c.message) for c in out['_checks'] if 'paper' in c.message.lower())
+    assert said == [('A4', 'is a paper with no timeline, so it is listed last in the planned papers, with no finish date'),
+                    ('A6', 'is titled "Paper:" with nothing after it, so the paper has no title')]
+    none = build(Proposal('T', 'NASA', 1, [Person('PI', 'PI', True, last='Doe')], [Item('Goal')]), ['isANONpapers'])['isANONpapers']
+    assert '\\WorPTresetPapers' in none and '\\WorPTpaper{' not in none
+
+
+def test_every_table_names_a_paper_by_worpts_number():
+    """The schedule and task tables print each paper as "Paper N: title" with WorPT's number, whatever number was typed;
+    a short title starting "Paper:" is numbered the same way. Other items, and other items' descriptions, are untouched."""
+    goals = papers_plan(); goals[0].children[2].short_title = 'Paper 9: Streams (short)'
+    goals[0].description = 'Not a paper: stays in the dashboard'
+    out = build(Proposal('T', 'NASA', 3, [Person('PI', 'PI', True, last='Doe')], goals))
+    for name in ('isANONschedule', 'isANONtasks', 'NOTANONtasks'):
+        t = out[name]
+        for want in ('Paper 1: First', 'Paper 3: Halos \\& tails', 'Paper 5: Late review', 'Paper 6: Undated', 'Papers to read'):
+            assert want in t, (name, want)
+        assert 'Paper 7' not in t and 'Paper 2: First' not in t and 'paper:Halos' not in t, name
+    assert 'Paper 4: Streams (short)' in out['isANONschedule']
     assert not any('stays in the dashboard' in out[n] for n in TABLES)

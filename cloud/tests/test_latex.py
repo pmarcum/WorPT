@@ -422,33 +422,6 @@ def test_a_work_effort_table_for_a_large_team_runs_over_pages(cls, landscape, tm
     assert not outside_block(tmp_path, tmp_path / 'doc.pdf'), cls
 
 
-@pytest.mark.parametrize('cls', ['article', '{aastex702}', '[twocolumn]{aastex702}', '{aastex631}', 'revtex4-2'])
-def test_planned_papers_in_the_text_and_listed(cls, tmp_path):
-    """\\papertitle{N} gives paper N's title anywhere, before or after the list, with hyperref too (headings, contents,
-    PDF bookmarks); an unknown number gives ?? and a warning. \\listplannedpapers lists them in number order, each once
-    even though the file is read twice (at \\begin{document} and by the paste-in block)."""
-    if not works(cls): pytest.skip(f'{cls} does not work on this machine, even without WorPT')
-    if not shutil.which('pdftotext'): pytest.skip('pdftotext is not installed')
-    from worpt.model import Item, Person, Proposal
-    goals = [Item('Science', children=[Item('Paper 2: Halo light profiles and $M_\\star$'), Item('Paper 1: Deep imaging of faint halos'),
-                                       Item('Paper 12: ' + 'A long title that wraps onto a second line of the list ' * 2)])]
-    out = build(Proposal('T', 'NASA', 1, [Person('PI', 'PI', True, last='Doe')], goals), ['isANONpapers'])
-    (tmp_path / 'isANONpapers.tex').write_text(out['isANONpapers']); shutil.copy(TEMPLATE_DIR / 'worpt.sty', tmp_path)
-    (tmp_path / 'doc.tex').write_text(documentclass(cls) + '\n\\usepackage{hyperref}\n' + paste_in('worpt') + EDGES + '\\begin{document}\n' + front(cls) +
-        '\\tableofcontents\n\\section{On \\papertitle{1}}\nFirst: \\textit{\\papertitle{2}}. Unknown: \\papertitle{7}.\n\n' +
-        paste_in('isANONpapers') + '\nAfter: \\papertitle{12}\n\\end{document}\n')
-    log, text = compile_doc(tmp_path)
-    assert not [l for l in log.splitlines() if l.startswith('!')], cls
-    assert 'There is no Paper 7 in the work plan' in log and text.count('??') == 1
-    flat = ' '.join(text.split())
-    assert re.search(r'First: Halo light profiles and M. ?\. Unknown: \?\?', flat), flat
-    assert re.search(r'Paper 1: Deep imaging of faint halos Paper 2: Halo light profiles and M. ?Paper 12: A long title', flat), flat
-    assert flat.count('Paper 1:') == 1 and flat.count('Paper 12:') == 1
-    assert flat.lower().count('deep imaging of faint halos') == 3        # contents, heading and list
-    assert 'Deep imaging of faint halos' in (tmp_path / 'doc.out').read_text(encoding='latin-1').replace('\\000', '').replace('\\040', ' ')
-    assert not outside_block(tmp_path, tmp_path / 'doc.pdf'), cls
-
-
 def test_a_work_plan_with_no_papers_says_so_where_the_list_goes(tmp_path):
     from worpt.model import Item, Person, Proposal
     out = build(Proposal('T', 'NASA', 1, [Person('PI', 'PI', True, last='Doe')], [Item('Goal')]), ['isANONpapers'])
@@ -480,25 +453,31 @@ def test_typed_ampersand_percent_and_hash_compile_in_every_table(tmp_path):
         assert typed in flat, typed
 
 
-@pytest.mark.parametrize('cls', ['{aastex702}', '[twocolumn]{aastex702}', 'revtex4-2'])
-def test_planned_papers_with_descriptions(cls, tmp_path):
-    """The list gives each paper's label, its title in italics and its description (paragraphs kept, your own macros
-    and references working); \\paperdescription{N} gives a description on its own; with \\PlannedPaperDescriptionsfalse
-    the list has the titles only, and \\WorPTRoman makes "Publication I:" labels."""
+@pytest.mark.parametrize('cls', ['article', '{aastex702}', '[twocolumn]{aastex702}', '{aastex631}', 'revtex4-2'])
+def test_planned_papers_list(cls, tmp_path):
+    """\\listplannedpapers gives each paper as a paragraph: its label and finish (Paper 1 (Year 1, Q2):), the title in
+    italics, the description (paragraphs kept, your own macros and references working); a paper with no timeline has no
+    date. Later lines are indented, and everything stays inside the margins. The settings switch the dates and
+    descriptions off and make "Publication I" labels; the file being read twice lists each paper once."""
     if not works(cls): pytest.skip(f'{cls} does not work on this machine, even without WorPT')
     if not shutil.which('pdftotext'): pytest.skip('pdftotext is not installed')
     from worpt.model import Item, Person, Proposal
-    goals = [Item('Science', children=[Item('Paper 1: Exploring the LSB universe', description='we will explore \\RST/WFI & more, as in Sec.~\\ref{sec:m}.\n\nA second paragraph.'),
-                                       Item('Paper 3: Streams')])]
-    out = build(Proposal('T', 'NASA', 1, [Person('PI', 'PI', True, last='Doe')], goals), ['isANONpapers'])
+    from test_tables import task
+    goals = [Item('Science', children=[
+        task('Paper: Streams', [('PI', 2, 0)], start=(2, 1), end=(2, 30)),
+        Item('Paper 5: Exploring the LSB universe', description='we will explore \\RST/WFI & more, as in Sec.~\\ref{sec:m}. ' + 'And more words to wrap. ' * 6 + '\n\nA second paragraph.',
+             children=[task('Imaging', [('PI', 2, 0)], start=(1, 1), end=(1, 20))]),
+        Item('Paper: Undated')])]
+    out = build(Proposal('T', 'NASA', 2, [Person('PI', 'PI', True, last='Doe')], goals), ['isANONpapers'])
     (tmp_path / 'isANONpapers.tex').write_text(out['isANONpapers']); shutil.copy(TEMPLATE_DIR / 'worpt.sty', tmp_path)
     (tmp_path / 'doc.tex').write_text(documentclass(cls) + '\n\\newcommand\\RST{Roman}\n' + paste_in('worpt') + EDGES + '\\begin{document}\n' + front(cls) +
-        '\\section{Methods}\\label{sec:m}\nAlone: \\paperdescription{1} End. None: [\\paperdescription{3}].\n\n' + paste_in('isANONpapers') +
-        '\nTitles only:\n\\PlannedPaperDescriptionsfalse\\def\\PlannedPaperLabel#1{\\textbf{Publication~\\WorPTRoman{#1}:}}\\listplannedpapers\n\\end{document}\n')
+        '\\section{Methods}\\label{sec:m}\nText.\n\n' + paste_in('isANONpapers') +
+        '\nShort:\n\\PlannedPaperDatesfalse\\PlannedPaperDescriptionsfalse\\def\\PlannedPaperLabel#1{\\textbf{Publication~\\WorPTRoman{#1}}}\\listplannedpapers\n\\end{document}\n')
     log, text = compile_doc(tmp_path)
     assert not [l for l in log.splitlines() if l.startswith('!')], cls
     flat = re.sub(r'Sec\. \w+\.', 'Sec. N.', ' '.join(text.split()).replace('- ', ''))       # whatever the class numbers it
-    assert 'Alone: we will explore Roman/WFI & more, as in Sec. N. A second paragraph. End. None: [].' in flat, flat
-    assert 'Paper 1: Exploring the LSB universe we will explore Roman/WFI & more, as in Sec. N. A second paragraph. Paper 3: Streams Titles only:' in flat, flat
-    assert 'Publication I: Exploring the LSB universe Publication III: Streams' in flat, flat
+    assert re.search(r'Paper 1 \(Year 1, Q2\): Exploring the LSB universe we will explore Roman/WFI & more, as in Sec\. N\. (And more words to wrap\. ){6}A second paragraph\. '
+                     r'Paper 2 \(Year 2, Q3\): Streams Paper 3: Undated Short:', flat), flat
+    assert 'Publication I: Exploring the LSB universe Publication II: Streams Publication III: Undated' in flat, flat
+    assert flat.count('Paper 1 (Year 1, Q2)') == 1
     assert not outside_block(tmp_path, tmp_path / 'doc.pdf'), cls

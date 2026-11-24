@@ -149,8 +149,7 @@ fetch, if gooTeX kept them, and tell the person the tables may be out of date.
 
 ## Where to put the files
 
-LaTeX has to find `worpt.sty` for `\usepackage{worpt}` and each table for `\input{<table>}`; `worpt.sty`
-also reads `isANONpapers.tex` by itself at `\begin{document}` (for `\papertitle{N}`), so it goes with the others. The
+LaTeX has to find `worpt.sty` for `\usepackage{worpt}` and each table for `\input{<table>}`. The
 readmes' paste-in blocks use bare names, so the simplest arrangement is the same folder as the
 document's main `.tex` file during the compile. If gooTeX prefers a subfolder, add it to the search
 path (for example `TEXINPUTS=./worpt//:` in the compile's environment) rather than changing the names.

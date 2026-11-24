@@ -1078,16 +1078,23 @@ def test_summaries_drafted_with_the_name_in_front_lose_it_once(team, tmp_path):
     assert api.ok('get', f'/api/proposals/{pid}')['members'][0]['bio_summary'] == 'Dr. Annson will lead it, as she asked.'
 
 
-def test_planned_papers_problems_show_on_the_dashboard_and_in_gootex(team):
-    """Two items titled with the same paper number, or a "Paper N:" with no title, are listed with the plan's other
-    problems on the dashboard, and in the checks gooTeX gets with the files, which include isANONpapers.tex."""
+def test_planned_papers_numbers_and_problems_reach_the_dashboard_and_gootex(team):
+    """The dashboard gets each paper's number and finish quarter (for the Plan tab's tag) and the papers' problems (no
+    timeline, no title) with the plan's others; gooTeX gets the same checks with the files, which include isANONpapers.tex."""
     ann, pid = team['ann'], team['pid']
     goal = ann.ok('post', f'/api/proposals/{pid}/items', dict(title='Papers'))['item']
-    for t in ('Paper 1: Deep imaging', 'paper 1: Another', 'Paper 2:'):
-        it = ann.ok('post', f'/api/proposals/{pid}/items', dict(title=t, parent_id=goal['id']))['item']
-        if t.startswith('Paper 1'): ann.ok('patch', f"/api/items/{it['id']}", dict(version=it['version'], description='Halos & tails\r\n\r\nwith \\RST.'))
-    said = {c['message'] for c in ann.ok('get', f'/api/proposals/{pid}')['computed']['checks'] if 'Paper' in c['message']}
-    assert len(said) == 2 and any('also titled "Paper 1:"' in m for m in said) and any('Paper 2 has no title' in m for m in said)
+    made = {}
+    for t in ('Paper 3: Deep imaging', 'paper: Halos', 'Paper:'):
+        made[t] = ann.ok('post', f'/api/proposals/{pid}/items', dict(title=t, parent_id=goal['id']))['item']
+    halos = made['paper: Halos']
+    timed(ann, halos, (1, 1, 1, 30))
+    it = ann.ok('get', f'/api/proposals/{pid}')['items']; deep = next(i for i in it if i['id'] == made['Paper 3: Deep imaging']['id'])
+    ann.ok('patch', f"/api/items/{deep['id']}", dict(version=deep['version'], description='Halos & tails\r\n\r\nwith \\RST.'))
+    d = ann.ok('get', f'/api/proposals/{pid}')['computed']
+    assert d['papers'] == {str(halos['id']): [1, 1, 3], str(deep['id']): [2, None, None], str(made['Paper:']['id']): [3, None, None]}
+    said = {c['message'] for c in d['checks'] if 'paper' in c['message'].lower()}
+    assert said == {'is a paper with no timeline, so it is listed last in the planned papers, with no finish date', 'is titled "Paper:" with nothing after it, so the paper has no title'}
     out = ann.ok('get', f'/api/proposals/{pid}/tables?files=1')
-    assert '\\WorPTpaper{1}{Deep imaging}{Halos \\& tails\n\nwith \\RST.}' in out['files']['isANONpapers.tex'] and 'isANONpapers' in out['blocks']
-    assert {c['message'] for c in out['checks'] if 'Paper' in c['message']} == said
+    assert '\\WorPTpaper{1}{1}{3}{Halos}{}' in out['files']['isANONpapers.tex']
+    assert '\\WorPTpaper{2}{}{}{Deep imaging}{Halos \\& tails\n\nwith \\RST.}' in out['files']['isANONpapers.tex'] and 'isANONpapers' in out['blocks']
+    assert {c['message'] for c in out['checks'] if 'paper' in c['message'].lower()} == said
