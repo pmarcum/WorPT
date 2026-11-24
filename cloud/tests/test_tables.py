@@ -227,7 +227,7 @@ def test_planned_papers_come_from_items_titled_paper_n():
                  Item('Observations', children=[Item('PAPER 1:Deep imaging'), Item('Paper 1: Another'), Item('Paper 3:')]),
                  Item('Paper one: not a number')])]
     out = build(Proposal('T', 'NASA', 1, [Person('PI', 'PI', True, last='Doe')], goals), ['isANONpapers'])
-    assert re.findall(r'^\\WorPTpaper\{(\d+)\}\{(.*)\}   % (\S+)$', out['isANONpapers'], re.M) == [
+    assert re.findall(r'^\\WorPTpaper\{(\d+)\}\{(.*)\}\{\}   % (\S+)$', out['isANONpapers'], re.M) == [
         ('1', 'Deep imaging', 'A3.1'), ('2', 'Halo light profiles of $M_\\star$ galaxies', 'A2'), ('3', '', 'A3.3'), ('5', 'A review', 'A')]
     assert out['isANONpapers'].index('\\WorPTresetPapers') < out['isANONpapers'].index('\\WorPTpaper{1}')
     said = [(c.item, c.message) for c in out['_checks'] if 'Paper' in c.message]
@@ -251,3 +251,13 @@ def test_a_bare_ampersand_percent_or_hash_in_typed_text_is_written_as_latex():
                        ('isANONnonlabor', 'Materials \\& Supplies'), ('NOTANONfte', 'Doe \\& Roe')):
         assert want in out[name], (name, want)
     assert 'Validation & Scaling' not in ''.join(out[n] for n in TABLES)
+
+
+def test_a_papers_description_is_the_one_typed_for_it_in_the_plan():
+    """Each paper's description is the Description typed for its item in the plan (LaTeX, a bare & written \\&, its
+    paragraphs kept); the descriptions of other items are not printed anywhere."""
+    goals = [Item('Science', description='Not a paper: stays in the dashboard', children=[
+                 Item('Paper 1: Halos', description='We will map halos & tails\n\nwith \\RST.'), Item('Paper 2: Streams')])]
+    out = build(Proposal('T', 'NASA', 1, [Person('PI', 'PI', True, last='Doe')], goals))
+    assert '\\WorPTpaper{1}{Halos}{We will map halos \\& tails\n\nwith \\RST.}   % A1\n\\WorPTpaper{2}{Streams}{}   % A2' in out['isANONpapers']
+    assert not any('stays in the dashboard' in out[n] for n in TABLES)

@@ -287,22 +287,31 @@
   \end{tikzpicture}}}
 
 % ------------------------------------------------ planned papers
-% The work plan's papers are its tasks and subtasks titled "Paper N: title". WorPT writes them to isANONpapers.tex
-% (\WorPTpaper{N}{title}, in number order), which is read at \begin{document}: \papertitle{N} prints paper N's title
-% anywhere in the document, and \listplannedpapers lists the papers ("Paper 1: title" ...). Settings, after
+% The work plan's papers are its tasks and subtasks titled "Paper N: title", each with the description typed for it in
+% WorPT's plan. WorPT writes them to isANONpapers.tex (\WorPTpaper{N}{title}{description}, in number order), which is
+% read at \begin{document}: \papertitle{N} and \paperdescription{N} print paper N's title and description anywhere in
+% the document, and \listplannedpapers lists the papers ("Paper 1: title description" ...). Settings, after
 % \usepackage{worpt} or just before \listplannedpapers:
-\newcommand\PlannedPaperLabel[1]{\textbf{Paper~#1:}}   % the label in front of each paper in the list
-\newcommand\PlannedPaperFormat[1]{#1}                  % each title in the list
+\newcommand\PlannedPaperLabel[1]{\textbf{Paper~#1:}}   % the label in front of each paper in the list (#1 is its number;
+                                                       % \textbf{Publication~\WorPTRoman{#1}:} gives Publication I: ...)
+\newcommand\PlannedPaperFormat[1]{\emph{#1}}           % each title in the list
+\newcommand\PlannedPaperDescriptionFormat[1]{#1}       % each description in the list
+\newcommand\PlannedPaperSeparator{ }                   % between a title and its description in the list
+\newif\ifPlannedPaperDescriptions \PlannedPaperDescriptionstrue   % \PlannedPaperDescriptionsfalse lists the titles only
 \newcommand\PlannedPapersSpace{\itemsep}               % space between papers in the list (a length)
 \newcommand\NoPlannedPapersText{\textbf{??} (no planned papers: the work plan has no tasks titled ``Paper N: title'')}
+\newcommand\WorPTRoman[1]{\@Roman{#1}}                 % a number in capital Roman numerals: 3 gives III
 \newdimen\WorPTpaperLabelWidth
 \newcommand\WorPT@papers{}                             % \do{N} for each paper, in number order
-\newcommand\WorPTresetPapers{\def\do##1{\global\expandafter\let\csname WorPT@paper@##1\endcsname\@undefined}\WorPT@papers
+\newcommand\WorPTresetPapers{\def\do##1{\global\expandafter\let\csname WorPT@paper@##1\endcsname\@undefined
+    \global\expandafter\let\csname WorPT@paperDescription@##1\endcsname\@undefined}\WorPT@papers
   \gdef\WorPT@papers{}}
-\newcommand\WorPTpaper[2]{\@ifundefined{WorPT@paper@#1}{\g@addto@macro\WorPT@papers{\do{#1}}}{}%
-  \expandafter\gdef\csname WorPT@paper@#1\endcsname{#2}}
-% \papertitle{N} becomes the title itself, so it is treated as if typed there (made capitals in a heading that is, say)
+\newcommand\WorPTpaper[3]{\@ifundefined{WorPT@paper@#1}{\g@addto@macro\WorPT@papers{\do{#1}}}{}%
+  \expandafter\gdef\csname WorPT@paper@#1\endcsname{#2}\expandafter\gdef\csname WorPT@paperDescription@#1\endcsname{#3}}
+% \papertitle{N} and \paperdescription{N} become the text itself, so it is treated as if typed there (made capitals in a
+% heading that is, say); a paper with no description gives nothing
 \newcommand\papertitle[1]{\ifcsname WorPT@paper@#1\endcsname\csname WorPT@paper@#1\expandafter\endcsname\else\WorPT@noPaper{#1}\fi}
+\newcommand\paperdescription[1]{\ifcsname WorPT@paper@#1\endcsname\csname WorPT@paperDescription@#1\expandafter\endcsname\else\WorPT@noPaper{#1}\fi}
 \DeclareRobustCommand\WorPT@noPaper[1]{\textbf{??}\PackageWarning{worpt}{There is no Paper #1 in the work plan (its tasks titled "Paper N: title")}}
 \newcommand\listplannedpapers{%
   \ifx\WorPT@papers\@empty
@@ -313,7 +322,9 @@
     \WorPT@papers
     \begin{list}{}{\labelwidth\WorPTpaperLabelWidth \leftmargin\labelwidth \advance\leftmargin\labelsep
                    \itemsep\PlannedPapersSpace \def\makelabel##1{##1\hfil}}%
-      \def\do##1{\item[\PlannedPaperLabel{##1}]\PlannedPaperFormat{\@nameuse{WorPT@paper@##1}}}%
+      \def\do##1{\item[\PlannedPaperLabel{##1}]\PlannedPaperFormat{\@nameuse{WorPT@paper@##1}}%
+        \ifPlannedPaperDescriptions\expandafter\ifx\csname WorPT@paperDescription@##1\endcsname\@empty\else
+          \PlannedPaperSeparator\PlannedPaperDescriptionFormat{\@nameuse{WorPT@paperDescription@##1}}\fi\fi}%
       \WorPT@papers
     \end{list}%
   \endgroup\fi}

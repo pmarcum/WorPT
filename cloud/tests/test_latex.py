@@ -478,3 +478,27 @@ def test_typed_ampersand_percent_and_hash_compile_in_every_table(tmp_path):
     flat = ' '.join(text.split())
     for typed in ('Validation & Scaling', 'Science & Tests', 'Halos & 100% #1', 'A1 & A2 (50%)', 'Lab #3 & Co', 'Materials & Supplies', 'Doe & Roe'):
         assert typed in flat, typed
+
+
+@pytest.mark.parametrize('cls', ['{aastex702}', '[twocolumn]{aastex702}', 'revtex4-2'])
+def test_planned_papers_with_descriptions(cls, tmp_path):
+    """The list gives each paper's label, its title in italics and its description (paragraphs kept, your own macros
+    and references working); \\paperdescription{N} gives a description on its own; with \\PlannedPaperDescriptionsfalse
+    the list has the titles only, and \\WorPTRoman makes "Publication I:" labels."""
+    if not works(cls): pytest.skip(f'{cls} does not work on this machine, even without WorPT')
+    if not shutil.which('pdftotext'): pytest.skip('pdftotext is not installed')
+    from worpt.model import Item, Person, Proposal
+    goals = [Item('Science', children=[Item('Paper 1: Exploring the LSB universe', description='we will explore \\RST/WFI & more, as in Sec.~\\ref{sec:m}.\n\nA second paragraph.'),
+                                       Item('Paper 3: Streams')])]
+    out = build(Proposal('T', 'NASA', 1, [Person('PI', 'PI', True, last='Doe')], goals), ['isANONpapers'])
+    (tmp_path / 'isANONpapers.tex').write_text(out['isANONpapers']); shutil.copy(TEMPLATE_DIR / 'worpt.sty', tmp_path)
+    (tmp_path / 'doc.tex').write_text(documentclass(cls) + '\n\\newcommand\\RST{Roman}\n' + paste_in('worpt') + EDGES + '\\begin{document}\n' + front(cls) +
+        '\\section{Methods}\\label{sec:m}\nAlone: \\paperdescription{1} End. None: [\\paperdescription{3}].\n\n' + paste_in('isANONpapers') +
+        '\nTitles only:\n\\PlannedPaperDescriptionsfalse\\def\\PlannedPaperLabel#1{\\textbf{Publication~\\WorPTRoman{#1}:}}\\listplannedpapers\n\\end{document}\n')
+    log, text = compile_doc(tmp_path)
+    assert not [l for l in log.splitlines() if l.startswith('!')], cls
+    flat = re.sub(r'Sec\. \w+\.', 'Sec. N.', ' '.join(text.split()).replace('- ', ''))       # whatever the class numbers it
+    assert 'Alone: we will explore Roman/WFI & more, as in Sec. N. A second paragraph. End. None: [].' in flat, flat
+    assert 'Paper 1: Exploring the LSB universe we will explore Roman/WFI & more, as in Sec. N. A second paragraph. Paper 3: Streams Titles only:' in flat, flat
+    assert 'Publication I: Exploring the LSB universe Publication III: Streams' in flat, flat
+    assert not outside_block(tmp_path, tmp_path / 'doc.pdf'), cls

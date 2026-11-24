@@ -1084,9 +1084,10 @@ def test_planned_papers_problems_show_on_the_dashboard_and_in_gootex(team):
     ann, pid = team['ann'], team['pid']
     goal = ann.ok('post', f'/api/proposals/{pid}/items', dict(title='Papers'))['item']
     for t in ('Paper 1: Deep imaging', 'paper 1: Another', 'Paper 2:'):
-        ann.ok('post', f'/api/proposals/{pid}/items', dict(title=t, parent_id=goal['id']))
+        it = ann.ok('post', f'/api/proposals/{pid}/items', dict(title=t, parent_id=goal['id']))['item']
+        if t.startswith('Paper 1'): ann.ok('patch', f"/api/items/{it['id']}", dict(version=it['version'], description='Halos & tails\r\n\r\nwith \\RST.'))
     said = {c['message'] for c in ann.ok('get', f'/api/proposals/{pid}')['computed']['checks'] if 'Paper' in c['message']}
     assert len(said) == 2 and any('also titled "Paper 1:"' in m for m in said) and any('Paper 2 has no title' in m for m in said)
     out = ann.ok('get', f'/api/proposals/{pid}/tables?files=1')
-    assert '\\WorPTpaper{1}{Deep imaging}' in out['files']['isANONpapers.tex'] and 'isANONpapers' in out['blocks']
+    assert '\\WorPTpaper{1}{Deep imaging}{Halos \\& tails\n\nwith \\RST.}' in out['files']['isANONpapers.tex'] and 'isANONpapers' in out['blocks']
     assert {c['message'] for c in out['checks'] if 'Paper' in c['message']} == said

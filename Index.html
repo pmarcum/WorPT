@@ -998,7 +998,8 @@ function viewItem(n, nodes) {
     '<div class="row" style="gap:10px;align-items:flex-start;flex-wrap:wrap"><label class="f" style="flex:2 1 300px">Title<input data-save="item:' + it.id + ':title" data-version="' + it.version + '" value="' + esc(it.title) + '" maxlength="500"></label>' +
     '<label class="f" style="flex:1 1 200px"><span>Short title <span class="muted">(optional)</span>' + info(HELP.short) + '</span><input data-save="item:' + it.id + ':short_title" data-version="' + it.version + '" value="' + esc(it.short_title || '') + '" maxlength="200" placeholder="' + esc(it.title || '') + '" aria-description="' + esc(HELP.short) + '"></label></div>' +
     '<label class="f"><span>Description <span class="muted">(optional)</span>' + info(HELP.description) + '</span><textarea data-save="item:' + it.id + ':description" data-version="' + it.version + '" rows="2" ' +
-      'placeholder="What this ' + LEVEL[d].toLowerCase() + ' stands for and involves: a reminder of what to describe in the proposal" aria-description="' + esc(HELP.description) + '">' + esc(it.description || '') + '</textarea></label>';
+      'placeholder="' + (paperNumber(it.title) ? 'What Paper ' + paperNumber(it.title) + ' will present: printed after its title in the list of planned papers (LaTeX allowed)'
+        : 'What this ' + LEVEL[d].toLowerCase() + ' stands for and involves: a reminder of what to describe in the proposal') + '" aria-description="' + esc(HELP.description) + '">' + esc(it.description || '') + '</textarea></label>';
   if (d === 0) return html + '<p class="muted" style="margin:0;line-height:1.5">A task category groups related tasks. It has no timeline or people of its own; its line on the calendar and its numbers come from its tasks (' + (+itemWeeks(it.id).toFixed(1)) + ' weeks in all).</p>' +
     '<div><button type="button" class="btn" data-act="addTask">+ Task in this category</button></div>';
   if (!leaf) {
@@ -1038,9 +1039,12 @@ function viewItem(n, nodes) {
     (work.some(a => a.is_team) && unnamed.length === 0 ? '<p class="hint">"Everyone not named (team)" covers nobody here, because everyone on the team is named on this ' + (d === 2 ? 'subtask' : 'task') + '.</p>' : '') + '</div>';
 }
 // The details' explanations, behind a small ⓘ beside what they explain (hover, or tab to it), so the panel stays compact.
+/** The paper number of an item titled "Paper N: title" (any capitals, any spaces), as WorPT's papers list reads it; else 0. */
+function paperNumber(title) { const m = /^\s*paper\s*(\d+)\s*:/i.exec(title || ''); return m ? +m[1] : 0; }
 const HELP = {
   short: 'The schedule and task management tables keep each title to one line: they show the short title when there is one, otherwise the title, cut short with "…" if it is too long for the line. The plan shows it too; hover over a title there to see the full title.',
-  description: 'For your team only: it shows when you hover over the title in the plan (a dotted underline marks titles that have one), and is never printed in the tables.',
+  description: 'For your team only: it shows when you hover over the title in the plan (a dotted underline marks titles that have one), and is never printed in the tables. ' +
+    'The one exception is a paper (an item titled "Paper N: title"): its description is printed after its title in the list of planned papers (\\listplannedpapers), and wherever \\paperdescription{N} is used. It is LaTeX, like the titles.',
   timeline: 'Or drag its bar on the calendar (click the bar and press Delete to remove it). A year has 52 weeks: Q1 is weeks 1–13, Q2 14–26, Q3 27–39, Q4 40–52.',
   get weeks() { return 'Each person\'s total effort on this item, in weeks. The green figure beside it is that effort in FTE, counted over the whole item (weeks ÷ ' + ((S.P && S.P.proposal.weeks_per_fte) || 52) + '), updated as you type; the panel below the calendar shows how it lands in each year once saved.'; },
   unfunded: 'The part of the weeks not paid by this proposal. For example, 1.5 weeks with 0.5 unfunded is 1.0 week funded plus 0.5 week unfunded. A collaborator\'s weeks are all unfunded.'

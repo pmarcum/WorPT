@@ -698,7 +698,7 @@ PAPER = re.compile(r'\s*paper\s*(\d+)\s*:\s*(.*?)\s*\Z', re.I | re.S)
 
 def planned_papers(goals):
     """The work plan's papers: its categories, tasks and subtasks titled "Paper N: title" (any capitals, any spaces), as
-    {N: (title, label)} in number order, and the checks: a number used more than once (the first in the plan keeps it)
+    {N: (title, label, description)} in number order, and the checks: a number used more than once (the first in the plan keeps it)
     and a "Paper N:" with no title after it."""
     found, checks = {}, []
     for lab, depth, it, parent in label_tree(goals):
@@ -709,14 +709,14 @@ def planned_papers(goals):
         if n in found:
             checks.append(Check('warn', lab, f'is also titled "Paper {n}:", like {found[n][1]}; Paper {n} keeps {found[n][1]}\'s title'))
         else:
-            found[n] = (title, lab)
+            found[n] = (title, lab, (it.description or '').strip())
     return dict(sorted(found.items())), checks
 
 
 def papers(c):
     found, checks = planned_papers(c['p'].goals)
     c['r']['checks'].extend(checks)
-    lines = ''.join(f'\\WorPTpaper{{{n}}}{{{title}}}   % {lab}\n' for n, (title, lab) in found.items())
+    lines = ''.join(f'\\WorPTpaper{{{n}}}{{{title}}}{{{desc}}}   % {lab}\n' for n, (title, lab, desc) in found.items())
     return template('isANONpapers').replace('[INSERTFILENAME]', 'isANONpapers').replace('[INSERTPAPERS]', lines.rstrip('\n'))
 
 
@@ -734,7 +734,8 @@ def latex_text(s):
 def as_latex_text(p):
     """The proposal with the text people type (names, institutions, positions, summaries, titles, non-labor items) made
     LaTeX by latex_text."""
-    def item(it): return dataclasses.replace(it, title=latex_text(it.title), short_title=latex_text(it.short_title), children=[item(k) for k in it.children])
+    def item(it): return dataclasses.replace(it, title=latex_text(it.title), short_title=latex_text(it.short_title), description=latex_text(it.description),
+                                             children=[item(k) for k in it.children])
     def person(m): return dataclasses.replace(m, **{f: latex_text(getattr(m, f)) for f in PERSON_TEXT if hasattr(m, f)})
     return dataclasses.replace(p, members=[person(m) for m in p.members], goals=[item(g) for g in p.goals],
                                nonlabor=[dataclasses.replace(n, item=latex_text(n.item)) for n in p.nonlabor])

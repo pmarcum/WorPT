@@ -85,7 +85,7 @@ AUTO_SNAPSHOT_DAYS = 60          # automatic snapshots are kept this long; named
 # Columns added after the first release, so an existing database gains them when the server starts.
 ADDED_COLUMNS = [('people', 'expertise', "TEXT NOT NULL DEFAULT ''"), ('people', 'pronoun', "TEXT NOT NULL DEFAULT ''"),
                  ('items', 'start_week', 'INTEGER'), ('items', 'end_week', 'INTEGER'), ('items', 'short_title', "TEXT NOT NULL DEFAULT ''"),
-                 ('items', 'description', "TEXT NOT NULL DEFAULT ''"),   # a note on what the item stands for; shown in the dashboard only
+                 ('items', 'description', "TEXT NOT NULL DEFAULT ''"),   # a note on what the item stands for; printed only for papers (Paper N: titles)
                  ('history', 'step', 'INTEGER'),                         # the step (request) a change was part of, for undo
                  ('proposals', 'frozen_at', 'TEXT'), ('proposals', 'frozen_by', 'TEXT'),   # a frozen work plan can't be changed
                  ('members', 'other_months', "TEXT NOT NULL DEFAULT '[]'")]   # per year: months on other currently funded projects
@@ -1174,7 +1174,7 @@ class Store:
                           prefix=m['prefix'], suffix=m['suffix'], institution=m['institution'], position=m['position'],
                           bio_summary=m['bio_summary'], task_summary=m['task_summary'], trips=m['trips'],
                           other_months=m.get('other_months') or []) for m in data['members']]
-        nodes = {i['id']: Item(i['title'], short_title=i.get('short_title', ''), start=(i['start_year'], i['start_week']) if i['start_year'] and i['start_week'] else None,
+        nodes = {i['id']: Item(i['title'], short_title=i.get('short_title', ''), description=i.get('description', ''), start=(i['start_year'], i['start_week']) if i['start_year'] and i['start_week'] else None,
                                end=(i['end_year'], i['end_week']) if i['end_year'] and i['end_week'] else None) for i in data['items']}
         for a in data['assignments']:
             nodes[a['item_id']].assignments.append(Assignment('team' if a['is_team'] else short[a['member_id']], a['weeks'], a['unfunded'], a['is_lead']))
