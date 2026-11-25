@@ -457,7 +457,7 @@ def test_typed_ampersand_percent_and_hash_compile_in_every_table(tmp_path):
 def test_planned_papers_list(cls, tmp_path):
     """\\listplannedpapers gives each paper as a paragraph: its label and finish (Paper 1 (Year 1, Q2):), the title in
     italics, the description (paragraphs kept, your own macros and references working); a paper with no timeline has no
-    date. Later lines are indented, and everything stays inside the margins. The settings switch the dates and
+    date. Every line starts flush with the text around it, and everything stays inside the margins. The settings switch the dates and
     descriptions off and make "Publication I" labels; the file being read twice lists each paper once."""
     if not works(cls): pytest.skip(f'{cls} does not work on this machine, even without WorPT')
     if not shutil.which('pdftotext'): pytest.skip('pdftotext is not installed')
@@ -471,7 +471,7 @@ def test_planned_papers_list(cls, tmp_path):
     out = build(Proposal('T', 'NASA', 2, [Person('PI', 'PI', True, last='Doe')], goals), ['isANONpapers'])
     (tmp_path / 'isANONpapers.tex').write_text(out['isANONpapers']); shutil.copy(TEMPLATE_DIR / 'worpt.sty', tmp_path)
     (tmp_path / 'doc.tex').write_text(documentclass(cls) + '\n\\newcommand\\RST{Roman}\n' + paste_in('worpt') + EDGES + '\\begin{document}\n' + front(cls) +
-        '\\section{Methods}\\label{sec:m}\nText.\n\n' + paste_in('isANONpapers') +
+        '\\section{Methods}\\label{sec:m}\n\\noindent Text.\n\n' + paste_in('isANONpapers') +
         '\nShort:\n\\PlannedPaperDatesfalse\\PlannedPaperDescriptionsfalse\\def\\PlannedPaperLabel#1{\\textbf{Publication~\\WorPTRoman{#1}}}\\listplannedpapers\n\\end{document}\n')
     log, text = compile_doc(tmp_path)
     assert not [l for l in log.splitlines() if l.startswith('!')], cls
@@ -480,4 +480,10 @@ def test_planned_papers_list(cls, tmp_path):
                      r'Paper 2 \(Year 2, Q3\): Streams Paper 3: Undated Short:', flat), flat
     assert 'Publication I: Exploring the LSB universe Publication II: Streams Publication III: Undated' in flat, flat
     assert flat.count('Paper 1 (Year 1, Q2)') == 1
+    lines = subprocess.run(['pdftotext', '-bbox-layout', str(tmp_path / 'doc.pdf'), '-'], capture_output=True, text=True).stdout
+    starts = [(float(x), w) for x, w in re.findall(r'<line[^>]*>\s*<word xMin="([\d.]+)"[^>]*>([^<]*)</word>', lines)]
+    text_x = next(x for x, w in starts if w == 'Text.')                  # the left edge of the text (an unindented line)
+    first = next(k for k, (x, w) in enumerate(starts) if w == 'Paper')
+    in_list = starts[first:next(k for k, (x, w) in enumerate(starts) if w == 'Short:')]
+    assert len(in_list) > 4 and all(abs(x - text_x) < 0.5 for x, w in in_list), (cls, text_x, in_list)   # no indent, first line or later
     assert not outside_block(tmp_path, tmp_path / 'doc.pdf'), cls

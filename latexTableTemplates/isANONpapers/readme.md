@@ -97,7 +97,7 @@ COPY any of the lines below (they show the default values), PASTE them into your
 \PlannedPaperDescriptions<mark>true</mark>                      % false: the titles only
 \def\PlannedPaperSeparator{<mark> </mark>}                   % between a title and its description (e.g. {: } or {. })
 \def\PlannedPaperDescriptionFormat#1{<mark>#1</mark>}        % each description
-\def\PlannedPapersIndent{<mark>1.5em</mark>}                 % how far a paper's later lines are indented
+\def\PlannedPapersIndent{<mark>0pt</mark>}                   % how far a paper's later lines are indented (e.g. 1.5em)
 \def\PlannedPapersSpace{<mark>\itemsep</mark>}                % space between papers (a length, e.g. 2pt)
 \def\NoPlannedPapersText{<mark>\textbf{??} (no planned papers: the work plan has no tasks titled ``Paper: title'')</mark>}
 </code></pre>
@@ -106,7 +106,7 @@ For <b>Publication I</b>, <b>Publication II</b> ... (capital Roman numerals), us
 \def\PlannedPaperLabel#1{\textbf{Publication~\WorPTRoman{#1}}}
 </code></pre>
 and for dates such as <i>Y2 Q3</i>, <code>\def\PlannedPaperDate#1#2{Y#1~Q#2}</code>.
-Each paper is a paragraph starting with its label; a long title or description wraps with its later lines indented.
+Each paper is a paragraph starting with its label, flush with the text around it; set <code>\PlannedPapersIndent</code> to indent its later lines instead.
 When the work plan has no papers yet, the list is <code>\NoPlannedPapersText</code> instead, and the LaTeX log says so.</td>
 </tr>
 
